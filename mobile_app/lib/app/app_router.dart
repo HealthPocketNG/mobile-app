@@ -3,6 +3,14 @@ import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/features/auth/presentation/auth_form_screen.dart';
+import 'package:healthpocket/features/auth/presentation/forgot_password_screen.dart';
+import 'package:healthpocket/features/auth/presentation/otp_verification_screen.dart';
+import 'package:healthpocket/features/auth/presentation/welcome_screen.dart';
+import 'package:healthpocket/features/onboarding/presentation/goal_setup_screen.dart';
+import 'package:healthpocket/features/onboarding/presentation/kyc_screen.dart';
+import 'package:healthpocket/features/onboarding/presentation/onboarding_start_screen.dart';
+import 'package:healthpocket/features/onboarding/presentation/personal_information_screen.dart';
 
 enum AppRoute {
   splash('/'),
@@ -12,6 +20,9 @@ enum AppRoute {
   forgotPassword('/forgot-password'),
   otp('/otp'),
   onboarding('/onboarding'),
+  personalInformation('/onboarding/personal-information'),
+  kyc('/onboarding/kyc'),
+  goalSetup('/onboarding/goal-setup'),
   dashboard('/dashboard'),
   goals('/goals'),
   familyPocket('/family-pocket'),
@@ -34,6 +45,15 @@ class AppRouter {
       settings: settings,
       builder: (context) => switch (destination) {
         AppRoute.splash => const _SplashScreen(),
+        AppRoute.welcome => const WelcomeScreen(),
+        AppRoute.signIn => const AuthFormScreen(mode: AuthMode.signIn),
+        AppRoute.signUp => const AuthFormScreen(mode: AuthMode.signUp),
+        AppRoute.forgotPassword => const ForgotPasswordScreen(),
+        AppRoute.otp => const OtpVerificationScreen(),
+        AppRoute.onboarding => const OnboardingStartScreen(),
+        AppRoute.personalInformation => const PersonalInformationScreen(),
+        AppRoute.kyc => const KycScreen(),
+        AppRoute.goalSetup => const GoalSetupScreen(),
         _ => _FoundationScreen(route: destination),
       },
     );

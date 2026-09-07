@@ -8,4 +8,16 @@ void main() {
     expect(find.text('HealthPocket'), findsOneWidget);
     expect(find.text('Get started'), findsOneWidget);
   });
+
+  testWidgets('moves from launch to account creation', (tester) async {
+    await tester.pumpWidget(const HealthPocketApp());
+
+    await tester.tap(find.text('Get started'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your health deserves a plan.'), findsOneWidget);
+
+    await tester.tap(find.text('Create an account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Create your account'), findsOneWidget);
+  });
 }
