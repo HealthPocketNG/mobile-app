@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:healthpocket/app/app_state.dart';
-import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
-import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/features/auth/presentation/auth_form_screen.dart';
 import 'package:healthpocket/features/auth/presentation/forgot_password_screen.dart';
 import 'package:healthpocket/features/auth/presentation/otp_verification_screen.dart';
+import 'package:healthpocket/features/auth/presentation/splash_screen.dart';
 import 'package:healthpocket/features/auth/presentation/welcome_screen.dart';
+import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:healthpocket/features/family/presentation/family_pocket_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/goal_setup_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/kyc_screen.dart';
-import 'package:healthpocket/features/onboarding/presentation/onboarding_start_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/personal_information_screen.dart';
+import 'package:healthpocket/features/savings/presentation/savings_goals_screen.dart';
 
 enum AppRoute {
   splash('/'),
@@ -44,63 +45,25 @@ class AppRouter {
     return MaterialPageRoute<void>(
       settings: settings,
       builder: (context) => switch (destination) {
-        AppRoute.splash => const _SplashScreen(),
+        AppRoute.splash => const SplashScreen(),
         AppRoute.welcome => const WelcomeScreen(),
         AppRoute.signIn => const AuthFormScreen(mode: AuthMode.signIn),
         AppRoute.signUp => const AuthFormScreen(mode: AuthMode.signUp),
         AppRoute.forgotPassword => const ForgotPasswordScreen(),
         AppRoute.otp => const OtpVerificationScreen(),
-        AppRoute.onboarding => const OnboardingStartScreen(),
+        AppRoute.onboarding => const PersonalInformationScreen(),
         AppRoute.personalInformation => const PersonalInformationScreen(),
         AppRoute.kyc => const KycScreen(),
         AppRoute.goalSetup => const GoalSetupScreen(),
+        AppRoute.dashboard => DashboardScreen(
+          savingsStore: appState.savingsStore,
+        ),
+        AppRoute.goals => SavingsGoalsScreen(store: appState.savingsStore),
+        AppRoute.familyPocket => FamilyPocketScreen(
+          store: appState.familyPocketStore,
+        ),
         _ => _FoundationScreen(route: destination),
       },
-    );
-  }
-}
-
-class _SplashScreen extends StatelessWidget {
-  const _SplashScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Spacer(),
-              Container(
-                height: 64,
-                width: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(AppSpacing.lg),
-                ),
-                child: const Icon(Icons.favorite_rounded, color: Colors.white),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text('HealthPocket', style: Theme.of(context).textTheme.displaySmall),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Build a healthcare fund before you need it.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const Spacer(),
-              AppPrimaryButton(
-                label: 'Get started',
-                onPressed: () => Navigator.pushReplacementNamed(
-                  context,
-                  AppRoute.welcome.path,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

@@ -13,16 +13,29 @@ class OtpVerificationScreen extends StatefulWidget {
 }
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
-  final _codeController = TextEditingController();
+  late final List<TextEditingController> _controllers;
+  late final List<FocusNode> _focusNodes;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = List.generate(6, (_) => TextEditingController());
+    _focusNodes = List.generate(6, (_) => FocusNode());
+  }
 
   @override
   void dispose() {
-    _codeController.dispose();
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
+    for (final node in _focusNodes) {
+      node.dispose();
+    }
     super.dispose();
   }
 
   void _verify() {
-    if (_codeController.text.length != 6) {
+    if (_controllers.any((controller) => controller.text.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter the 6-digit verification code.')),
       );
@@ -30,7 +43,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
     Navigator.pushNamedAndRemoveUntil(
       context,
-      AppRoute.onboarding.path,
+      AppRoute.personalInformation.path,
       (route) => false,
     );
   }
@@ -44,53 +57,69 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Verify your number',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Enter the six-digit code we sent to your phone number.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.inkMuted,
-                ),
-              ),
+              Text('Verify your number', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(height: AppSpacing.xl),
-              TextField(
-                controller: _codeController,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  letterSpacing: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  counterText: '',
-                  hintText: '000000',
-                ),
-                onSubmitted: (_) => _verify(),
+              Container(
+                width: 112,
+                height: 112,
+                decoration: const BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
+                child: const Icon(Icons.sms_outlined, size: 54, color: AppColors.primary),
               ),
               const SizedBox(height: AppSpacing.lg),
-              AppPrimaryButton(label: 'Verify and continue', onPressed: _verify),
-              const SizedBox(height: AppSpacing.md),
-              Center(
-                child: TextButton(
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('A new code has been sent.')),
-                  ),
-                  child: const Text('Resend code'),
+              Text('Enter the 6-digit code', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'We sent a code to +234 803 123 4567',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(6, (index) => _digitField(index)),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text.rich(
+                TextSpan(
+                  text: 'Resend code in ',
+                  style: const TextStyle(color: AppColors.inkMuted),
+                  children: const [
+                    TextSpan(text: '00:28', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                  ],
                 ),
+              ),
+              const Spacer(),
+              AppPrimaryButton(label: 'Continue', onPressed: _verify),
+              TextButton(
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('A new code has been sent.')),
+                ),
+                child: const Text("Didn't receive the code? Resend"),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _digitField(int index) {
+    return SizedBox(
+      width: 47,
+      child: TextField(
+        controller: _controllers[index],
+        focusNode: _focusNodes[index],
+        autofocus: index == 0,
+        textAlign: TextAlign.center,
+        keyboardType: TextInputType.number,
+        maxLength: 1,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        decoration: const InputDecoration(counterText: '', contentPadding: EdgeInsets.symmetric(vertical: 16)),
+        onChanged: (value) {
+          if (value.isNotEmpty && index < 5) _focusNodes[index + 1].requestFocus();
+          if (value.isEmpty && index > 0) _focusNodes[index - 1].requestFocus();
+        },
       ),
     );
   }

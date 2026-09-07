@@ -3,6 +3,7 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/core/widgets/onboarding_step_header.dart';
 
 class PersonalInformationScreen extends StatefulWidget {
   const PersonalInformationScreen({super.key});
@@ -14,22 +15,22 @@ class PersonalInformationScreen extends StatefulWidget {
 class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
   final _formKey = GlobalKey<FormState>();
   DateTime? _dateOfBirth;
-  String? _selectedGender;
+  String? _gender;
+  String? _state;
 
-  Future<void> _selectDateOfBirth() async {
-    final today = DateTime.now();
-    final selected = await showDatePicker(
+  Future<void> _selectDate() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
       context: context,
-      firstDate: DateTime(today.year - 100),
-      lastDate: DateTime(today.year - 18),
-      initialDate: DateTime(today.year - 25),
-      helpText: 'Select your date of birth',
+      firstDate: DateTime(now.year - 100),
+      lastDate: DateTime(now.year - 18),
+      initialDate: DateTime(now.year - 25),
     );
-    if (selected != null) setState(() => _dateOfBirth = selected);
+    if (date != null) setState(() => _dateOfBirth = date);
   }
 
   void _continue() {
-    if (!_formKey.currentState!.validate() || _dateOfBirth == null || _selectedGender == null) {
+    if (!_formKey.currentState!.validate() || _dateOfBirth == null || _gender == null || _state == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Complete the required details to continue.')),
       );
@@ -40,74 +41,142 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel = _dateOfBirth == null
-        ? 'Select date of birth'
-        : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/'
-            '${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}';
+    final date = _dateOfBirth;
+    final dateText = date == null
+        ? 'Select your date of birth'
+        : '${date.day} ${_monthName(date.month)} ${date.year}';
+
     return Scaffold(
-      appBar: AppBar(),
       body: SafeArea(
-        top: false,
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
             children: [
-              Text(
-                'STEP 1 OF 3',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
+              const OnboardingStepHeader(title: 'Personal details', step: 2),
+              const SizedBox(height: AppSpacing.xl),
+              _SelectionField(
+                icon: Icons.calendar_today_outlined,
+                label: 'Date of birth',
+                value: dateText,
+                onTap: _selectDate,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              DropdownButtonFormField<String>(
+                initialValue: _gender,
+                decoration: const InputDecoration(
+                  labelText: 'Gender',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
                 ),
+                items: const [
+                  DropdownMenuItem(value: 'female', child: Text('Female')),
+                  DropdownMenuItem(value: 'male', child: Text('Male')),
+                  DropdownMenuItem(value: 'prefer_not_to_say', child: Text('Prefer not to say')),
+                ],
+                onChanged: (value) => setState(() => _gender = value),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Residential address',
+                  hintText: 'House number and street',
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                ),
+                validator: _required,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              DropdownButtonFormField<String>(
+                initialValue: _state,
+                decoration: const InputDecoration(
+                  labelText: 'State of residence',
+                  prefixIcon: Icon(Icons.apartment_rounded),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Lagos', child: Text('Lagos')),
+                  DropdownMenuItem(value: 'Abuja', child: Text('Abuja (FCT)')),
+                  DropdownMenuItem(value: 'Ogun', child: Text('Ogun')),
+                  DropdownMenuItem(value: 'Oyo', child: Text('Oyo')),
+                  DropdownMenuItem(value: 'Rivers', child: Text('Rivers')),
+                  DropdownMenuItem(value: 'Other', child: Text('Other state')),
+                ],
+                onChanged: (value) => setState(() => _state = value),
               ),
               const SizedBox(height: AppSpacing.lg),
               Text(
-                'Tell us about yourself',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                'Next of kin / Emergency contact',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.sm),
-              Text(
-                'These details help us personalise your HealthPocket experience.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
-              ),
-              const SizedBox(height: AppSpacing.xl),
               TextFormField(
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(labelText: 'First name'),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Enter your first name'
-                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'Full name',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+                validator: _required,
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               TextFormField(
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(labelText: 'Last name'),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Enter your last name'
-                    : null,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              OutlinedButton.icon(
-                onPressed: _selectDateOfBirth,
-                icon: const Icon(Icons.calendar_today_outlined),
-                label: Align(alignment: Alignment.centerLeft, child: Text(dateLabel)),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedGender,
-                decoration: const InputDecoration(labelText: 'Gender'),
-                items: const [
-                  DropdownMenuItem(value: 'woman', child: Text('Woman')),
-                  DropdownMenuItem(value: 'man', child: Text('Man')),
-                  DropdownMenuItem(value: 'prefer_not_to_say', child: Text('Prefer not to say')),
-                ],
-                onChanged: (value) => setState(() => _selectedGender = value),
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: '+234 800 000 0000',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+                validator: _required,
               ),
               const SizedBox(height: AppSpacing.xl),
               AppPrimaryButton(label: 'Continue', onPressed: _continue),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _required(String? value) => value == null || value.trim().isEmpty ? 'Required' : null;
+
+  String _monthName(int month) => const [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ][month - 1];
+}
+
+class _SelectionField extends StatelessWidget {
+  const _SelectionField({required this.icon, required this.label, required this.value, required this.onTap});
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surfaceMuted,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: AppColors.outline),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 13),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.primaryDark),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.inkMuted)),
+                    const SizedBox(height: 2),
+                    Text(value, style: Theme.of(context).textTheme.bodyLarge),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
             ],
           ),
         ),

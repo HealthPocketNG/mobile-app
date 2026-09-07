@@ -3,6 +3,7 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/core/widgets/onboarding_step_header.dart';
 
 class KycScreen extends StatelessWidget {
   const KycScreen({super.key});
@@ -10,56 +11,58 @@ class KycScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
       body: SafeArea(
-        top: false,
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const OnboardingStepHeader(title: 'Complete demo KYC', step: 3),
+              const SizedBox(height: AppSpacing.xl),
+              Container(
+                width: 92,
+                height: 92,
+                decoration: const BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
+                child: const Icon(Icons.verified_user_rounded, color: AppColors.primary, size: 46),
+              ),
+              const SizedBox(height: AppSpacing.md),
               Text(
-                'STEP 2 OF 3',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                ),
+                'Verify your identity (Demo)',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'This shows how verification will work. No identity data is collected in this UI MVP.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Identity verification',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+              const _KycTask(
+                icon: Icons.badge_outlined,
+                title: 'Select ID type',
+                subtitle: 'NIN, driver’s licence or passport',
               ),
               const SizedBox(height: AppSpacing.sm),
-              Text(
-                'We’ll verify your identity before HealthPocket handles real savings. For this UI MVP, no identity document or personal data is collected.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
+              const _KycTask(
+                icon: Icons.upload_file_outlined,
+                title: 'Upload ID',
+                subtitle: 'Take or upload a clear photo',
               ),
-              const SizedBox(height: AppSpacing.xl),
-              const _InfoRow(
-                icon: Icons.lock_outline_rounded,
-                title: 'Protect your account',
-                description: 'Verification helps keep your HealthPocket secure.',
+              const SizedBox(height: AppSpacing.sm),
+              const _KycTask(
+                icon: Icons.face_retouching_natural_outlined,
+                title: 'Selfie check',
+                subtitle: 'Take a selfie for verification',
               ),
-              const SizedBox(height: AppSpacing.lg),
-              const _InfoRow(
-                icon: Icons.receipt_long_outlined,
-                title: 'Complete it later',
-                description: 'You’ll be able to verify when it becomes available.',
+              const SizedBox(height: AppSpacing.sm),
+              const _KycTask(
+                icon: Icons.location_on_outlined,
+                title: 'Confirm address',
+                subtitle: 'Verify your residential address',
               ),
               const Spacer(),
               AppPrimaryButton(
-                label: 'Continue with demo verification',
+                label: 'Submit demo KYC',
                 onPressed: () => Navigator.pushNamed(context, AppRoute.goalSetup.path),
-              ),
-              Center(
-                child: TextButton(
-                  onPressed: () => Navigator.pushNamed(context, AppRoute.goalSetup.path),
-                  child: const Text('Verify later'),
-                ),
               ),
             ],
           ),
@@ -69,35 +72,37 @@ class KycScreen extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.title, required this.description});
-
+class _KycTask extends StatelessWidget {
+  const _KycTask({required this.icon, required this.title, required this.subtitle});
   final IconData icon;
   final String title;
-  final String description;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          decoration: const BoxDecoration(color: AppColors.surfaceMuted, shape: BoxShape.circle),
-          child: Icon(icon, color: AppColors.primary),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.xs),
-              Text(description, style: Theme.of(context).textTheme.bodyMedium),
-            ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.outline),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted)),
+              ],
+            ),
           ),
-        ),
-      ],
+          const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 21),
+        ],
+      ),
     );
   }
 }

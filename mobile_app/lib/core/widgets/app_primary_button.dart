@@ -16,7 +16,7 @@ class AppPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 52,
+      height: 54,
       child: FilledButton(
         onPressed: isLoading ? null : onPressed,
         child: isLoading
