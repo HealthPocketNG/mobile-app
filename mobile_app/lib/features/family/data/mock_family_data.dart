@@ -6,11 +6,9 @@ abstract final class MockFamilyData {
       id: 'adebayo-family-care',
       name: 'Adebayo Family Care',
       beneficiary: 'The Adebayo family',
-      goalAmount: 200000,
-      currentAmount: 35000,
       members: [
         FamilyMember(
-          id: 'samson',
+          id: 'current-user',
           name: 'Samson Adebayo',
           email: 'samson@example.com',
           role: FamilyRole.admin,

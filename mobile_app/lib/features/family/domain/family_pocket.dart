@@ -21,31 +21,25 @@ class FamilyPocket {
     required this.id,
     required this.name,
     required this.beneficiary,
-    required this.goalAmount,
-    required this.currentAmount,
     required this.members,
   });
 
   final String id;
   final String name;
   final String beneficiary;
-  final int goalAmount;
-  final int currentAmount;
   final List<FamilyMember> members;
 
-  double get progress => goalAmount == 0 ? 0 : currentAmount / goalAmount;
-
-  FamilyPocket copyWith({int? currentAmount, List<FamilyMember>? members}) {
+  FamilyPocket copyWith({List<FamilyMember>? members}) {
     return FamilyPocket(
       id: id,
       name: name,
       beneficiary: beneficiary,
-      goalAmount: goalAmount,
-      currentAmount: currentAmount ?? this.currentAmount,
       members: members ?? this.members,
     );
   }
 }
+
+enum FamilyContributionStatus { completed, reversed }
 
 class FamilyContribution {
   const FamilyContribution({
@@ -54,6 +48,8 @@ class FamilyContribution {
     required this.memberName,
     required this.amount,
     required this.createdAt,
+    this.status = FamilyContributionStatus.completed,
+    this.source = 'mock',
   });
 
   final String id;
@@ -61,4 +57,6 @@ class FamilyContribution {
   final String memberName;
   final int amount;
   final DateTime createdAt;
+  final FamilyContributionStatus status;
+  final String source;
 }

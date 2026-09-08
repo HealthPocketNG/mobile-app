@@ -6,6 +6,6 @@ abstract interface class AuthRepository {
 }
 
 abstract interface class SavingsRepository {
-  Future<void> createGoal();
+  Future<void> savePlan();
   Future<void> recordContribution();
 }

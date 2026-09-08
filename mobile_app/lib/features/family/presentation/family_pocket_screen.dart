@@ -20,11 +20,7 @@ class FamilyPocketScreen extends StatelessWidget {
       builder: (context) => const _CreatePocketSheet(),
     );
     if (draft == null) return;
-    store.createPocket(
-      name: draft.name,
-      beneficiary: draft.beneficiary,
-      goalAmount: draft.goalAmount,
-    );
+    store.createPocket(name: draft.name, beneficiary: draft.beneficiary);
   }
 
   Future<void> _inviteMember(BuildContext context) async {
@@ -35,22 +31,61 @@ class FamilyPocketScreen extends StatelessWidget {
       builder: (context) => const _InviteMemberSheet(),
     );
     if (invite == null) return;
-    store.inviteMember(
+    final invited = store.inviteMember(
       name: invite.name,
       email: invite.email,
       role: invite.role,
     );
+    if (!invited && context.mounted) {
+      _showMessage(context, 'Only a Family Pocket admin can invite members.');
+    }
   }
 
   Future<void> _recordContribution(BuildContext context) async {
+    final pocket = store.selectedPocket;
+    if (pocket == null) return;
     final amount = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) =>
-          _FamilyContributionSheet(pocketName: store.selectedPocket.name),
+      builder: (context) => _FamilyContributionSheet(pocketName: pocket.name),
     );
     if (amount != null) store.recordContribution(amount);
+  }
+
+  Future<void> _removeContributor(
+    BuildContext context,
+    FamilyMember member,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove contributor?'),
+        content: Text(
+          '${member.name} will lose access to this Family Pocket. Their previous contributions will remain in the history.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove contributor'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final removed = store.removeContributor(member.id);
+    if (context.mounted) {
+      _showMessage(
+        context,
+        removed
+            ? '${member.name} was removed.'
+            : 'Only an admin can remove a contributor.',
+      );
+    }
   }
 
   @override
@@ -71,101 +106,117 @@ class FamilyPocketScreen extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
             ],
           ),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              AppSpacing.xl,
-            ),
-            children: [
-              if (store.pockets.length > 1) ...[
-                DropdownButtonFormField<String>(
-                  initialValue: pocket.id,
-                  decoration: const InputDecoration(
-                    labelText: 'Selected pocket',
-                    prefixIcon: Icon(Icons.groups_2_outlined),
+          body: pocket == null
+              ? _EmptyPocketView(onCreate: () => _createPocket(context))
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
                   ),
-                  items: store.pockets
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item.id,
-                          child: Text(item.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) store.selectPocket(value);
-                  },
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              _PocketHero(pocket: pocket),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: _PocketAction(
-                      icon: Icons.person_add_alt_1_outlined,
-                      label: 'Invite',
-                      onTap: () => _inviteMember(context),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _PocketAction(
-                      icon: Icons.add_card_outlined,
-                      label: 'Contribute',
-                      onTap: () => _recordContribution(context),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _PocketAction(
-                      icon: Icons.add_home_work_outlined,
-                      label: 'New pocket',
-                      onTap: () => _createPocket(context),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              _SectionHeader(
-                title: 'Members',
-                action: '${pocket.members.length}',
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.outline),
-                ),
-                child: Column(
                   children: [
-                    for (
-                      var index = 0;
-                      index < pocket.members.length;
-                      index++
-                    ) ...[
-                      _MemberTile(member: pocket.members[index]),
-                      if (index != pocket.members.length - 1)
-                        const Divider(height: 1, indent: 68),
+                    if (store.pockets.length > 1) ...[
+                      DropdownButtonFormField<String>(
+                        key: ValueKey(pocket.id),
+                        initialValue: pocket.id,
+                        decoration: const InputDecoration(
+                          labelText: 'Selected pocket',
+                          prefixIcon: Icon(Icons.groups_2_outlined),
+                        ),
+                        items: store.pockets
+                            .map(
+                              (item) => DropdownMenuItem(
+                                value: item.id,
+                                child: Text(item.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) store.selectPocket(value);
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                     ],
+                    _PocketHero(pocket: pocket, balance: store.selectedBalance),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PocketAction(
+                            icon: Icons.person_add_alt_1_outlined,
+                            label: 'Invite',
+                            onTap: store.canManageMembers
+                                ? () => _inviteMember(context)
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: _PocketAction(
+                            icon: Icons.add_card_outlined,
+                            label: 'Contribute',
+                            onTap: () => _recordContribution(context),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: _PocketAction(
+                            icon: Icons.add_home_work_outlined,
+                            label: 'New pocket',
+                            onTap: () => _createPocket(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    _SectionHeader(
+                      title: 'Members',
+                      action: '${pocket.members.length}',
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Material(
+                      color: AppColors.surface,
+                      clipBehavior: Clip.antiAlias,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        side: const BorderSide(color: AppColors.outline),
+                      ),
+                      child: Column(
+                        children: [
+                          for (
+                            var index = 0;
+                            index < pocket.members.length;
+                            index++
+                          ) ...[
+                            _MemberTile(
+                              member: pocket.members[index],
+                              canRemove:
+                                  store.canManageMembers &&
+                                  pocket.members[index].role ==
+                                      FamilyRole.contributor,
+                              onRemove: () => _removeContributor(
+                                context,
+                                pocket.members[index],
+                              ),
+                            ),
+                            if (index != pocket.members.length - 1)
+                              const Divider(height: 1, indent: 68),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    const _SectionHeader(title: 'Shared contribution history'),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (store.selectedContributions.isEmpty)
+                      const _EmptyActivity()
+                    else
+                      ...store.selectedContributions.map(
+                        (item) => _FamilyContributionTile(contribution: item),
+                      ),
                   ],
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionHeader(title: 'Shared activity'),
-              const SizedBox(height: AppSpacing.sm),
-              if (store.selectedContributions.isEmpty)
-                const _EmptyActivity()
-              else
-                ...store.selectedContributions.map(
-                  (item) => _FamilyContributionTile(contribution: item),
-                ),
-            ],
-          ),
           bottomNavigationBar: const AppBottomNavigation(currentIndex: 2),
         );
       },
@@ -173,14 +224,60 @@ class FamilyPocketScreen extends StatelessWidget {
   }
 }
 
-class _PocketHero extends StatelessWidget {
-  const _PocketHero({required this.pocket});
-  final FamilyPocket pocket;
+class _EmptyPocketView extends StatelessWidget {
+  const _EmptyPocketView({required this.onCreate});
+
+  final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
-    final progress = pocket.progress.clamp(0.0, 1.0).toDouble();
-    final percent = (progress * 100).round();
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          children: [
+            const CircleAvatar(
+              radius: 42,
+              backgroundColor: AppColors.primarySoft,
+              child: Icon(
+                Icons.groups_2_outlined,
+                color: AppColors.primary,
+                size: 42,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Save together for family healthcare',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'Create a shared pocket, invite family members, and build a shared health balance without a target.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.inkMuted),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppPrimaryButton(
+              label: 'Create Family Pocket',
+              onPressed: onCreate,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PocketHero extends StatelessWidget {
+  const _PocketHero({required this.pocket, required this.balance});
+
+  final FamilyPocket pocket;
+  final int balance;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -196,14 +293,10 @@ class _PocketHero extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  color: Colors.white12,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.groups_2_rounded, color: Colors.white),
+              const CircleAvatar(
+                radius: 24,
+                backgroundColor: Colors.white12,
+                child: Icon(Icons.groups_2_rounded, color: Colors.white),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -229,32 +322,22 @@ class _PocketHero extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(
-                '$percent%',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          const Text(
+            'Shared health balance',
+            style: TextStyle(color: Colors.white70),
+          ),
           Text(
-            _naira(pocket.currentAmount),
+            _naira(balance),
             style: Theme.of(context).textTheme.headlineMedium
                 ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
           ),
+          const SizedBox(height: AppSpacing.xs),
           Text(
-            'of ${_naira(pocket.goalAmount)} shared goal',
+            '${pocket.members.length} members building health security together',
             style: const TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          LinearProgressIndicator(
-            value: progress,
-            minHeight: 8,
-            borderRadius: BorderRadius.circular(99),
-            backgroundColor: Colors.white24,
-            color: const Color(0xFF71F1C9),
           ),
         ],
       ),
@@ -268,14 +351,15 @@ class _PocketAction extends StatelessWidget {
     required this.label,
     required this.onTap,
   });
+
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface,
+      color: onTap == null ? AppColors.surfaceMuted : AppColors.surface,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -288,7 +372,11 @@ class _PocketAction extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Icon(icon, color: AppColors.primary, size: 22),
+              Icon(
+                icon,
+                color: onTap == null ? AppColors.inkMuted : AppColors.primary,
+                size: 22,
+              ),
               const SizedBox(height: 5),
               Text(
                 label,
@@ -309,6 +397,7 @@ class _PocketAction extends StatelessWidget {
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title, this.action});
+
   final String title;
   final String? action;
 
@@ -344,8 +433,15 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _MemberTile extends StatelessWidget {
-  const _MemberTile({required this.member});
+  const _MemberTile({
+    required this.member,
+    required this.canRemove,
+    required this.onRemove,
+  });
+
   final FamilyMember member;
+  final bool canRemove;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -376,6 +472,14 @@ class _MemberTile extends StatelessWidget {
       ),
       trailing: member.role == FamilyRole.admin
           ? const Icon(Icons.shield_outlined, color: AppColors.accent)
+          : canRemove
+          ? IconButton(
+              key: ValueKey('remove-member-${member.id}'),
+              onPressed: onRemove,
+              icon: const Icon(Icons.person_remove_outlined),
+              color: AppColors.error,
+              tooltip: 'Remove ${member.name}',
+            )
           : null,
     );
   }
@@ -383,6 +487,7 @@ class _MemberTile extends StatelessWidget {
 
 class _FamilyContributionTile extends StatelessWidget {
   const _FamilyContributionTile({required this.contribution});
+
   final FamilyContribution contribution;
 
   @override
@@ -397,7 +502,7 @@ class _FamilyContributionTile extends StatelessWidget {
         '${contribution.memberName} contributed',
         style: const TextStyle(fontWeight: FontWeight.w700),
       ),
-      subtitle: Text(_dateLabel(contribution.createdAt)),
+      subtitle: Text('${_dateLabel(contribution.createdAt)} • Demo record'),
       trailing: Text(
         '+${_naira(contribution.amount)}',
         style: const TextStyle(
@@ -438,26 +543,12 @@ class _CreatePocketSheetState extends State<_CreatePocketSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _beneficiaryController = TextEditingController();
-  final _amountController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
     _beneficiaryController.dispose();
-    _amountController.dispose();
     super.dispose();
-  }
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.pop(
-      context,
-      _PocketDraft(
-        name: _nameController.text.trim(),
-        beneficiary: _beneficiaryController.text.trim(),
-        goalAmount: int.parse(_amountController.text),
-      ),
-    );
   }
 
   @override
@@ -470,6 +561,11 @@ class _CreatePocketSheetState extends State<_CreatePocketSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _sheetTitle(context, 'Create Family Pocket'),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'Family Pockets build an ongoing shared balance without a target.',
+              style: TextStyle(color: AppColors.inkMuted),
+            ),
             const SizedBox(height: AppSpacing.lg),
             TextFormField(
               controller: _nameController,
@@ -486,19 +582,20 @@ class _CreatePocketSheetState extends State<_CreatePocketSheet> {
               ),
               validator: _required,
             ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                labelText: 'Shared goal amount',
-                prefixText: '₦ ',
-              ),
-              validator: _amountValidator,
-            ),
             const SizedBox(height: AppSpacing.lg),
-            AppPrimaryButton(label: 'Create pocket', onPressed: _submit),
+            AppPrimaryButton(
+              label: 'Create pocket',
+              onPressed: () {
+                if (!_formKey.currentState!.validate()) return;
+                Navigator.pop(
+                  context,
+                  _PocketDraft(
+                    name: _nameController.text.trim(),
+                    beneficiary: _beneficiaryController.text.trim(),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -524,18 +621,6 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
     _nameController.dispose();
     _emailController.dispose();
     super.dispose();
-  }
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.pop(
-      context,
-      _InviteDraft(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        role: _role,
-      ),
-    );
   }
 
   @override
@@ -581,7 +666,20 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
               onChanged: (value) => setState(() => _role = value!),
             ),
             const SizedBox(height: AppSpacing.lg),
-            AppPrimaryButton(label: 'Send demo invite', onPressed: _submit),
+            AppPrimaryButton(
+              label: 'Send demo invite',
+              onPressed: () {
+                if (!_formKey.currentState!.validate()) return;
+                Navigator.pop(
+                  context,
+                  _InviteDraft(
+                    name: _nameController.text.trim(),
+                    email: _emailController.text.trim(),
+                    role: _role,
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -591,6 +689,7 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
 
 class _FamilyContributionSheet extends StatefulWidget {
   const _FamilyContributionSheet({required this.pocketName});
+
   final String pocketName;
 
   @override
@@ -618,6 +717,11 @@ class _FamilyContributionSheetState extends State<_FamilyContributionSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _sheetTitle(context, 'Contribute to ${widget.pocketName}'),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'Demo only—this records activity without moving money.',
+              style: TextStyle(color: AppColors.inkMuted),
+            ),
             const SizedBox(height: AppSpacing.lg),
             TextFormField(
               controller: _amountController,
@@ -648,6 +752,7 @@ class _FamilyContributionSheetState extends State<_FamilyContributionSheet> {
 
 class _SheetFrame extends StatelessWidget {
   const _SheetFrame({required this.child});
+
   final Widget child;
 
   @override
@@ -665,14 +770,10 @@ class _SheetFrame extends StatelessWidget {
 }
 
 class _PocketDraft {
-  const _PocketDraft({
-    required this.name,
-    required this.beneficiary,
-    required this.goalAmount,
-  });
+  const _PocketDraft({required this.name, required this.beneficiary});
+
   final String name;
   final String beneficiary;
-  final int goalAmount;
 }
 
 class _InviteDraft {
@@ -681,6 +782,7 @@ class _InviteDraft {
     required this.email,
     required this.role,
   });
+
   final String name;
   final String email;
   final FamilyRole role;
@@ -696,8 +798,8 @@ String? _required(String? value) =>
     value == null || value.trim().isEmpty ? 'Required' : null;
 
 String? _amountValidator(String? value) =>
-    value == null || int.tryParse(value) == null || int.parse(value) < 1000
-    ? 'Enter an amount of at least ₦1,000'
+    value == null || int.tryParse(value) == null || int.parse(value) < 100
+    ? 'Enter an amount of at least ₦100'
     : null;
 
 String _roleLabel(FamilyRole role) => switch (role) {
@@ -724,4 +826,10 @@ String _dateLabel(DateTime date) {
   if (days == 0) return 'Today';
   if (days == 1) return 'Yesterday';
   return '$days days ago';
+}
+
+void _showMessage(BuildContext context, String message) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message)));
 }

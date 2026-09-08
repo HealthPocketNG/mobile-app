@@ -4,16 +4,24 @@ import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/core/widgets/onboarding_step_header.dart';
+import 'package:healthpocket/features/profile/application/profile_store.dart';
 
 class KycScreen extends StatelessWidget {
-  const KycScreen({super.key});
+  const KycScreen({required this.profileStore, super.key});
+
+  final ProfileStore profileStore;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
           child: Column(
             children: [
               const OnboardingStepHeader(title: 'Complete demo KYC', step: 3),
@@ -21,19 +29,28 @@ class KycScreen extends StatelessWidget {
               Container(
                 width: 92,
                 height: 92,
-                decoration: const BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
-                child: const Icon(Icons.verified_user_rounded, color: AppColors.primary, size: 46),
+                decoration: const BoxDecoration(
+                  color: AppColors.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.verified_user_rounded,
+                  color: AppColors.primary,
+                  size: 46,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
                 'Verify your identity (Demo)',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'This shows how verification will work. No identity data is collected in this UI MVP.',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: AppColors.inkMuted),
               ),
               const SizedBox(height: AppSpacing.lg),
               const _KycTask(
@@ -62,7 +79,10 @@ class KycScreen extends StatelessWidget {
               const Spacer(),
               AppPrimaryButton(
                 label: 'Submit demo KYC',
-                onPressed: () => Navigator.pushNamed(context, AppRoute.goalSetup.path),
+                onPressed: () {
+                  profileStore.completeDemoKyc();
+                  Navigator.pushNamed(context, AppRoute.savingsPlanSetup.path);
+                },
               ),
             ],
           ),
@@ -73,7 +93,11 @@ class KycScreen extends StatelessWidget {
 }
 
 class _KycTask extends StatelessWidget {
-  const _KycTask({required this.icon, required this.title, required this.subtitle});
+  const _KycTask({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
   final IconData icon;
   final String title;
   final String subtitle;
@@ -81,7 +105,10 @@ class _KycTask extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 12,
+      ),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.outline),
@@ -95,12 +122,24 @@ class _KycTask extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted)),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AppColors.inkMuted),
+                ),
               ],
             ),
           ),
-          const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 21),
+          const Icon(
+            Icons.check_circle_rounded,
+            color: AppColors.primary,
+            size: 21,
+          ),
         ],
       ),
     );

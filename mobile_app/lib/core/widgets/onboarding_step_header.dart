@@ -30,9 +30,8 @@ class OnboardingStepHeader extends StatelessWidget {
               child: Text(
                 title,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             SizedBox(
@@ -40,9 +39,8 @@ class OnboardingStepHeader extends StatelessWidget {
               child: Text(
                 '$step of $total',
                 textAlign: TextAlign.right,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.inkMuted,
-                ),
+                style: Theme.of(context).textTheme.labelMedium
+                    ?.copyWith(color: AppColors.inkMuted),
               ),
             ),
           ],

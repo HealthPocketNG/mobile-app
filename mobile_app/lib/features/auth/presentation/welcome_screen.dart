@@ -24,24 +24,21 @@ class WelcomeScreen extends StatelessWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () => Navigator.pushNamed(context, AppRoute.signIn.path),
+                  onPressed: () =>
+                      Navigator.pushNamed(context, AppRoute.signIn.path),
                   child: const Text('Skip'),
                 ),
               ),
               Text(
                 'Prepare for medical\nbills before they happen.',
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  height: 1.05,
-                ),
+                style: Theme.of(context).textTheme.displaySmall
+                    ?.copyWith(fontWeight: FontWeight.w800, height: 1.05),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Save consistently and build a healthier future for you and your family.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.inkMuted,
-                  height: 1.45,
-                ),
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.inkMuted, height: 1.45),
               ),
               const SizedBox(height: AppSpacing.lg),
               const Expanded(child: _WelcomeIllustration()),
@@ -50,12 +47,14 @@ class WelcomeScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               AppPrimaryButton(
                 label: 'Get started',
-                onPressed: () => Navigator.pushNamed(context, AppRoute.signUp.path),
+                onPressed: () =>
+                    Navigator.pushNamed(context, AppRoute.signUp.path),
               ),
               const SizedBox(height: AppSpacing.xs),
               Center(
                 child: TextButton(
-                  onPressed: () => Navigator.pushNamed(context, AppRoute.signIn.path),
+                  onPressed: () =>
+                      Navigator.pushNamed(context, AppRoute.signIn.path),
                   child: const Text('I already have an account'),
                 ),
               ),
@@ -103,7 +102,11 @@ class _WelcomeIllustration extends StatelessWidget {
                   color: AppColors.primaryDark,
                   borderRadius: BorderRadius.circular(22),
                   boxShadow: const [
-                    BoxShadow(color: Color(0x22045E5B), blurRadius: 20, offset: Offset(0, 12)),
+                    BoxShadow(
+                      color: Color(0x22045E5B),
+                      blurRadius: 20,
+                      offset: Offset(0, 12),
+                    ),
                   ],
                 ),
                 child: FittedBox(
@@ -123,10 +126,11 @@ class _WelcomeIllustration extends StatelessWidget {
                         const SizedBox(height: AppSpacing.md),
                         Text(
                           'A healthier tomorrow starts today.',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                       ],
                     ),
@@ -138,7 +142,11 @@ class _WelcomeIllustration extends StatelessWidget {
           const Positioned(
             right: 34,
             bottom: 30,
-            child: Icon(Icons.person_rounded, size: 126, color: AppColors.primary),
+            child: Icon(
+              Icons.person_rounded,
+              size: 126,
+              color: AppColors.primary,
+            ),
           ),
           const Positioned(
             right: 105,
@@ -162,7 +170,10 @@ class _PageDots extends StatelessWidget {
         Container(
           width: 20,
           height: 6,
-          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(99)),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(99),
+          ),
         ),
         const SizedBox(width: 5),
         ...List.generate(
@@ -171,7 +182,10 @@ class _PageDots extends StatelessWidget {
             width: 6,
             height: 6,
             margin: const EdgeInsets.only(right: 5),
-            decoration: const BoxDecoration(color: AppColors.outline, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: AppColors.outline,
+              shape: BoxShape.circle,
+            ),
           ),
         ),
       ],

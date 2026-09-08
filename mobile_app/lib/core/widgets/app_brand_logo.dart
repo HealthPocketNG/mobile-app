@@ -3,7 +3,11 @@ import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 
 class AppBrandLogo extends StatelessWidget {
-  const AppBrandLogo({super.key, this.centered = false, this.showTagline = false});
+  const AppBrandLogo({
+    super.key,
+    this.centered = false,
+    this.showTagline = false,
+  });
 
   final bool centered;
   final bool showTagline;
@@ -17,13 +21,14 @@ class AppBrandLogo extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         RichText(
           text: TextSpan(
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: AppColors.ink,
-            ),
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800, color: AppColors.ink),
             children: const [
               TextSpan(text: 'Health'),
-              TextSpan(text: 'Pocket', style: TextStyle(color: AppColors.primary)),
+              TextSpan(
+                text: 'Pocket',
+                style: TextStyle(color: AppColors.primary),
+              ),
             ],
           ),
         ),
@@ -31,14 +36,17 @@ class AppBrandLogo extends StatelessWidget {
     );
 
     return Column(
-      crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      crossAxisAlignment: centered
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         logo,
         if (showTagline) ...[
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Save today. Healthier tomorrow.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AppColors.inkMuted),
           ),
         ],
       ],

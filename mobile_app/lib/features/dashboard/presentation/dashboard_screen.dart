@@ -4,55 +4,65 @@ import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/features/dashboard/data/mock_dashboard_data.dart';
+import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
+import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({required this.savingsStore, super.key});
+  const DashboardScreen({
+    required this.savingsStore,
+    required this.profileStore,
+    super.key,
+  });
 
   final SavingsStore savingsStore;
+  final ProfileStore profileStore;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.lg,
-                AppSpacing.xl,
+    return AnimatedBuilder(
+      animation: Listenable.merge([savingsStore, profileStore]),
+      builder: (context, child) => Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  AppSpacing.xl,
+                ),
+                sliver: SliverList.list(
+                  children: [
+                    _DashboardHeader(profileStore: profileStore),
+                    const SizedBox(height: AppSpacing.lg),
+                    _BalanceCard(store: savingsStore),
+                    const SizedBox(height: AppSpacing.xl),
+                    _CoverageSection(balance: savingsStore.currentBalance),
+                    const SizedBox(height: AppSpacing.lg),
+                    _SavingsPlanCard(plan: savingsStore.plan),
+                    const SizedBox(height: AppSpacing.md),
+                    const _FamilyPocketCard(),
+                    const SizedBox(height: AppSpacing.xl),
+                    _ActivitySection(store: savingsStore),
+                  ],
+                ),
               ),
-              sliver: SliverList.list(
-                children: [
-                  const _DashboardHeader(),
-                  const SizedBox(height: AppSpacing.lg),
-                  _BalanceCard(store: savingsStore),
-                  const SizedBox(height: AppSpacing.xl),
-                  const _GoalsSection(),
-                  const SizedBox(height: AppSpacing.md),
-                  _ProgressCard(store: savingsStore),
-                  const SizedBox(height: AppSpacing.md),
-                  _PrimaryGoalCard(store: savingsStore),
-                  const SizedBox(height: AppSpacing.md),
-                  const _FamilyPocketCard(),
-                  const SizedBox(height: AppSpacing.xl),
-                  _ActivitySection(store: savingsStore),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
+        bottomNavigationBar: const AppBottomNavigation(currentIndex: 0),
       ),
-      bottomNavigationBar: const AppBottomNavigation(currentIndex: 0),
     );
   }
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader();
+  const _DashboardHeader({required this.profileStore});
+
+  final ProfileStore profileStore;
 
   @override
   Widget build(BuildContext context) {
@@ -64,17 +74,13 @@ class _DashboardHeader extends StatelessWidget {
         : 'Good evening,';
     return Row(
       children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: const BoxDecoration(
-            color: AppColors.primarySoft,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
+        const CircleAvatar(
+          radius: 26,
+          backgroundColor: AppColors.primarySoft,
+          child: Icon(
             Icons.person_rounded,
             color: AppColors.primaryDark,
-            size: 32,
+            size: 31,
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -84,36 +90,21 @@ class _DashboardHeader extends StatelessWidget {
             children: [
               Text(greeting, style: Theme.of(context).textTheme.bodyLarge),
               Text(
-                '${MockDashboardData.firstName} 👋',
+                '${_firstName(profileStore.profile.fullName)} 👋',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.headlineSmall
                     ?.copyWith(fontWeight: FontWeight.w800),
               ),
             ],
           ),
         ),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            IconButton(
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('You have no new notifications.')),
-              ),
-              icon: const Icon(Icons.notifications_none_rounded, size: 29),
-              tooltip: 'Notifications',
-            ),
-            Positioned(
-              right: 7,
-              top: 7,
-              child: Container(
-                width: 9,
-                height: 9,
-                decoration: const BoxDecoration(
-                  color: AppColors.secondary,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ],
+        IconButton(
+          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You have no new notifications.')),
+          ),
+          icon: const Icon(Icons.notifications_none_rounded, size: 28),
+          tooltip: 'Notifications',
         ),
       ],
     );
@@ -127,13 +118,10 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final saved = store.totalSaved;
-    final target = store.totalTarget;
-    final remaining = target - saved;
-    final progress = saved / target;
-
+    final balance = store.currentBalance;
+    final plan = store.plan;
     return Container(
-      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -149,106 +137,77 @@ class _BalanceCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Positioned(right: -30, top: -38, child: _BalanceOrb(size: 150)),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      'Total health savings',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    const Icon(
-                      Icons.info_outline_rounded,
-                      color: Colors.white70,
-                      size: 19,
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.account_balance_wallet_rounded,
-                      color: Color(0xFF6FE0C4),
-                      size: 38,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  _naira(saved),
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+          const Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Health savings balance',
+                  style: TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                const Row(
-                  children: [
-                    Icon(
-                      Icons.shield_rounded,
-                      color: Color(0xFF71F1C9),
-                      size: 22,
-                    ),
-                    SizedBox(width: AppSpacing.sm),
-                    Text(
-                      'Peace of mind, one step at a time',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ],
+              ),
+              Icon(
+                Icons.account_balance_wallet_rounded,
+                color: Color(0xFF71F1C9),
+                size: 34,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            _naira(balance),
+            style: Theme.of(context).textTheme.displaySmall
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            balance == 0
+                ? 'Start small. Every contribution builds health security.'
+                : 'Your available healthcare savings',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Container(height: 1, color: Colors.white24),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _BalanceMetric(
+                  label: 'Savings plan',
+                  value: plan == null
+                      ? 'Not set'
+                      : '${_naira(plan.contributionAmount)} ${plan.frequency.toLowerCase()}',
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 8,
-                    backgroundColor: Colors.white24,
-                    valueColor: const AlwaysStoppedAnimation(Color(0xFF71F1C9)),
-                  ),
+              ),
+              Container(width: 1, height: 42, color: Colors.white24),
+              Expanded(
+                child: _BalanceMetric(
+                  label: 'Contributions',
+                  value: '${store.contributions.length} recorded',
                 ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _BalanceMetric(
-                        label: 'Goal target',
-                        value: _naira(target),
-                      ),
-                    ),
-                    Container(width: 1, height: 42, color: Colors.white24),
-                    Expanded(
-                      child: _BalanceMetric(
-                        label: 'Remaining',
-                        value: _naira(remaining),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: AppColors.primaryDark,
-                    ),
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Mock contribution flow is coming next.'),
-                      ),
-                    ),
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Add savings'),
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.primaryDark,
+              ),
+              onPressed: () =>
+                  Navigator.pushNamed(context, AppRoute.savings.path),
+              icon: const Icon(Icons.add_rounded),
+              label: Text(
+                balance == 0 ? 'Add your first savings' : 'Add savings',
+              ),
             ),
           ),
         ],
@@ -257,23 +216,9 @@ class _BalanceCard extends StatelessWidget {
   }
 }
 
-class _BalanceOrb extends StatelessWidget {
-  const _BalanceOrb({required this.size});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: const BoxDecoration(
-      color: Color(0x1600FFCC),
-      shape: BoxShape.circle,
-    ),
-  );
-}
-
 class _BalanceMetric extends StatelessWidget {
   const _BalanceMetric({required this.label, required this.value});
+
   final String label;
   final String value;
 
@@ -291,10 +236,12 @@ class _BalanceMetric extends StatelessWidget {
           const SizedBox(height: 3),
           Text(
             value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w700,
-              fontSize: 16,
+              fontSize: 14,
             ),
           ),
         ],
@@ -303,28 +250,37 @@ class _BalanceMetric extends StatelessWidget {
   }
 }
 
-class _GoalsSection extends StatelessWidget {
-  const _GoalsSection();
+class _CoverageSection extends StatelessWidget {
+  const _CoverageSection({required this.balance});
+
+  final int balance;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(
-          title: 'What you’re saving for',
-          action: 'View goals',
-          onTap: () => Navigator.pushNamed(context, AppRoute.goals.path),
+        Text(
+          'What your balance can help cover',
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        const Text(
+          'Illustrative costs only—not insurance or a provider quote.',
+          style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
         ),
         const SizedBox(height: AppSpacing.md),
         SizedBox(
           height: 154,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: MockDashboardData.goals.length,
+            itemCount: MockDashboardData.coverageGuides.length,
             separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-            itemBuilder: (context, index) =>
-                _GoalCategoryCard(goal: MockDashboardData.goals[index]),
+            itemBuilder: (context, index) => _CoverageCard(
+              guide: MockDashboardData.coverageGuides[index],
+              balance: balance,
+            ),
           ),
         ),
       ],
@@ -332,14 +288,18 @@ class _GoalsSection extends StatelessWidget {
   }
 }
 
-class _GoalCategoryCard extends StatelessWidget {
-  const _GoalCategoryCard({required this.goal});
-  final DashboardGoal goal;
+class _CoverageCard extends StatelessWidget {
+  const _CoverageCard({required this.guide, required this.balance});
+
+  final HealthcareCostGuide guide;
+  final int balance;
 
   @override
   Widget build(BuildContext context) {
+    final enough = balance >= guide.referenceCost;
+    final difference = guide.referenceCost - balance;
     return Container(
-      width: 136,
+      width: 145,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -349,102 +309,37 @@ class _GoalCategoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: goal.color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(goal.icon, color: goal.color, size: 22),
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: guide.color.withValues(alpha: 0.12),
+            child: Icon(guide.icon, color: guide.color, size: 21),
           ),
           const Spacer(),
           Text(
-            goal.title,
+            guide.title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 3),
           Text(
-            '${_naira(goal.currentAmount)} saved',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AppColors.inkMuted),
+            'Estimate ${_naira(guide.referenceCost)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.inkMuted, fontSize: 11),
           ),
-          const SizedBox(height: 7),
-          LinearProgressIndicator(
-            value: goal.progress.clamp(0.0, 1.0).toDouble(),
-            minHeight: 5,
-            borderRadius: BorderRadius.circular(99),
-            backgroundColor: AppColors.outline,
-            valueColor: AlwaysStoppedAnimation(goal.color),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProgressCard extends StatelessWidget {
-  const _ProgressCard({required this.store});
-
-  final SavingsStore store;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = store.totalTarget == 0
-        ? 0.0
-        : store.totalSaved / store.totalTarget;
-    final percent = (progress * 100).round();
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'You’re $percent% toward your goal',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.primaryDark,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Keep saving to grow your healthcare cushion.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          SizedBox(
-            width: 68,
-            height: 68,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 8,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: Colors.white,
-                  color: AppColors.primary,
-                ),
-                Text(
-                  '$percent%',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 17,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 5),
+          Text(
+            balance == 0
+                ? 'Start saving'
+                : enough
+                ? 'Within your balance'
+                : '${_naira(difference)} more may help',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: enough ? AppColors.success : AppColors.primaryDark,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -453,36 +348,32 @@ class _ProgressCard extends StatelessWidget {
   }
 }
 
-class _PrimaryGoalCard extends StatelessWidget {
-  const _PrimaryGoalCard({required this.store});
+class _SavingsPlanCard extends StatelessWidget {
+  const _SavingsPlanCard({required this.plan});
 
-  final SavingsStore store;
+  final SavingsPlan? plan;
 
   @override
   Widget build(BuildContext context) {
-    final goal = store.goals.first;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    final currentPlan = plan;
+    return Material(
+      color: AppColors.primarySoft,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionTitle(
-            title: goal.title,
-            action: 'View details',
-            onTap: () => Navigator.pushNamed(context, AppRoute.goals.path),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
+        onTap: () => Navigator.pushNamed(context, AppRoute.savings.path),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
             children: [
-              const Icon(
-                Icons.track_changes_rounded,
-                color: AppColors.primary,
-                size: 40,
+              const CircleAvatar(
+                radius: 27,
+                backgroundColor: Colors.white,
+                child: Icon(
+                  Icons.savings_outlined,
+                  color: AppColors.primary,
+                  size: 29,
+                ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -490,42 +381,32 @@ class _PrimaryGoalCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Current savings',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: AppColors.inkMuted),
+                      currentPlan == null
+                          ? 'Set up your savings plan'
+                          : '${_naira(currentPlan.contributionAmount)} ${currentPlan.frequency.toLowerCase()}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.primaryDark,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     Text(
-                      _naira(goal.currentAmount),
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                    Text(
-                      'of ${_naira(goal.targetAmount)} target',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      currentPlan == null
+                          ? 'Choose an amount and a comfortable schedule.'
+                          : currentPlan.status == SavingsPlanStatus.paused
+                          ? 'Savings plan paused'
+                          : 'Your savings plan is active',
+                      style: const TextStyle(color: AppColors.inkMuted),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  goal.frequency,
-                  style: TextStyle(
-                    color: AppColors.primaryDark,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -546,35 +427,29 @@ class _FamilyPocketCard extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
             children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
+              const CircleAvatar(
+                radius: 27,
+                backgroundColor: Colors.white,
+                child: Icon(
                   Icons.groups_2_outlined,
                   color: AppColors.primary,
-                  size: 30,
+                  size: 29,
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Family Pocket',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      style: TextStyle(
                         color: AppColors.primaryDark,
+                        fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Contribute together. Build stronger health security.',
-                    ),
+                    Text('Save together for your family’s healthcare.'),
                   ],
                 ),
               ),
@@ -597,70 +472,53 @@ class _ActivitySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle(title: 'Recent activity'),
+        Text(
+          'Recent activity',
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: AppSpacing.sm),
-        ...store.contributions
-            .take(3)
-            .map(
-              (activity) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  backgroundColor: AppColors.primarySoft,
-                  child: const Icon(
-                    Icons.south_west_rounded,
-                    color: AppColors.primary,
+        if (store.contributions.isEmpty)
+          const Text(
+            'No contributions yet. Your savings activity will appear here.',
+            style: TextStyle(color: AppColors.inkMuted),
+          )
+        else
+          ...store.contributions
+              .take(3)
+              .map(
+                (activity) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: AppColors.primarySoft,
+                    child: Icon(
+                      Icons.south_west_rounded,
+                      color: AppColors.primary,
+                    ),
                   ),
-                ),
-                title: Text(
-                  activity.goalTitle,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: Text(_activityDate(activity.createdAt)),
-                trailing: Text(
-                  '+${_naira(activity.amount)}',
-                  style: const TextStyle(
-                    color: AppColors.success,
-                    fontWeight: FontWeight.w700,
+                  title: const Text(
+                    'Health savings contribution',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(_activityDate(activity.createdAt)),
+                  trailing: Text(
+                    '+${_naira(activity.amount)}',
+                    style: const TextStyle(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
-            ),
       ],
     );
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.action, this.onTap});
-  final String title;
-  final String? action;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ),
-        if (action != null)
-          TextButton(
-            onPressed: onTap,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(action!),
-                const Icon(Icons.chevron_right_rounded, size: 19),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
+String _firstName(String fullName) {
+  final value = fullName.trim();
+  if (value.isEmpty) return MockDashboardData.firstName;
+  return value.split(RegExp(r'\s+')).first;
 }
 
 String _naira(int amount) {
@@ -678,7 +536,7 @@ String _activityDate(DateTime date) {
     now.month,
     now.day,
   ).difference(DateTime(date.year, date.month, date.day)).inDays;
-  if (days == 0) return 'Goal contribution • Today';
-  if (days == 1) return 'Goal contribution • Yesterday';
-  return 'Goal contribution • $days days ago';
+  if (days == 0) return 'Demo record • Today';
+  if (days == 1) return 'Demo record • Yesterday';
+  return 'Demo record • $days days ago';
 }

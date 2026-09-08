@@ -18,7 +18,7 @@ class AppBottomNavigation extends StatelessWidget {
         if (index == currentIndex) return;
         final route = switch (index) {
           0 => AppRoute.dashboard,
-          1 => AppRoute.goals,
+          1 => AppRoute.savings,
           2 => AppRoute.familyPocket,
           _ => AppRoute.profile,
         };
@@ -33,7 +33,7 @@ class AppBottomNavigation extends StatelessWidget {
         NavigationDestination(
           icon: Icon(Icons.savings_outlined),
           selectedIcon: Icon(Icons.savings_rounded),
-          label: 'Goals',
+          label: 'Savings',
         ),
         NavigationDestination(
           icon: Icon(Icons.groups_2_outlined),

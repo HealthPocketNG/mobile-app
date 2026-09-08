@@ -21,7 +21,9 @@
 
 HealthPocket is a healthcare-focused savings platform that helps Nigerians prepare financially for medical expenses before emergencies occur.
 
-Users create healthcare savings goals, contribute consistently, track progress, and eventually use those funds for healthcare-related spending.
+Users configure a recurring healthcare savings plan, contribute consistently,
+build an ongoing health balance, and eventually use those funds for
+healthcare-related spending.
 
 The MVP is focused on validating saving behavior, not building a complete healthcare payments ecosystem.
 
@@ -36,7 +38,7 @@ The primary objective of the MVP is to answer a single question:
 The MVP should prioritize:
 
 - User onboarding
-- Savings goal creation
+- Savings plan setup
 - Savings tracking
 - Family savings collaboration
 - User retention
@@ -107,31 +109,33 @@ No hospital partnerships are required.
 
 - Personal Information
 - KYC Screens
-- Savings Goal Setup
-- Healthcare Goal Setup
+- Recurring Savings Plan Setup
 
 #### Dashboard
 
 - Current Balance
-- Savings Goal Progress
-- Goal Summary
+- Savings Plan Summary
+- What Your Balance Can Cover
 - Activity Feed
 
 #### Savings
 
-- Create Savings Goal
-- Edit Savings Goal
-- Pause Goal
-- Resume Goal
+- Set Savings Amount and Frequency
+- Edit Savings Plan
+- Pause Savings Plan
+- Resume Savings Plan
 - Record mock contributions
 - View contribution history
+- View a zero-balance encouragement state
 
 #### Family Pocket
 
 - Create Family Pocket
 - Invite Member
 - View Members
-- Shared Goal Progress
+- Remove Contributor (Admin only)
+- Shared Balance
+- Shared Contribution History
 
 #### Profile
 
@@ -177,23 +181,24 @@ Convert the UI into a functional MVP.
 
 #### Savings Engine
 
-- Create Goal
-- Update Goal
-- Pause and Resume Goal
+- Create Savings Plan
+- Update Savings Amount and Frequency
+- Pause and Resume Savings Plan
 - Record Contribution (Savings Record)
-- Track Progress
-- Goal Completion Logic
+- Calculate Current Health Balance
+- Calculate Informational Healthcare Coverage Guidance
 
-Each contribution must be linked to an individual goal or Family Pocket and
-must update the relevant displayed progress. In Month 2, this is a product
-record only; it must not imply real-money movement until a banking/payment
-partner is integrated.
+Each contribution must be linked to either a user's personal HealthPocket or a
+Family Pocket and must update the relevant calculated balance. Savings plans
+do not have target balances and never become "completed." In Month 2, a
+contribution is a product record only; it must not imply real-money movement
+until a banking/payment partner is integrated.
 
 #### Activity Tracking
 
 - Contribution (Savings Record) History
 - User Activity Logs
-- Goal and Family Pocket Activity Feed
+- Savings Plan and Family Pocket Activity Feed
 
 #### Family Pocket
 
@@ -202,7 +207,8 @@ partner is integrated.
 - Invite Members
 - Shared Contributions
 - Role Management
-- Shared Contribution History and Shared Goal Progress
+- Admin Removal of Contributors
+- Shared Contribution History and Shared Balance
 
 ### Optional Partner Features
 
@@ -254,16 +260,24 @@ Avoid building complex payment infrastructure at this stage.
 
 Users can:
 
-- Create healthcare savings goals
-- Track progress toward goals
+- Configure how much to save daily, weekly, or monthly
+- Edit, pause, and resume their savings plan
+- Build an ongoing healthcare balance without a required target
 - View contribution history
 - Monitor savings activity
+- See informational examples of healthcare expenses their current balance may
+  help cover
+
+The "What your balance can cover" experience is guidance only. It must not be
+presented as insurance coverage, a medical guarantee, a provider quote, or a
+promise that a particular treatment will be fully paid for.
 
 ---
 
 ## Family Pocket
 
-Users can collaborate on shared healthcare savings goals.
+Users can collaborate through a shared healthcare balance. A Family Pocket
+does not have a target amount or completion progress.
 
 ### Roles
 
@@ -271,18 +285,23 @@ Users can collaborate on shared healthcare savings goals.
 
 - Creates Pocket
 - Invites Members
-- Manages Goal
+- Removes Contributors
+- Manages Pocket Membership
 
 #### Contributor
 
 - Contributes Funds
-- Tracks Progress
+- Views Shared Balance and Activity
 
 #### Beneficiary
 
 - Intended healthcare recipient
 
 Role architecture should remain extensible.
+
+Only an Admin may remove a Contributor. The founding Admin cannot be removed
+through the standard contributor-removal action. Removing a member does not
+delete or reverse their historical contributions.
 
 ---
 
@@ -331,21 +350,41 @@ User
 - createdAt
 ```
 
-## Savings Goal
+## Personal HealthPocket
 
 ```text
-SavingsGoal
+PersonalHealthPocket
 - id
 - userId
-- title
-- targetAmount
-- currentAmount
 - currency
-- status (active | paused | completed)
-- targetDate (optional)
+- status (active | restricted | closed)
 - createdAt
 - updatedAt
 ```
+
+The displayed personal balance is calculated from completed personal
+contributions. It is not a goal-progress value.
+
+## Savings Plan
+
+```text
+SavingsPlan
+- id
+- userId
+- personalHealthPocketId
+- contributionAmount
+- frequency (daily | weekly | monthly)
+- startDate
+- nextContributionDate (optional)
+- status (active | paused)
+- fundingSourceId (optional; unavailable until a payment partner exists)
+- createdAt
+- updatedAt
+```
+
+A user has one default personal HealthPocket savings plan in the MVP. Editing
+the plan changes future contribution instructions; it does not alter historical
+contribution records.
 
 ## Contribution (Savings Record)
 
@@ -353,8 +392,9 @@ SavingsGoal
 Contribution
 - id
 - contributorUserId
-- savingsGoalId (optional; required when familyPocketId is absent)
-- familyPocketId (optional; required when savingsGoalId is absent)
+- personalHealthPocketId (optional; required when familyPocketId is absent)
+- savingsPlanId (optional; identifies the plan that prompted the record)
+- familyPocketId (optional; required when personalHealthPocketId is absent)
 - amount
 - currency
 - status (recorded | completed | reversed)
@@ -363,10 +403,11 @@ Contribution
 - createdAt
 ```
 
-`Contribution` is the canonical record for savings history and progress. A
-goal or Family Pocket balance is calculated from its completed contributions;
-do not maintain an unrelated transaction history. The `source` field keeps
-the MVP provider-agnostic and makes future payment integrations replaceable.
+`Contribution` is the canonical record for savings history and balances. A
+Personal HealthPocket or Family Pocket balance is calculated from its completed
+contributions; do not maintain an unrelated transaction history. The `source`
+field keeps the MVP provider-agnostic and makes future payment integrations
+replaceable.
 
 ## Family Pocket
 
@@ -374,10 +415,8 @@ the MVP provider-agnostic and makes future payment integrations replaceable.
 FamilyPocket
 - id
 - name
-- goalAmount
-- currentAmount
 - currency
-- status (active | completed)
+- status (active | archived)
 - createdBy
 - createdAt
 - updatedAt
@@ -390,8 +429,10 @@ FamilyMember
 - id
 - pocketId
 - userId
-- role
+- role (admin | contributor | beneficiary)
+- invitationStatus (pending | accepted)
 - joinedAt
+- removedAt (optional)
 ```
 
 ## Activity Record
@@ -407,14 +448,23 @@ ActivityRecord
 - createdAt
 ```
 
-## Savings and Activity Rules
+## Savings, Family, and Activity Rules
 
-- Only completed contributions count toward a goal or Family Pocket balance.
-- A paused goal accepts no new contributions until it is resumed.
+- Only completed contributions count toward a personal or Family Pocket
+  balance.
+- A paused savings plan stops future scheduled contribution instructions but
+  does not close the user's HealthPocket or erase its balance.
+- Manual contribution records may still be added in the mock MVP. Actual bank
+  debits must not be implied before payment infrastructure exists.
 - A contribution creates an associated activity record for the contributor;
   shared-pocket activity is visible to its members according to their role.
-- Goal completion occurs when the calculated balance reaches or exceeds its
-  target amount. The MVP must not create payouts, transfers, or settlements.
+- Family Pockets do not have targets or completion states.
+- Only a Family Pocket Admin may remove a Contributor. Membership removal must
+  preserve historical contribution and activity records.
+- Healthcare coverage guidance is derived from configurable reference-cost
+  bands and the current balance; it is informational and must carry no promise
+  of insurance or provider pricing.
+- The MVP must not create payouts, transfers, automatic debits, or settlements.
 
 ---
 
@@ -467,7 +517,7 @@ When implementing HealthPocket:
 HealthPocket MVP is successful if:
 
 - Users complete onboarding.
-- Users create healthcare savings goals.
+- Users configure healthcare savings plans.
 - Users actively use the application.
 - Users return regularly.
 - Family Pocket receives adoption.

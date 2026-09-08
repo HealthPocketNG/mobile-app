@@ -5,24 +5,30 @@ import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/core/widgets/onboarding_step_header.dart';
+import 'package:healthpocket/features/savings/application/savings_store.dart';
 
-class GoalSetupScreen extends StatefulWidget {
-  const GoalSetupScreen({super.key});
+class SavingsPlanSetupScreen extends StatefulWidget {
+  const SavingsPlanSetupScreen({
+    required this.savingsStore,
+    required this.onCompleted,
+    super.key,
+  });
+
+  final SavingsStore savingsStore;
+  final VoidCallback onCompleted;
 
   @override
-  State<GoalSetupScreen> createState() => _GoalSetupScreenState();
+  State<SavingsPlanSetupScreen> createState() => _SavingsPlanSetupScreenState();
 }
 
-class _GoalSetupScreenState extends State<GoalSetupScreen> {
+class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController(text: 'Family Health Fund');
-  final _amountController = TextEditingController(text: '150000');
+  final _amountController = TextEditingController(text: '5000');
   String _frequency = 'Monthly';
   DateTime _startDate = DateTime.now();
 
   @override
   void dispose() {
-    _nameController.dispose();
     _amountController.dispose();
     super.dispose();
   }
@@ -37,9 +43,19 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
     if (date != null) setState(() => _startDate = date);
   }
 
-  void _createGoal() {
+  void _createPlan() {
     if (!_formKey.currentState!.validate()) return;
-    Navigator.pushNamedAndRemoveUntil(context, AppRoute.dashboard.path, (route) => false);
+    widget.savingsStore.saveOnboardingPlan(
+      contributionAmount: int.parse(_amountController.text),
+      frequency: _frequency,
+      startDate: _startDate,
+    );
+    widget.onCompleted();
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoute.dashboard.path,
+      (route) => false,
+    );
   }
 
   @override
@@ -49,20 +65,35 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
             children: [
-              const OnboardingStepHeader(title: 'Create your first goal', step: 4),
+              const OnboardingStepHeader(title: 'Set up savings', step: 4),
               const SizedBox(height: AppSpacing.xl),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Row(
                   children: [
                     Container(
                       width: 54,
                       height: 54,
-                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                      child: const Icon(Icons.track_changes_rounded, color: AppColors.secondary, size: 30),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.track_changes_rounded,
+                        color: AppColors.secondary,
+                        size: 30,
+                      ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
@@ -70,13 +101,15 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Set a goal. Build a healthier tomorrow.',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                            'Save consistently for your health.',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'Start with a goal to keep you motivated.',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+                            'Choose an amount and schedule that works for you.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.inkMuted),
                           ),
                         ],
                       ),
@@ -86,27 +119,20 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
               TextFormField(
-                controller: _nameController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Goal name',
-                  prefixIcon: Icon(Icons.adjust_rounded),
-                ),
-                validator: (value) => value == null || value.trim().isEmpty ? 'Give your goal a name' : null,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              TextFormField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
-                  labelText: 'Target amount',
+                  labelText: 'Amount to save each time',
                   prefixIcon: Icon(Icons.savings_outlined),
                   prefixText: '₦ ',
                 ),
                 onChanged: (_) => setState(() {}),
-                validator: (value) => value == null || int.tryParse(value) == null || int.parse(value) < 1000
-                    ? 'Enter an amount of at least ₦1,000'
+                validator: (value) =>
+                    value == null ||
+                        int.tryParse(value) == null ||
+                        int.parse(value) < 100
+                    ? 'Enter an amount of at least ₦100'
                     : null,
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -117,9 +143,9 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
                   prefixIcon: Icon(Icons.calendar_month_outlined),
                 ),
                 items: const [
+                  DropdownMenuItem(value: 'Daily', child: Text('Daily')),
                   DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
                   DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
-                  DropdownMenuItem(value: 'Whenever I can', child: Text('Whenever I can')),
                 ],
                 onChanged: (value) => setState(() => _frequency = value!),
               ),
@@ -134,18 +160,30 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.track_changes_rounded, color: AppColors.primary, size: 34),
+                    const Icon(
+                      Icons.track_changes_rounded,
+                      color: AppColors.primary,
+                      size: 34,
+                    ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('You’ll save', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted)),
+                          Text(
+                            'You’ll save',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.inkMuted),
+                          ),
                           Text(
                             '₦${_formatAmount(_amountController.text)}',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
-                          Text('$_frequency, starting ${_shortDate(_startDate)}', style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                            '$_frequency, starting ${_shortDate(_startDate)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ],
                       ),
                     ),
@@ -153,7 +191,10 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              AppPrimaryButton(label: 'Create goal', onPressed: _createGoal),
+              AppPrimaryButton(
+                label: 'Create savings plan',
+                onPressed: _createPlan,
+              ),
             ],
           ),
         ),
@@ -164,13 +205,14 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
   String _formatAmount(String value) {
     final digits = value.replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) return '0';
-    return digits.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => ',');
+    return digits.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (match) => ',',
+    );
   }
 
-  String _shortDate(DateTime date) => '${date.day} ${const [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ][date.month - 1]} ${date.year}';
+  String _shortDate(DateTime date) =>
+      '${date.day} ${const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.month - 1]} ${date.year}';
 }
 
 class _DateTile extends StatelessWidget {
@@ -180,7 +222,20 @@ class _DateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return Material(
       color: AppColors.surfaceMuted,
       shape: RoundedRectangleBorder(
@@ -192,7 +247,10 @@ class _DateTile extends StatelessWidget {
         leading: const Icon(Icons.event_outlined, color: AppColors.primaryDark),
         title: const Text('Start date'),
         subtitle: Text('${date.day} ${months[date.month - 1]} ${date.year}'),
-        trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: AppColors.primary,
+        ),
       ),
     );
   }

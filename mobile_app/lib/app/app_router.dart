@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:healthpocket/app/app_state.dart';
-import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/features/auth/presentation/auth_form_screen.dart';
 import 'package:healthpocket/features/auth/presentation/forgot_password_screen.dart';
 import 'package:healthpocket/features/auth/presentation/otp_verification_screen.dart';
@@ -8,10 +7,11 @@ import 'package:healthpocket/features/auth/presentation/splash_screen.dart';
 import 'package:healthpocket/features/auth/presentation/welcome_screen.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:healthpocket/features/family/presentation/family_pocket_screen.dart';
-import 'package:healthpocket/features/onboarding/presentation/goal_setup_screen.dart';
+import 'package:healthpocket/features/onboarding/presentation/savings_plan_setup_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/kyc_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/personal_information_screen.dart';
-import 'package:healthpocket/features/savings/presentation/savings_goals_screen.dart';
+import 'package:healthpocket/features/profile/presentation/profile_screen.dart';
+import 'package:healthpocket/features/savings/presentation/savings_screen.dart';
 
 enum AppRoute {
   splash('/'),
@@ -23,9 +23,9 @@ enum AppRoute {
   onboarding('/onboarding'),
   personalInformation('/onboarding/personal-information'),
   kyc('/onboarding/kyc'),
-  goalSetup('/onboarding/goal-setup'),
+  savingsPlanSetup('/onboarding/savings-plan'),
   dashboard('/dashboard'),
-  goals('/goals'),
+  savings('/savings'),
   familyPocket('/family-pocket'),
   profile('/profile');
 
@@ -47,58 +47,41 @@ class AppRouter {
       builder: (context) => switch (destination) {
         AppRoute.splash => const SplashScreen(),
         AppRoute.welcome => const WelcomeScreen(),
-        AppRoute.signIn => const AuthFormScreen(mode: AuthMode.signIn),
-        AppRoute.signUp => const AuthFormScreen(mode: AuthMode.signUp),
+        AppRoute.signIn => AuthFormScreen(
+          mode: AuthMode.signIn,
+          profileStore: appState.profileStore,
+          onRegistrationStarted: appState.beginRegistration,
+        ),
+        AppRoute.signUp => AuthFormScreen(
+          mode: AuthMode.signUp,
+          profileStore: appState.profileStore,
+          onRegistrationStarted: appState.beginRegistration,
+        ),
         AppRoute.forgotPassword => const ForgotPasswordScreen(),
-        AppRoute.otp => const OtpVerificationScreen(),
-        AppRoute.onboarding => const PersonalInformationScreen(),
-        AppRoute.personalInformation => const PersonalInformationScreen(),
-        AppRoute.kyc => const KycScreen(),
-        AppRoute.goalSetup => const GoalSetupScreen(),
+        AppRoute.otp => OtpVerificationScreen(
+          profileStore: appState.profileStore,
+        ),
+        AppRoute.onboarding => PersonalInformationScreen(
+          profileStore: appState.profileStore,
+        ),
+        AppRoute.personalInformation => PersonalInformationScreen(
+          profileStore: appState.profileStore,
+        ),
+        AppRoute.kyc => KycScreen(profileStore: appState.profileStore),
+        AppRoute.savingsPlanSetup => SavingsPlanSetupScreen(
+          savingsStore: appState.savingsStore,
+          onCompleted: appState.completeOnboarding,
+        ),
         AppRoute.dashboard => DashboardScreen(
           savingsStore: appState.savingsStore,
+          profileStore: appState.profileStore,
         ),
-        AppRoute.goals => SavingsGoalsScreen(store: appState.savingsStore),
+        AppRoute.savings => SavingsScreen(store: appState.savingsStore),
         AppRoute.familyPocket => FamilyPocketScreen(
           store: appState.familyPocketStore,
         ),
-        _ => _FoundationScreen(route: destination),
+        AppRoute.profile => ProfileScreen(store: appState.profileStore),
       },
-    );
-  }
-}
-
-class _FoundationScreen extends StatelessWidget {
-  const _FoundationScreen({required this.route});
-
-  final AppRoute route;
-
-  @override
-  Widget build(BuildContext context) {
-    final title = route.name
-        .replaceAllMapped(RegExp(r'([A-Z])'), (match) => ' ${match.group(0)}')
-        .replaceFirstMapped(
-          RegExp(r'^.'),
-          (match) => match.group(0)!.toUpperCase(),
-        );
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('HealthPocket')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              'This route is ready for its feature screen. The design system, '
-              'navigation, and app state are in place.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

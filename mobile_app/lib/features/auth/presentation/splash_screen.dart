@@ -19,7 +19,9 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     _timer = Timer(const Duration(milliseconds: 1600), () {
-      if (mounted) Navigator.pushReplacementNamed(context, AppRoute.welcome.path);
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRoute.welcome.path);
+      }
     });
   }
 
@@ -68,7 +70,10 @@ class _SoftOrb extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: size,
     height: size,
-    decoration: const BoxDecoration(color: AppColors.primarySoft, shape: BoxShape.circle),
+    decoration: const BoxDecoration(
+      color: AppColors.primarySoft,
+      shape: BoxShape.circle,
+    ),
   );
 }
 
@@ -91,13 +96,19 @@ class _CareCity extends StatelessWidget {
               height: 94,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
                 border: Border.all(color: AppColors.outline),
               ),
               child: const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.local_hospital_rounded, color: AppColors.secondary, size: 32),
+                  Icon(
+                    Icons.local_hospital_rounded,
+                    color: AppColors.secondary,
+                    size: 32,
+                  ),
                   SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,

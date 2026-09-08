@@ -4,18 +4,19 @@ import 'package:healthpocket/core/theme/app_spacing.dart';
 
 abstract final class AppTheme {
   static ThemeData get light {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: AppColors.primary,
-      secondary: AppColors.secondary,
-      tertiary: AppColors.accent,
-      surface: AppColors.surface,
-      error: AppColors.error,
-      onSurface: AppColors.ink,
-      outline: AppColors.outline,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: AppColors.primary,
+          secondary: AppColors.secondary,
+          tertiary: AppColors.accent,
+          surface: AppColors.surface,
+          error: AppColors.error,
+          onSurface: AppColors.ink,
+          outline: AppColors.outline,
+        );
 
     return ThemeData(
       useMaterial3: true,
@@ -57,7 +58,9 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
         ),
       ),

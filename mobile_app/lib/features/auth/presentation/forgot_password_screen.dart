@@ -37,16 +37,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               children: [
                 Text(
                   'Reset your password',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(context).textTheme.headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Enter the email linked to your account and we’ll send reset instructions.',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.inkMuted,
-                  ),
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: AppColors.inkMuted),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 TextFormField(
@@ -57,7 +55,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     hintText: 'you@example.com',
                   ),
                   validator: (value) {
-                    if (value == null || !value.contains('@') || !value.contains('.')) {
+                    if (value == null ||
+                        !value.contains('@') ||
+                        !value.contains('.')) {
                       return 'Enter a valid email address';
                     }
                     return null;
