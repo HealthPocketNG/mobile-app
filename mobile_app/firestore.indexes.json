@@ -1,0 +1,54 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "savings_plans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contributions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "personalHealthPocketId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contributions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyPocketId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "members",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "invitationStatus", "order": "ASCENDING" },
+        { "fieldPath": "joinedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "activities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "activities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyPocketId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

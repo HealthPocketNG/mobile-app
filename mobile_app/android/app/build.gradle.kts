@@ -1,5 +1,8 @@
 plugins {
     id("com.android.application")
+    // START: FlutterFire Configuration
+    id("com.google.gms.google-services")
+    // END: FlutterFire Configuration
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -14,8 +17,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    buildFeatures {
+        resValues = true
+    }
+
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.healthpocket.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -29,11 +35,37 @@ android {
         versionName = flutter.versionName
     }
 
+    flavorDimensions += "environment"
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "HealthPocket Dev")
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        create("prod") {
+            dimension = "environment"
+            resValue("string", "app_name", "HealthPocket")
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Production signing is intentionally not configured here. Add a
+            // protected upload key before distributing the prodRelease bundle.
+        }
+    }
+}
+
+// Production Firebase must never be available to a debuggable Android build.
+androidComponents {
+    beforeVariants { variantBuilder ->
+        val isProduction = variantBuilder.productFlavors.contains(
+            "environment" to "prod",
+        )
+        if (isProduction && variantBuilder.buildType != "release") {
+            variantBuilder.enable = false
         }
     }
 }

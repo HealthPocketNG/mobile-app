@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "610980097928",
+    "project_id": "healthpocket-ng",
+    "storage_bucket": "healthpocket-ng.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:610980097928:android:735181f20381ef8110d43d",
+        "android_client_info": {
+          "package_name": "com.healthpocket.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXiKxSNXEzxCaHqo6Qx2EPFgXM3KzzSPI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,5 @@
+enum KycStatus { notStarted, pending, verified, rejected, demoComplete }
+
 class UserProfile {
   const UserProfile({
     required this.fullName,

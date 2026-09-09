@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "HealthPocket Dev",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main_dev.dart",
+            "toolArgs": [
+                "--flavor",
+                "dev"
+            ]
+        },
+        {
+            "name": "HealthPocket Dev (Firebase emulators)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main_dev.dart",
+            "toolArgs": [
+                "--flavor",
+                "dev",
+                "--dart-define=USE_FIREBASE_EMULATORS=true"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,215 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function personalPocketPath(pocketId) {
+      return /databases/$(database)/documents/personal_health_pockets/$(pocketId);
+    }
+
+    function ownsPersonalPocket(pocketId) {
+      return signedIn()
+        && exists(personalPocketPath(pocketId))
+        && get(personalPocketPath(pocketId)).data.userId == request.auth.uid;
+    }
+
+    function familyPocketPath(pocketId) {
+      return /databases/$(database)/documents/family_pockets/$(pocketId);
+    }
+
+    function memberPath(pocketId, userId) {
+      return /databases/$(database)/documents/family_pockets/$(pocketId)/members/$(userId);
+    }
+
+    function isPocketCreator(pocketId) {
+      return signedIn()
+        && exists(familyPocketPath(pocketId))
+        && get(familyPocketPath(pocketId)).data.createdBy == request.auth.uid;
+    }
+
+    function willBePocketCreator(pocketId) {
+      return signedIn()
+        && existsAfter(familyPocketPath(pocketId))
+        && getAfter(familyPocketPath(pocketId)).data.createdBy == request.auth.uid;
+    }
+
+    function isActiveMember(pocketId) {
+      return signedIn()
+        && exists(memberPath(pocketId, request.auth.uid))
+        && get(memberPath(pocketId, request.auth.uid)).data.invitationStatus == 'accepted'
+        && !('removedAt' in get(memberPath(pocketId, request.auth.uid)).data);
+    }
+
+    function isAdmin(pocketId) {
+      return isActiveMember(pocketId)
+        && get(memberPath(pocketId, request.auth.uid)).data.role == 'admin';
+    }
+
+    function hasExactlyOnePocket(data) {
+      return ('personalHealthPocketId' in data) != ('familyPocketId' in data);
+    }
+
+    function validContribution(data) {
+      return data.keys().hasOnly([
+          'contributorUserId',
+          'personalHealthPocketId',
+          'savingsPlanId',
+          'familyPocketId',
+          'amount',
+          'currency',
+          'status',
+          'source',
+          'note',
+          'createdAt'
+        ])
+        && data.contributorUserId == request.auth.uid
+        && data.amount is int
+        && data.amount > 0
+        && data.currency == 'NGN'
+        && data.status in ['recorded', 'completed']
+        && data.source in ['mock', 'manual']
+        && data.createdAt is timestamp
+        && hasExactlyOnePocket(data)
+        && (
+          ('personalHealthPocketId' in data
+            && ownsPersonalPocket(data.personalHealthPocketId))
+          || ('familyPocketId' in data && isActiveMember(data.familyPocketId))
+        );
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.userId == userId
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+      allow update: if isOwner(userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt is timestamp;
+      allow delete: if false;
+    }
+
+    match /personal_health_pockets/{pocketId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.currency == 'NGN'
+        && request.resource.data.status == 'active';
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.currency == resource.data.currency
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.status in ['active', 'restricted', 'closed'];
+      allow delete: if false;
+    }
+
+    match /savings_plans/{planId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && ownsPersonalPocket(request.resource.data.personalHealthPocketId)
+        && request.resource.data.contributionAmount is int
+        && request.resource.data.contributionAmount > 0
+        && request.resource.data.frequency in ['daily', 'weekly', 'monthly']
+        && request.resource.data.status in ['active', 'paused'];
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.personalHealthPocketId == resource.data.personalHealthPocketId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.contributionAmount is int
+        && request.resource.data.contributionAmount > 0
+        && request.resource.data.frequency in ['daily', 'weekly', 'monthly']
+        && request.resource.data.status in ['active', 'paused'];
+      allow delete: if false;
+    }
+
+    match /contributions/{contributionId} {
+      allow read: if signedIn() && (
+        ('personalHealthPocketId' in resource.data
+          && ownsPersonalPocket(resource.data.personalHealthPocketId))
+        || ('familyPocketId' in resource.data
+          && isActiveMember(resource.data.familyPocketId))
+      );
+      allow create: if signedIn() && validContribution(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /family_pockets/{pocketId} {
+      allow read: if isActiveMember(pocketId) || isPocketCreator(pocketId);
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.currency == 'NGN'
+        && request.resource.data.status == 'active';
+      allow update: if isAdmin(pocketId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.currency == resource.data.currency
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.status in ['active', 'archived'];
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow read: if isActiveMember(pocketId)
+          || (signedIn() && resource.data.userId == request.auth.uid)
+          || isPocketCreator(pocketId);
+        allow create: if signedIn()
+          && request.resource.data.pocketId == pocketId
+          && (
+            isAdmin(pocketId)
+            || (willBePocketCreator(pocketId)
+              && memberId == request.auth.uid
+              && request.resource.data.userId == request.auth.uid
+              && request.resource.data.role == 'admin'
+              && request.resource.data.invitationStatus == 'accepted')
+          );
+        allow update: if isAdmin(pocketId)
+          && request.resource.data.pocketId == resource.data.pocketId
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.joinedAt == resource.data.joinedAt
+          && request.resource.data.role in ['admin', 'contributor', 'beneficiary']
+          && request.resource.data.invitationStatus in ['pending', 'accepted', 'removed'];
+        allow delete: if false;
+      }
+    }
+
+    match /activities/{activityId} {
+      allow read: if signedIn() && (
+        resource.data.userId == request.auth.uid
+        || ('familyPocketId' in resource.data
+          && isActiveMember(resource.data.familyPocketId))
+      );
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userId',
+          'activityType',
+          'metadata',
+          'relatedEntityType',
+          'relatedEntityId',
+          'familyPocketId',
+          'createdAt'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.activityType is string
+        && request.resource.data.metadata is map
+        && request.resource.data.relatedEntityType is string
+        && request.resource.data.relatedEntityId is string
+        && (!('familyPocketId' in request.resource.data)
+          || isActiveMember(request.resource.data.familyPocketId))
+        && request.resource.data.createdAt is timestamp;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,5 +1,9 @@
 enum FamilyRole { admin, contributor, beneficiary }
 
+enum FamilyInvitationStatus { pending, accepted, removed }
+
+enum FamilyPocketStatus { active, archived }
+
 class FamilyMember {
   const FamilyMember({
     required this.id,
@@ -37,6 +41,30 @@ class FamilyPocket {
       members: members ?? this.members,
     );
   }
+}
+
+class FamilyMembership {
+  const FamilyMembership({
+    required this.id,
+    required this.pocketId,
+    required this.name,
+    required this.email,
+    required this.role,
+    required this.invitationStatus,
+    this.userId,
+    this.joinedAt,
+    this.removedAt,
+  });
+
+  final String id;
+  final String pocketId;
+  final String? userId;
+  final String name;
+  final String email;
+  final FamilyRole role;
+  final FamilyInvitationStatus invitationStatus;
+  final DateTime? joinedAt;
+  final DateTime? removedAt;
 }
 
 enum FamilyContributionStatus { completed, reversed }

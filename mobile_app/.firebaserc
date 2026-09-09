@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "healthpocket-dev-a82f3",
+    "dev": "healthpocket-dev-a82f3",
+    "prod": "healthpocket-ng"
+  }
+}
