@@ -84,3 +84,33 @@ flutterfire configure --project=healthpocket-ng --platforms=android --android-pa
 
 The MVP scope and product decisions are maintained in
 `HealthPocketMVP-PRD-for-Codex.md`.
+
+## MVP authentication
+
+The app uses Firebase Authentication for Email/Password and Google Sign-In.
+Email/password accounts must verify their email before Firestore data is
+accessible. Firebase restores the signed-in account session; subsequent local
+opens require a six-digit HealthPocket PIN.
+
+The PIN is only an app-unlock factor. It never replaces the Firebase credential,
+is never written to Firestore, and is stored as a salted PBKDF2-SHA256 hash in
+Android Keystore-backed secure storage. Five failed attempts trigger a short
+local lockout. Forgot-PIN recovery requires Firebase re-authentication before a
+new local PIN can be created. Android backup is disabled so PIN material is not
+silently transferred to a different device.
+
+Phone/SMS authentication, production KYC, BVN/NIN checks, biometric unlock and
+identity-document collection are deliberately not implemented in this MVP.
+Repository and profile boundaries retain room for regulated providers later.
+
+Before testing Google Sign-In against real DEV Firebase, enable Email/Password
+and Google in **Authentication → Sign-in method** for
+`healthpocket-dev-a82f3`, select the project support email, then refresh only
+the DEV Android configuration:
+
+```bash
+flutterfire configure --project=healthpocket-dev-a82f3 --platforms=android --android-package-name=com.healthpocket.app.dev --out=lib/firebase/firebase_options_dev.dart --android-out=android/app/src/dev/google-services.json --yes
+```
+
+Do not enable production providers or refresh production configuration until
+the production-auth review is approved.

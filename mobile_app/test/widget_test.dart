@@ -9,6 +9,7 @@ import 'package:healthpocket/features/family/presentation/family_pocket_screen.d
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/profile/presentation/profile_screen.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
+import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 import 'package:healthpocket/features/savings/presentation/savings_screen.dart';
 
 void main() {
@@ -28,6 +29,27 @@ void main() {
     await tester.tap(find.text('Get started'));
     await tester.pumpAndSettle();
     expect(find.text('Create your account'), findsOneWidget);
+  });
+
+  testWidgets('explains that Google sign-up also requires consent', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const HealthPocketApp());
+    await tester.pump(const Duration(milliseconds: 1700));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Get started'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView).last, const Offset(0, -700));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Sign up with Google'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Accept the Terms and Privacy Policy to sign up with Google.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('dashboard shows savings summary and core navigation', (
@@ -67,6 +89,27 @@ void main() {
 
     expect(find.text('₦47,300'), findsOneWidget);
     expect(store.contributions.first.amount, 5000);
+  });
+
+  testWidgets('opens a restored savings plan for editing', (tester) async {
+    final store = SavingsStore();
+    addTearDown(store.dispose);
+    await tester.pumpWidget(MaterialApp(home: SavingsScreen(store: store)));
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit savings plan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit savings plan'), findsOneWidget);
+    expect(
+      tester
+          .widget<DropdownButtonFormField<SavingsFrequency>>(
+            find.byType(DropdownButtonFormField<SavingsFrequency>),
+          )
+          .initialValue,
+      SavingsFrequency.weekly,
+    );
   });
 
   testWidgets('invites a Family Pocket member', (tester) async {
@@ -154,9 +197,14 @@ void main() {
     expect(preference.value, isFalse);
   });
 
-  test('connects onboarding data to the shared app stores', () {
+  test('connects MVP onboarding data to the shared app stores', () async {
     final appState = AppState();
     addTearDown(appState.dispose);
+
+    await appState.authRepository.signInWithEmail(
+      email: 'amara@example.com',
+      password: 'secure-password',
+    );
 
     appState.profileStore.beginRegistration(
       fullName: 'Amara Okafor',
@@ -164,7 +212,6 @@ void main() {
       phoneNumber: '+234 801 234 5678',
     );
     appState.beginRegistration();
-    appState.profileStore.verifyPhoneNumber();
     appState.profileStore.updatePersonalInformation(
       dateOfBirth: DateTime(1995, 4, 18),
       gender: 'female',
@@ -173,27 +220,26 @@ void main() {
       nextOfKinName: 'Chidi Okafor',
       nextOfKinPhone: '+234 809 876 5432',
     );
-    appState.profileStore.completeDemoKyc();
     appState.savingsStore.saveOnboardingPlan(
       contributionAmount: 2500,
-      frequency: 'Monthly',
+      frequency: SavingsFrequency.monthly,
       startDate: DateTime(2026, 10, 1),
     );
     appState.savingsStore.saveOnboardingPlan(
       contributionAmount: 3000,
-      frequency: 'Weekly',
+      frequency: SavingsFrequency.weekly,
       startDate: DateTime(2026, 10, 8),
     );
-    appState.completeOnboarding();
+    await appState.completeOnboarding();
 
     final profile = appState.profileStore.profile;
     expect(profile.fullName, 'Amara Okafor');
     expect(profile.stateOfResidence, 'Rivers');
     expect(profile.nextOfKinName, 'Chidi Okafor');
-    expect(profile.phoneVerified, isTrue);
-    expect(profile.demoKycComplete, isTrue);
+    expect(profile.phoneVerified, isFalse);
+    expect(profile.demoKycComplete, isFalse);
     expect(appState.savingsStore.plan!.contributionAmount, 3000);
-    expect(appState.savingsStore.plan!.frequency, 'Weekly');
+    expect(appState.savingsStore.plan!.frequency, SavingsFrequency.weekly);
     expect(appState.savingsStore.plan!.startDate, DateTime(2026, 10, 8));
     expect(appState.savingsStore.currentBalance, 0);
     expect(appState.hasCompletedOnboarding, isTrue);

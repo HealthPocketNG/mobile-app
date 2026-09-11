@@ -2,32 +2,49 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:healthpocket/app/app_router.dart';
+import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/widgets/app_brand_logo.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({required this.appState, super.key});
+
+  final AppState appState;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  Timer? _timer;
+  Timer? _startupTimer;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(milliseconds: 1600), () {
+    _startupTimer = Timer(const Duration(milliseconds: 1200), _resolveSession);
+  }
+
+  Future<void> _resolveSession() async {
+    try {
+      final destination = await widget.appState.resolveStartup();
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
+        context,
+        appRouteForAuthFlow(destination).path,
+      );
+    } catch (_) {
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoute.welcome.path);
+        setState(() {
+          _errorMessage = 'We could not restore your session. Try again.';
+        });
       }
-    });
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _startupTimer?.cancel();
     super.dispose();
   }
 
@@ -44,14 +61,32 @@ class _SplashScreenState extends State<SplashScreen> {
               children: [
                 const AppBrandLogo(centered: true, showTagline: true),
                 const SizedBox(height: 18),
-                SizedBox(
-                  width: 96,
-                  child: LinearProgressIndicator(
-                    minHeight: 3,
-                    borderRadius: BorderRadius.circular(20),
-                    backgroundColor: AppColors.primarySoft,
+                if (_errorMessage == null)
+                  SizedBox(
+                    width: 96,
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      borderRadius: BorderRadius.circular(20),
+                      backgroundColor: AppColors.primarySoft,
+                    ),
+                  )
+                else ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      _errorMessage!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.error),
+                    ),
                   ),
-                ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _errorMessage = null);
+                      _resolveSession();
+                    },
+                    child: const Text('Try again'),
+                  ),
+                ],
               ],
             ),
           ),

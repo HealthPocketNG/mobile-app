@@ -32,6 +32,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/google-services.json
 **/node_modules/
 
 # Symbolication related

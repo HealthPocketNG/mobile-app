@@ -12,7 +12,20 @@
           "package_name": "com.healthpocket.app.dev"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "56473250484-7a0fi3g16f3e61650kpcdhcffib58lsd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.healthpocket.app.dev",
+            "certificate_hash": "45c6a297215a5dba9461b02441de6c8ec446fdb2"
+          }
+        },
+        {
+          "client_id": "56473250484-cpe17ren1b71rjsv2puqof8e12lkpr9e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDlHaW6ScHE_ttUNOUKktbmMooc1hXsH1s"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "56473250484-cpe17ren1b71rjsv2puqof8e12lkpr9e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

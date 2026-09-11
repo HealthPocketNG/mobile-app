@@ -1,5 +1,15 @@
 enum SavingsPlanStatus { active, paused }
 
+enum SavingsFrequency {
+  daily('Daily'),
+  weekly('Weekly'),
+  monthly('Monthly');
+
+  const SavingsFrequency(this.label);
+
+  final String label;
+}
+
 class SavingsPlan {
   const SavingsPlan({
     required this.id,
@@ -11,13 +21,13 @@ class SavingsPlan {
 
   final String id;
   final int contributionAmount;
-  final String frequency;
+  final SavingsFrequency frequency;
   final DateTime startDate;
   final SavingsPlanStatus status;
 
   SavingsPlan copyWith({
     int? contributionAmount,
-    String? frequency,
+    SavingsFrequency? frequency,
     DateTime? startDate,
     SavingsPlanStatus? status,
   }) {

@@ -3,6 +3,7 @@ import 'package:healthpocket/core/data/firestore/firestore_documents.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
+import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 
 void main() {
   test('profile document round-trips the current MVP profile', () {
@@ -73,6 +74,29 @@ void main() {
     expect(encoded, isNot(contains('familyPocketId')));
     expect(decoded.amount, 5000);
     expect(decoded.createdAt.toUtc(), createdAt);
+  });
+
+  test('savings frequency round-trips as a typed lowercase value', () {
+    final createdAt = DateTime.utc(2026, 3, 1);
+    final document = SavingsPlanDocument(
+      plan: SavingsPlan(
+        id: 'plan-1',
+        contributionAmount: 5000,
+        frequency: SavingsFrequency.weekly,
+        startDate: createdAt,
+        status: SavingsPlanStatus.active,
+      ),
+      userId: 'user-1',
+      personalHealthPocketId: 'personal-1',
+      createdAt: createdAt,
+      updatedAt: createdAt,
+    );
+
+    final encoded = document.toMap();
+    final decoded = SavingsPlanDocument.fromMap('plan-1', encoded);
+
+    expect(encoded['frequency'], 'weekly');
+    expect(decoded.plan.frequency, SavingsFrequency.weekly);
   });
 
   test('removed Family Pocket membership preserves its audit timestamp', () {

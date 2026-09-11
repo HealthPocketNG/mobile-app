@@ -32,10 +32,7 @@ DateTime firestoreDateTime(Map<String, dynamic> data, String field) {
   throw FormatException('Expected "$field" to be a timestamp.');
 }
 
-DateTime? firestoreNullableDateTime(
-  Map<String, dynamic> data,
-  String field,
-) {
+DateTime? firestoreNullableDateTime(Map<String, dynamic> data, String field) {
   final value = data[field];
   if (value == null) return null;
   if (value is Timestamp) return value.toDate();
@@ -62,9 +59,7 @@ T firestoreEnum<T extends Enum>(
   final encoded = firestoreString(data, field);
   return values.firstWhere(
     (value) => value.name == encoded,
-    orElse: () => throw FormatException(
-      'Unknown "$field" value "$encoded".',
-    ),
+    orElse: () => throw FormatException('Unknown "$field" value "$encoded".'),
   );
 }
 

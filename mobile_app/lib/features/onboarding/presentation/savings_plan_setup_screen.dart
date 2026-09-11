@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
@@ -6,6 +7,7 @@ import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/core/widgets/onboarding_step_header.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
+import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 
 class SavingsPlanSetupScreen extends StatefulWidget {
   const SavingsPlanSetupScreen({
@@ -15,7 +17,7 @@ class SavingsPlanSetupScreen extends StatefulWidget {
   });
 
   final SavingsStore savingsStore;
-  final VoidCallback onCompleted;
+  final Future<void> Function() onCompleted;
 
   @override
   State<SavingsPlanSetupScreen> createState() => _SavingsPlanSetupScreenState();
@@ -23,9 +25,21 @@ class SavingsPlanSetupScreen extends StatefulWidget {
 
 class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController(text: '5000');
-  String _frequency = 'Monthly';
-  DateTime _startDate = DateTime.now();
+  late final TextEditingController _amountController;
+  late SavingsFrequency _frequency;
+  late DateTime _startDate;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final plan = widget.savingsStore.plan;
+    _amountController = TextEditingController(
+      text: (plan?.contributionAmount ?? 5000).toString(),
+    );
+    _frequency = plan?.frequency ?? SavingsFrequency.monthly;
+    _startDate = plan?.startDate ?? DateTime.now();
+  }
 
   @override
   void dispose() {
@@ -43,19 +57,38 @@ class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
     if (date != null) setState(() => _startDate = date);
   }
 
-  void _createPlan() {
+  Future<void> _createPlan() async {
     if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
     widget.savingsStore.saveOnboardingPlan(
       contributionAmount: int.parse(_amountController.text),
       frequency: _frequency,
       startDate: _startDate,
     );
-    widget.onCompleted();
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoute.dashboard.path,
-      (route) => false,
-    );
+    try {
+      await widget.onCompleted();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoute.createPin.path,
+        (route) => false,
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Failed to persist onboarding: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'We could not save your setup. Check your connection and try again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -72,7 +105,11 @@ class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
               AppSpacing.lg,
             ),
             children: [
-              const OnboardingStepHeader(title: 'Set up savings', step: 4),
+              const OnboardingStepHeader(
+                title: 'Set up savings',
+                step: 2,
+                total: 2,
+              ),
               const SizedBox(height: AppSpacing.xl),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
@@ -136,17 +173,20 @@ class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
                     : null,
               ),
               const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<String>(
+              DropdownButtonFormField<SavingsFrequency>(
                 initialValue: _frequency,
                 decoration: const InputDecoration(
                   labelText: 'Save frequency',
                   prefixIcon: Icon(Icons.calendar_month_outlined),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'Daily', child: Text('Daily')),
-                  DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
-                  DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
-                ],
+                items: SavingsFrequency.values
+                    .map(
+                      (frequency) => DropdownMenuItem(
+                        value: frequency,
+                        child: Text(frequency.label),
+                      ),
+                    )
+                    .toList(growable: false),
                 onChanged: (value) => setState(() => _frequency = value!),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -181,7 +221,7 @@ class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
                                 ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           Text(
-                            '$_frequency, starting ${_shortDate(_startDate)}',
+                            '${_frequency.label}, starting ${_shortDate(_startDate)}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
@@ -194,6 +234,7 @@ class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
               AppPrimaryButton(
                 label: 'Create savings plan',
                 onPressed: _createPlan,
+                isLoading: _isSaving,
               ),
             ],
           ),

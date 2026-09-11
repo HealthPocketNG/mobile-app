@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/core/data/repository_contracts.dart';
+import 'package:healthpocket/features/auth/domain/auth_user.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
+  const ForgotPasswordScreen({required this.authRepository, super.key});
+
+  final AuthRepository authRepository;
 
   @override
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
@@ -12,14 +16,36 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  bool _isSending = false;
+  String? _message;
 
-  void _sendResetLink() {
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendResetLink() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Password-reset instructions sent.')),
-    );
+    setState(() {
+      _isSending = true;
+      _message = null;
+    });
+    try {
+      await widget.authRepository.sendPasswordResetEmail(
+        _emailController.text.trim(),
+      );
+      if (mounted) {
+        setState(() => _message = 'Password-reset instructions sent.');
+      }
+    } on AuthFailure catch (error) {
+      if (mounted) setState(() => _message = error.message);
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 
   @override
@@ -48,6 +74,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 TextFormField(
+                  controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   autofocus: true,
                   decoration: const InputDecoration(
@@ -64,9 +91,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   },
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                if (_message != null) ...[
+                  Text(_message!),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 AppPrimaryButton(
-                  label: 'Send reset instructions',
-                  onPressed: _sendResetLink,
+                  label: _isSending ? 'Sending…' : 'Send reset instructions',
+                  onPressed: _isSending ? null : _sendResetLink,
                 ),
               ],
             ),

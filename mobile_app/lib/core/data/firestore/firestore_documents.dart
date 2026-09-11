@@ -42,10 +42,7 @@ class UserProfileDocument {
     );
   }
 
-  factory UserProfileDocument.fromMap(
-    String id,
-    Map<String, dynamic> data,
-  ) {
+  factory UserProfileDocument.fromMap(String id, Map<String, dynamic> data) {
     final notificationData = firestoreObjectMap(
       data,
       'notificationPreferences',
@@ -161,23 +158,17 @@ class SavingsPlanDocument {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  factory SavingsPlanDocument.fromMap(
-    String id,
-    Map<String, dynamic> data,
-  ) {
+  factory SavingsPlanDocument.fromMap(String id, Map<String, dynamic> data) {
     return SavingsPlanDocument(
       plan: SavingsPlan(
         id: id,
         contributionAmount: firestoreInt(data, 'contributionAmount'),
-        frequency: firestoreString(data, 'frequency'),
+        frequency: firestoreEnum(data, 'frequency', SavingsFrequency.values),
         startDate: firestoreDateTime(data, 'startDate'),
         status: firestoreEnum(data, 'status', SavingsPlanStatus.values),
       ),
       userId: firestoreString(data, 'userId'),
-      personalHealthPocketId: firestoreString(
-        data,
-        'personalHealthPocketId',
-      ),
+      personalHealthPocketId: firestoreString(data, 'personalHealthPocketId'),
       nextContributionDate: firestoreNullableDateTime(
         data,
         'nextContributionDate',
@@ -192,7 +183,7 @@ class SavingsPlanDocument {
     'userId': userId,
     'personalHealthPocketId': personalHealthPocketId,
     'contributionAmount': plan.contributionAmount,
-    'frequency': plan.frequency.toLowerCase(),
+    'frequency': plan.frequency.name,
     'startDate': firestoreTimestamp(plan.startDate),
     'nextContributionDate': nextContributionDate == null
         ? null
@@ -209,10 +200,7 @@ class ContributionDocument {
 
   final ContributionRecord contribution;
 
-  factory ContributionDocument.fromMap(
-    String id,
-    Map<String, dynamic> data,
-  ) {
+  factory ContributionDocument.fromMap(String id, Map<String, dynamic> data) {
     return ContributionDocument(
       ContributionRecord(
         id: id,
@@ -273,10 +261,7 @@ class FamilyPocketDocument {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  factory FamilyPocketDocument.fromMap(
-    String id,
-    Map<String, dynamic> data,
-  ) {
+  factory FamilyPocketDocument.fromMap(String id, Map<String, dynamic> data) {
     return FamilyPocketDocument(
       pocket: FamilyPocket(
         id: id,
@@ -351,10 +336,7 @@ class ActivityRecordDocument {
 
   final ActivityRecord activity;
 
-  factory ActivityRecordDocument.fromMap(
-    String id,
-    Map<String, dynamic> data,
-  ) {
+  factory ActivityRecordDocument.fromMap(String id, Map<String, dynamic> data) {
     return ActivityRecordDocument(
       ActivityRecord(
         id: id,
@@ -384,53 +366,53 @@ class ActivityRecordDocument {
 abstract final class FirestoreDocumentCollections {
   static CollectionReference<UserProfileDocument> users(
     FirebaseFirestore firestore,
-  ) => firestore.collection('users').withConverter(
-    fromFirestore: (snapshot, _) => UserProfileDocument.fromMap(
-      snapshot.id,
-      snapshot.data()!,
-    ),
-    toFirestore: (document, _) => document.toMap(),
-  );
+  ) => firestore
+      .collection('users')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            UserProfileDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (document, _) => document.toMap(),
+      );
 
   static CollectionReference<PersonalHealthPocketDocument> personalPockets(
     FirebaseFirestore firestore,
-  ) => firestore.collection('personal_health_pockets').withConverter(
-    fromFirestore: (snapshot, _) => PersonalHealthPocketDocument.fromMap(
-      snapshot.id,
-      snapshot.data()!,
-    ),
-    toFirestore: (document, _) => document.toMap(),
-  );
+  ) => firestore
+      .collection('personal_health_pockets')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            PersonalHealthPocketDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (document, _) => document.toMap(),
+      );
 
   static CollectionReference<SavingsPlanDocument> savingsPlans(
     FirebaseFirestore firestore,
-  ) => firestore.collection('savings_plans').withConverter(
-    fromFirestore: (snapshot, _) => SavingsPlanDocument.fromMap(
-      snapshot.id,
-      snapshot.data()!,
-    ),
-    toFirestore: (document, _) => document.toMap(),
-  );
+  ) => firestore
+      .collection('savings_plans')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            SavingsPlanDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (document, _) => document.toMap(),
+      );
 
   static CollectionReference<ContributionDocument> contributions(
     FirebaseFirestore firestore,
-  ) => firestore.collection('contributions').withConverter(
-    fromFirestore: (snapshot, _) => ContributionDocument.fromMap(
-      snapshot.id,
-      snapshot.data()!,
-    ),
-    toFirestore: (document, _) => document.toMap(),
-  );
+  ) => firestore
+      .collection('contributions')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            ContributionDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (document, _) => document.toMap(),
+      );
 
   static CollectionReference<FamilyPocketDocument> familyPockets(
     FirebaseFirestore firestore,
-  ) => firestore.collection('family_pockets').withConverter(
-    fromFirestore: (snapshot, _) => FamilyPocketDocument.fromMap(
-      snapshot.id,
-      snapshot.data()!,
-    ),
-    toFirestore: (document, _) => document.toMap(),
-  );
+  ) => firestore
+      .collection('family_pockets')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            FamilyPocketDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (document, _) => document.toMap(),
+      );
 
   static CollectionReference<FamilyMembershipDocument> familyMembers(
     FirebaseFirestore firestore,
@@ -440,20 +422,18 @@ abstract final class FirestoreDocumentCollections {
       .doc(pocketId)
       .collection('members')
       .withConverter(
-        fromFirestore: (snapshot, _) => FamilyMembershipDocument.fromMap(
-          snapshot.id,
-          snapshot.data()!,
-        ),
+        fromFirestore: (snapshot, _) =>
+            FamilyMembershipDocument.fromMap(snapshot.id, snapshot.data()!),
         toFirestore: (document, _) => document.toMap(),
       );
 
   static CollectionReference<ActivityRecordDocument> activities(
     FirebaseFirestore firestore,
-  ) => firestore.collection('activities').withConverter(
-    fromFirestore: (snapshot, _) => ActivityRecordDocument.fromMap(
-      snapshot.id,
-      snapshot.data()!,
-    ),
-    toFirestore: (document, _) => document.toMap(),
-  );
+  ) => firestore
+      .collection('activities')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            ActivityRecordDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (document, _) => document.toMap(),
+      );
 }

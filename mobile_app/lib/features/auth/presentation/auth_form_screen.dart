@@ -1,23 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:healthpocket/app/app_router.dart';
+import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_brand_logo.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
-import 'package:healthpocket/features/profile/application/profile_store.dart';
+import 'package:healthpocket/features/auth/domain/auth_user.dart';
 
 enum AuthMode { signIn, signUp }
 
 class AuthFormScreen extends StatefulWidget {
-  const AuthFormScreen({
-    required this.mode,
-    required this.profileStore,
-    required this.onRegistrationStarted,
-    super.key,
-  });
+  const AuthFormScreen({required this.mode, required this.appState, super.key});
   final AuthMode mode;
-  final ProfileStore profileStore;
-  final VoidCallback onRegistrationStarted;
+  final AppState appState;
 
   @override
   State<AuthFormScreen> createState() => _AuthFormScreenState();
@@ -27,11 +22,12 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmation = true;
   bool _acceptedTerms = false;
+  bool _isBusy = false;
+  String? _errorMessage;
 
   bool get _isSignUp => widget.mode == AuthMode.signUp;
 
@@ -39,12 +35,11 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_isSignUp && !_acceptedTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -54,15 +49,62 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
       );
       return;
     }
-    if (_isSignUp) {
-      widget.profileStore.beginRegistration(
-        fullName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
-      );
-      widget.onRegistrationStarted();
+    setState(() {
+      _isBusy = true;
+      _errorMessage = null;
+    });
+    try {
+      final result = _isSignUp
+          ? await widget.appState.authRepository.createAccountWithEmail(
+              fullName: _nameController.text.trim(),
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+            )
+          : await widget.appState.authRepository.signInWithEmail(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+            );
+      await _continueWith(result);
+    } on AuthFailure catch (error) {
+      if (mounted) setState(() => _errorMessage = error.message);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
     }
-    Navigator.pushNamed(context, AppRoute.otp.path);
+  }
+
+  Future<void> _signInWithGoogle() async {
+    if (_isSignUp && !_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Accept the Terms and Privacy Policy to sign up with Google.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _isBusy = true;
+      _errorMessage = null;
+    });
+    try {
+      final result = await widget.appState.authRepository.signInWithGoogle();
+      if (result != null) await _continueWith(result);
+    } on AuthFailure catch (error) {
+      if (mounted) setState(() => _errorMessage = error.message);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _continueWith(AuthResult result) async {
+    final destination = await widget.appState.acceptAuthentication(result);
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      appRouteForAuthFlow(destination).path,
+      (route) => false,
+    );
   }
 
   @override
@@ -114,18 +156,6 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                 keyboardType: TextInputType.emailAddress,
                 validator: _email,
               ),
-              if (_isSignUp) ...[
-                const SizedBox(height: AppSpacing.sm),
-                _field(
-                  controller: _phoneController,
-                  label: 'Phone number',
-                  hint: '+234 800 000 0000',
-                  icon: Icons.phone_outlined,
-                  keyboardType: TextInputType.phone,
-                  validator: (value) =>
-                      _required(value, 'Enter your phone number'),
-                ),
-              ],
               const SizedBox(height: AppSpacing.sm),
               TextFormField(
                 controller: _passwordController,
@@ -198,9 +228,49 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                 ),
               const SizedBox(height: AppSpacing.md),
               AppPrimaryButton(
-                label: _isSignUp ? 'Continue' : 'Log in',
-                onPressed: _submit,
+                label: _isBusy
+                    ? 'Please wait…'
+                    : _isSignUp
+                    ? 'Create account'
+                    : 'Log in',
+                onPressed: _isBusy ? null : _submit,
               ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
+                    child: Text(
+                      'or',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: AppColors.inkMuted),
+                    ),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: _isBusy ? null : _signInWithGoogle,
+                icon: const Icon(Icons.g_mobiledata_rounded, size: 30),
+                label: Text(
+                  _isSignUp ? 'Sign up with Google' : 'Continue with Google',
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
+              ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.error),
+                ),
+              ],
             ],
           ),
         ),

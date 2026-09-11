@@ -11,10 +11,20 @@ class ProfileStore extends ChangeNotifier {
   NotificationPreferences get notifications => _notifications;
   bool get biometricUnlock => _biometricUnlock;
 
+  void hydrate({
+    required UserProfile profile,
+    required NotificationPreferences notifications,
+  }) {
+    _profile = profile;
+    _notifications = notifications;
+    notifyListeners();
+  }
+
   void beginRegistration({
     required String fullName,
     required String email,
     required String phoneNumber,
+    bool emailVerified = false,
   }) {
     _profile = UserProfile(
       fullName: fullName,
@@ -22,7 +32,16 @@ class ProfileStore extends ChangeNotifier {
       phoneNumber: phoneNumber,
       stateOfResidence: '',
       memberSince: DateTime.now(),
+      emailVerified: emailVerified,
     );
+    _notifications = MockProfileData.notifications;
+    _biometricUnlock = false;
+    notifyListeners();
+  }
+
+  void verifyEmailAddress() {
+    if (_profile.emailVerified) return;
+    _profile = _profile.copyWith(emailVerified: true);
     notifyListeners();
   }
 

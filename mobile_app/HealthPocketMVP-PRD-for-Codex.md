@@ -1,356 +1,238 @@
-# HealthPocket MVP PRD
+# HealthPocket MVP Product and Launch Plan
 
-**Version:** MVP v1.0\
-**Status:** Pre-MVP Build\
-**Timeline:** September–December 2026\
-**Audience:** Codex, Claude Code, Cursor, Engineering Team
+**Version:** MVP v1.1
 
-# Design Tokens/System
+**Status:** Active build
 
-**Font:** Geomini
-**Color palette:**
-    **Primary:** Teal
-    **Secondary:** Pinkish Red
-    **Accent (minimal use only):** Brownish Gold — reserved for small highlight moments (e.g. tier-unlock states, premium/coverage indicators), not for large surface areas
+**Build window:** September–December 2026
 
-*An existing interactive concept prototype exists for reference: https://healthpocket-dashboard.netlify.app/*
+**Target launch:** 1 January 2027 (controlled public beta)
 
----
+**Audience:** Product, Engineering, Design, Operations
 
-# 1. Product Overview
+## Design system
+
+- **Font:** Geomini
+- **Primary:** Teal
+- **Secondary:** Pinkish red
+- **Accent:** Brownish gold, used sparingly for tier unlocks and other small
+  highlights—not large surfaces
+- **Reference prototype:** https://healthpocket-dashboard.netlify.app/
 
-HealthPocket is a healthcare-focused savings platform that helps Nigerians prepare financially for medical expenses before emergencies occur.
+## 1. Product promise
 
-Users configure a recurring healthcare savings plan, contribute consistently,
-build an ongoing health balance, and eventually use those funds for
-healthcare-related spending.
+HealthPocket helps Nigerians build a dedicated health-savings habit before a
+medical need becomes an emergency. A user chooses how much to save and how
+often, builds an ongoing health balance, and can use that balance with an
+approved clinic, hospital, or pharmacy partner.
 
-The MVP is focused on validating saving behavior, not building a complete healthcare payments ecosystem.
+The MVP must prove two things:
 
----
+1. People will save consistently for healthcare.
+2. A small partner network can accept a clear HealthPocket care authorization
+   and be settled through a controlled manual process.
 
-# 2. MVP Objective
+HealthPocket is not insurance. “What your balance can cover” is educational
+guidance only—not a provider quote, treatment guarantee, or promise of full
+payment.
 
-The primary objective of the MVP is to answer a single question:
+## 2. January beta outcome
 
-**Will users consistently save money for healthcare through HealthPocket?**
+By launch, a user should be able to:
 
-The MVP should prioritize:
+- Create an account with email/password or Google.
+- Verify an email address and securely return using a six-digit local app PIN.
+- Complete a basic profile without SMS OTP, BVN/NIN verification, or identity
+  document collection by HealthPocket.
+- Configure and edit an ongoing daily, weekly, or monthly savings instruction.
+- Fund a personal HealthPocket through a licensed financial partner and see a
+  trustworthy contribution history and available balance.
+- Create or participate in a Family Pocket where the selected financial and
+  legal model supports it.
+- Discover approved care partners in the pilot state.
+- Scan a partner QR code, request use of an amount, and receive a short-lived
+  HealthPocket authorization.
+- Follow the authorization through service completion and manual settlement.
 
-- User onboarding
-- Savings plan setup
-- Savings tracking
-- Family savings collaboration
-- User retention
-- Product trust
+The pilot partner must see **HEALTHPOCKET AUTHORIZED**, not **PAID**, until
+settlement has actually completed.
 
-The MVP should not prioritize:
+## 3. MVP scope
 
-- Complex banking integrations
-- Automated investment systems
-- Hospital settlement infrastructure
-- Large-scale compliance architecture
-- Enterprise-grade scaling
+### Account and security
 
----
+- Firebase Email/Password authentication
+- Google Sign-In
+- Email verification for password accounts
+- Password reset
+- Firebase session restoration
+- Six-digit HealthPocket PIN for subsequent local unlocking
+- PIN recovery through Firebase re-authentication
+- Basic profile and notification preferences
 
-# 3. Product Principles
+The PIN supplements Firebase authentication. It never replaces the Firebase
+credential and must not be stored in plaintext or ordinary Firestore.
 
-Every implementation decision should follow these principles:
+### Personal health savings
 
-### Simplicity First
+- One default Personal HealthPocket per user
+- Recurring amount and frequency: daily, weekly, or monthly
+- Edit, pause, and resume the instruction
+- Funding through a licensed financial/custody partner
+- Provider-confirmed contribution records
+- Current available balance and contribution history
+- Zero-balance encouragement and first-deposit guidance
+- Informational “What your balance can cover” reference bands
 
-Build the simplest solution that solves the problem.
+The default product has no savings target and never becomes “complete.” A goal
+or target pocket, if introduced later, is a separate product.
 
-### Reliability Over Complexity
+### Family Pocket
 
-A stable application is more valuable than advanced infrastructure.
+- Create a pocket
+- Invite and view members
+- Admin, contributor, and beneficiary roles
+- Admin removal of a contributor
+- Shared balance and contribution history
 
-### Validation Before Scale
-
-Prove users want the product before building large systems.
-
-### Partner Agnostic
-
-Do not tightly couple architecture to any bank, hospital, payment provider, or asset manager.
-
-### Mobile First
-
-The mobile application is the primary product experience.
-
----
-
-# 4. MVP Timeline
-
-## Month 1 — September 2026
-
-### Goal
-
-Build a complete production-quality Flutter application interface.
-
-No external integrations are required.
-
-No real money movement is required.
-
-No hospital partnerships are required.
-
-### Features
-
-#### Authentication
-
-- Splash Screen
-- Welcome Screen
-- Sign Up
-- Login
-- OTP Verification
-- Forgot Password
-
-#### User Onboarding
-
-- Personal Information
-- KYC Screens
-- Recurring Savings Plan Setup
-
-#### Dashboard
-
-- Current Balance
-- Savings Plan Summary
-- What Your Balance Can Cover
-- Activity Feed
-
-#### Savings
-
-- Set Savings Amount and Frequency
-- Edit Savings Plan
-- Pause Savings Plan
-- Resume Savings Plan
-- Record mock contributions
-- View contribution history
-- View a zero-balance encouragement state
-
-#### Family Pocket
-
-- Create Family Pocket
-- Invite Member
-- View Members
-- Remove Contributor (Admin only)
-- Shared Balance
-- Shared Contribution History
-
-#### Profile
-
-- Account Information
-- Security Settings
-- Notification Preferences
-- Help & Support
-
-### Deliverables
-
-By the end of Month 1:
-
-- Complete Design System
-- Complete Flutter UI
-- Navigation Architecture
-- State Management Structure
-- Mock Data Integration
-- End-to-End User Flow Demonstrations
-
-The application should feel production-ready even when backed by mock data.
-
----
-
-## Month 2 — October 2026
-
-### Goal
-
-Convert the UI into a functional MVP.
-
-### Core Features
-
-#### Authentication
-
-- User Registration
-- User Login
-- Session Management
-- Secure Authentication
-
-#### User Profiles
-
-- Profile Management
-- KYC Data Storage
-
-#### Savings Engine
-
-- Create Savings Plan
-- Update Savings Amount and Frequency
-- Pause and Resume Savings Plan
-- Record Contribution (Savings Record)
-- Calculate Current Health Balance
-- Calculate Informational Healthcare Coverage Guidance
-
-Each contribution must be linked to either a user's personal HealthPocket or a
-Family Pocket and must update the relevant calculated balance. Savings plans
-do not have target balances and never become "completed." In Month 2, a
-contribution is a product record only; it must not imply real-money movement
-until a banking/payment partner is integrated.
-
-#### Activity Tracking
-
-- Contribution (Savings Record) History
-- User Activity Logs
-- Savings Plan and Family Pocket Activity Feed
-
-#### Family Pocket
-
-- Create Pocket
-- Join Pocket
-- Invite Members
-- Shared Contributions
-- Role Management
-- Admin Removal of Contributors
-- Shared Contribution History and Shared Balance
-
-### Optional Partner Features
-
-If hospital partnerships are secured during October:
-
-#### Hospital Directory
-
-- Partner Listing
-- Hospital Profiles
-- Search Functionality
-
-No payment infrastructure should be built yet.
-
----
-
-## Month 3 — November 2026
-
-### Goal
-
-Support active beta users.
-
-### Focus Areas
-
-- Stability
-- Performance
-- Analytics
-- User Feedback
-- Bug Fixes
-- Product Refinement
-
-### Partner Features (Only If Partnerships Exist)
-
-#### QR Health Payments (Version 1)
-
-- Hospital Whitelist
-- QR Generation
-- QR Validation
-- Usage Tracking
-
-Settlement can remain manual.
-
-Avoid building complex payment infrastructure at this stage.
-
----
-
-# 5. Core Features
-
-## Individual Savings
-
-Users can:
-
-- Configure how much to save daily, weekly, or monthly
-- Edit, pause, and resume their savings plan
-- Build an ongoing healthcare balance without a required target
-- View contribution history
-- Monitor savings activity
-- See informational examples of healthcare expenses their current balance may
-  help cover
-
-The "What your balance can cover" experience is guidance only. It must not be
-presented as insurance coverage, a medical guarantee, a provider quote, or a
-promise that a particular treatment will be fully paid for.
-
----
-
-## Family Pocket
-
-Users can collaborate through a shared healthcare balance. A Family Pocket
-does not have a target amount or completion progress.
-
-### Roles
-
-#### Admin
-
-- Creates Pocket
-- Invites Members
-- Removes Contributors
-- Manages Pocket Membership
-
-#### Contributor
-
-- Contributes Funds
-- Views Shared Balance and Activity
-
-#### Beneficiary
-
-- Intended healthcare recipient
-
-Role architecture should remain extensible.
-
-Only an Admin may remove a Contributor. The founding Admin cannot be removed
-through the standard contributor-removal action. Removing a member does not
-delete or reverse their historical contributions.
-
----
-
-# 6. Deferred Features
-
-The following features are intentionally excluded from the MVP.
-
-## Banking Integrations
-
-Deferred until user behavior is validated.
-
-## Automated Daily Debits
-
-Deferred until banking partnerships exist.
-
-## T-Bill Integration
-
-Deferred until licensed asset-manager partnerships exist.
-
-## Yield Tracking
-
-Dependent on investment infrastructure.
-
-## Automated Hospital Settlement
-
-Deferred until hospital network expansion.
-
-## Advanced Compliance Infrastructure
-
-Deferred until scaling requirements justify implementation.
-
----
-
-# 7. Core Data Models
-
-## User
+A Family Pocket has no target or completion state. Removing a contributor must
+not delete or reverse their historical contributions. Real-money Family Pocket
+funding ships only if the chosen regulated partner and operating model support
+ownership, beneficiary, and withdrawal controls safely; otherwise the feature
+remains behind a beta flag until that dependency is resolved.
+
+### Care-partner discovery and authorization
+
+- Pilot directory for approved clinics, hospitals, and/or pharmacies
+- Filter or search by state and partner type
+- Partner QR identifies an approved facility; it must not contain sensitive
+  user or medical data
+- Server-created, short-lived, single-use authorization reference
+- Amount confirmation and explicit user consent
+- Partner verification screen or lightweight operations portal
+- Authorization status history and expiry
+- Manual service confirmation, reconciliation, and settlement records
+
+Initial status flow:
 
 ```text
-User
-- id
-- firstName
-- lastName
-- email
-- phone
-- kycStatus
-- createdAt
+requested -> authorized -> careApproved -> serviceCompleted
+          -> pendingSettlement -> settled
 ```
 
-## Personal HealthPocket
+Cancelled, declined, and expired terminal paths must be supported. Only the
+trusted backend may authorize, expire, or settle a care request. The mobile app
+must never be the source of truth for balances or authorization state.
+
+### Operations required for the pilot
+
+- Approve and manage partner locations
+- Confirm care authorizations
+- Record completion and settlement evidence
+- Reconcile partner-held funds, the HealthPocket ledger, and settlement records
+- Resolve failed or disputed cases
+- Maintain an auditable status history
+
+## 4. Explicitly deferred until post-MVP
+
+- Real SMS OTP or phone authentication
+- HealthPocket-built production KYC
+- BVN/NIN verification
+- Identity-document or selfie collection by HealthPocket
+- Biometrics as an authentication factor
+- Treasury bills, investments, yield, or return projections
+- Automated hospital/pharmacy settlement
+- Insurance claims or coverage guarantees
+- Open-ended nationwide partner onboarding
+- Goal/target pockets
+
+If the selected savings partner legally requires identity checks for the launch
+account tier, use its compliant hosted or SDK-based flow where practical. Do
+not build a custom KYC system. If that cannot satisfy the agreed MVP boundary,
+it is a launch dependency to resolve—not a check to bypass.
+
+## 5. Recommended launch sequence
+
+### September — identity and durable product foundation
+
+- Complete DEV/PROD Android isolation and keep debug builds on DEV Firebase.
+- Implement Email/Password, Google Sign-In, email verification, password reset,
+  session restoration, local PIN, and recovery.
+- Persist profiles, personal pockets, savings instructions, contributions,
+  Family Pockets, and activity behind repository interfaces.
+- Remove seeded mock state from authenticated DEV user journeys.
+- Keep emulators and security-rule tests in the development loop.
+- Select the licensed savings/custody partner and document the integration,
+  compliance, reconciliation, and failure-handling responsibilities.
+
+**Current partner-research position:** Anchor is the leading candidate, pending
+due diligence, technical validation, pricing, compliance review, and agreement.
+No application domain model may depend directly on Anchor-specific types.
+
+### October — real savings through the selected partner
+
+- Integrate customer/account or virtual-account provisioning through the
+  selected licensed partner.
+- Receive trusted deposit confirmation through a backend webhook.
+- Make the server-side contribution ledger authoritative and idempotent.
+- Display pending, completed, failed, and reversed funding states accurately.
+- Support recurring instructions only to the extent the partner safely enables
+  them; never imply a debit occurred from a local schedule alone.
+- Implement reconciliation, support tooling, and provider failure handling.
+
+This is the point at which a trusted backend becomes a concrete requirement.
+Use the smallest maintainable backend shape; do not introduce microservices.
+
+### November — care network and QR authorization
+
+- Launch the pilot partner directory.
+- Build partner QR scanning and secure authorization creation.
+- Build the minimum partner/operations verification surface.
+- Enforce available-balance, expiry, replay-prevention, and status-transition
+  rules on the backend.
+- Implement manual completion, settlement, reconciliation, and audit history.
+- Test first with pharmacies or small clinics if hospital onboarding is slower.
+
+### December — closed pilot and launch hardening
+
+- Run a closed pilot with approximately 2–5 partners in one state.
+- Exercise deposits, reversals, authorization expiry, service completion,
+  settlement, reconciliation, and support playbooks end to end.
+- Complete accessibility, performance, security, privacy, crash, and poor-network
+  testing.
+- Finalize partner agreements, user-facing terms, privacy disclosures, support
+  escalation, analytics, and launch measurements.
+- Fix pilot findings and prepare a controlled January rollout.
+
+### 1 January 2027 — controlled public beta
+
+- Open only where savings custody and care-partner operations are ready.
+- Use feature flags and invite/geographic limits when needed.
+- Expand partners and states only after reconciliation and support remain
+  reliable under real usage.
+
+## 6. Core domain model
+
+### User profile
+
+```text
+UserProfile
+- userId
+- fullName
+- email
+- phoneNumber (optional, unverified in MVP)
+- stateOfResidence
+- basic personal/emergency-contact information
+- emailVerified
+- notificationPreferences
+- createdAt
+- updatedAt
+```
+
+The account model retains extension points for future phone verification and
+regulated KYC, but MVP clients must not collect or fabricate those results.
+
+### Personal HealthPocket
 
 ```text
 PersonalHealthPocket
@@ -358,14 +240,12 @@ PersonalHealthPocket
 - userId
 - currency
 - status (active | restricted | closed)
+- providerAccountReference (optional)
 - createdAt
 - updatedAt
 ```
 
-The displayed personal balance is calculated from completed personal
-contributions. It is not a goal-progress value.
-
-## Savings Plan
+### Savings plan
 
 ```text
 SavingsPlan
@@ -377,152 +257,132 @@ SavingsPlan
 - startDate
 - nextContributionDate (optional)
 - status (active | paused)
-- fundingSourceId (optional; unavailable until a payment partner exists)
+- fundingSourceId (optional)
 - createdAt
 - updatedAt
 ```
 
-A user has one default personal HealthPocket savings plan in the MVP. Editing
-the plan changes future contribution instructions; it does not alter historical
-contribution records.
+Editing a plan changes future instructions and never rewrites contribution
+history.
 
-## Contribution (Savings Record)
+### Contribution
 
 ```text
 Contribution
 - id
 - contributorUserId
-- personalHealthPocketId (optional; required when familyPocketId is absent)
-- savingsPlanId (optional; identifies the plan that prompted the record)
-- familyPocketId (optional; required when personalHealthPocketId is absent)
+- personalHealthPocketId OR familyPocketId
+- savingsPlanId (optional)
+- providerReference (optional)
 - amount
 - currency
-- status (recorded | completed | reversed)
-- source (mock | manual | provider)
+- status (pending | completed | failed | reversed)
+- source (manualTest | provider)
 - note (optional)
 - createdAt
+- confirmedAt (optional)
 ```
 
-`Contribution` is the canonical record for savings history and balances. A
-Personal HealthPocket or Family Pocket balance is calculated from its completed
-contributions; do not maintain an unrelated transaction history. The `source`
-field keeps the MVP provider-agnostic and makes future payment integrations
-replaceable.
+Completed contributions, less valid reversals and authorized/settled debits,
+form the balance. Production clients must not let a user create a “completed”
+contribution merely by entering an amount.
 
-## Family Pocket
+### Family Pocket and membership
 
 ```text
 FamilyPocket
 - id
 - name
 - currency
-- status (active | archived)
+- status (active | restricted | archived)
 - createdBy
 - createdAt
 - updatedAt
-```
 
-## Family Member
-
-```text
-FamilyMember
+FamilyMembership
 - id
 - pocketId
 - userId
 - role (admin | contributor | beneficiary)
-- invitationStatus (pending | accepted)
+- invitationStatus (pending | accepted | removed)
 - joinedAt
 - removedAt (optional)
 ```
 
-## Activity Record
+### Care partner and authorization
 
 ```text
-ActivityRecord
+CarePartnerLocation
+- id
+- partnerId
+- name
+- type (clinic | hospital | pharmacy)
+- state
+- address
+- status (active | suspended)
+- qrReference
+
+CareAuthorization
 - id
 - userId
-- activityType
-- metadata
-- relatedEntityType
-- relatedEntityId
+- personalHealthPocketId OR familyPocketId
+- partnerLocationId
+- amount
+- currency
+- status
+- expiresAt
 - createdAt
+- authorizedAt (optional)
+- completedAt (optional)
+- settlementReference (optional)
 ```
 
-## Savings, Family, and Activity Rules
+Every balance-affecting event and authorization transition must be auditable
+and idempotent.
 
-- Only completed contributions count toward a personal or Family Pocket
-  balance.
-- A paused savings plan stops future scheduled contribution instructions but
-  does not close the user's HealthPocket or erase its balance.
-- Manual contribution records may still be added in the mock MVP. Actual bank
-  debits must not be implied before payment infrastructure exists.
-- A contribution creates an associated activity record for the contributor;
-  shared-pocket activity is visible to its members according to their role.
-- Family Pockets do not have targets or completion states.
-- Only a Family Pocket Admin may remove a Contributor. Membership removal must
-  preserve historical contribution and activity records.
-- Healthcare coverage guidance is derived from configurable reference-cost
-  bands and the current balance; it is informational and must carry no promise
-  of insurance or provider pricing.
-- The MVP must not create payouts, transfers, automatic debits, or settlements.
+## 7. Technical direction and guardrails
 
----
+- Flutter mobile application, mobile first
+- Firebase Authentication for MVP identity
+- Cloud Firestore for current application data
+- Repository interfaces between features and Firebase/provider SDKs
+- Modular monolith and one trusted backend when real financial workflows begin
+- Separate DEV and PROD projects, credentials, application IDs, and deploy paths
+- Emulator-backed rules tests and least-privilege access
+- Integer minor currency units or another explicit money representation at the
+  partner boundary; never floating-point arithmetic for money
+- No secrets, provider signing keys, webhook validation, balance authority, or
+  settlement authority in the mobile client
+- No direct production data changes during normal development
 
-# 8. Technical Direction
+## 8. Launch gates
 
-## Frontend
+The January beta does not open until all of these are true:
 
-- Flutter
-- Mobile First
+- Licensed custody/funding partner agreement and technical integration approved
+- Real deposits confirmed from trusted provider events
+- Ledger and partner reconciliation tested
+- QR authorization cannot overspend, replay, or remain valid after expiry
+- Manual settlement and exception procedures rehearsed
+- Pilot partners trained on **AUTHORIZED** versus **PAID**
+- Privacy, terms, user support, and incident ownership approved
+- Critical auth, data-isolation, and money-flow tests pass
+- Monitoring and launch metrics are available
 
-## Backend
+## 9. MVP success measures
 
-- API Driven
-- Modular Monolith
+Primary measures:
 
-## Database
+- Verified-account onboarding completion
+- First successful deposit rate
+- Recurring contribution adherence and 30-day saver retention
+- Number and value of completed contributions
+- Care-partner discovery-to-authorization conversion
+- Authorization-to-service-completion rate
+- Settlement accuracy and time
+- Support, failed-deposit, expired-authorization, and dispute rates
 
-- Use either Firestore (a document database) or a relational database, based
-  on the selected Month 2 backend.
-- Keep data access behind repository interfaces so the choice is replaceable.
-
-## Architecture
-
-Build a modular monolith.
-
-Do not introduce microservices during MVP development.
-
-Prioritize maintainability and development speed.
-
----
-
-# 9. Engineering Constraints
-
-When implementing HealthPocket:
-
-1. Build MVP before scalability features.
-2. Avoid unnecessary infrastructure.
-3. Assume no active banking partnership.
-4. Assume no active investment partnership.
-5. Assume no active hospital payment integration.
-6. Keep providers abstract and replaceable.
-7. Prioritize user experience.
-8. Prioritize shipping speed.
-9. Prioritize reliability over sophistication.
-
----
-
-# 10. Definition of MVP Success
-
-HealthPocket MVP is successful if:
-
-- Users complete onboarding.
-- Users configure healthcare savings plans.
-- Users actively use the application.
-- Users return regularly.
-- Family Pocket receives adoption.
-- Product feedback validates demand.
-
-The MVP is not considered successful because of integrations, partnerships, or advanced infrastructure.
-
-The MVP succeeds when real users consistently save for healthcare.
+Family Pocket adoption is a secondary measure until the regulated operating
+model is confirmed. The MVP succeeds when real users repeatedly save for
+healthcare and a small partner network can reliably honor and settle approved
+care—not when the app merely demonstrates more features.

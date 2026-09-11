@@ -182,7 +182,7 @@ class _BalanceCard extends StatelessWidget {
                   label: 'Savings plan',
                   value: plan == null
                       ? 'Not set'
-                      : '${_naira(plan.contributionAmount)} ${plan.frequency.toLowerCase()}',
+                      : '${_naira(plan.contributionAmount)} ${plan.frequency.name}',
                 ),
               ),
               Container(width: 1, height: 42, color: Colors.white24),
@@ -383,7 +383,7 @@ class _SavingsPlanCard extends StatelessWidget {
                     Text(
                       currentPlan == null
                           ? 'Set up your savings plan'
-                          : '${_naira(currentPlan.contributionAmount)} ${currentPlan.frequency.toLowerCase()}',
+                          : '${_naira(currentPlan.contributionAmount)} ${currentPlan.frequency.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

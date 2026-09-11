@@ -82,7 +82,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
       nextOfKinName: _nextOfKinNameController.text.trim(),
       nextOfKinPhone: _nextOfKinPhoneController.text.trim(),
     );
-    Navigator.pushNamed(context, AppRoute.kyc.path);
+    Navigator.pushNamed(context, AppRoute.savingsPlanSetup.path);
   }
 
   @override
@@ -104,7 +104,11 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
               AppSpacing.lg,
             ),
             children: [
-              const OnboardingStepHeader(title: 'Personal details', step: 2),
+              const OnboardingStepHeader(
+                title: 'Personal details',
+                step: 1,
+                total: 2,
+              ),
               const SizedBox(height: AppSpacing.xl),
               _SelectionField(
                 icon: Icons.calendar_today_outlined,

@@ -26,6 +26,13 @@ remain active until the Week 2 integration pass.
 
 ## Data decisions
 
+- Firebase Auth is the account authority. MVP sign-in providers are verified
+  Email/Password and Google; Firestore rejects unverified email identities.
+- The six-digit HealthPocket app PIN is device-local only. Firestore has no PIN
+  field. Only a salted PBKDF2-SHA256 hash is placed in OS-protected secure
+  storage, with local attempt throttling. A new device must use Firebase sign-in
+  and creates its own local PIN.
+
 - Currency is explicitly stored as `NGN`; MVP amounts are positive integer
   naira values. Before integrating a real payment provider, this boundary must
   be revisited because most providers represent money in minor units (kobo).
@@ -38,6 +45,9 @@ remain active until the Week 2 integration pass.
 - KYC documents, selfies, bank credentials, OTPs, and card details must not be
   stored in these documents. Only a provider status and opaque provider
   reference should be retained once a regulated integration is selected.
+- SMS OTP, production KYC, BVN/NIN verification and identity-document collection
+  are outside MVP scope. Existing status fields are reserved extension points;
+  the client rules cannot promote them to a verified state.
 - Rules are deny-by-default. User records are owner-scoped; Family Pocket data
   is member-scoped; member administration requires an active admin membership.
 - Firestore document deletion is disabled by the rules for financial and audit

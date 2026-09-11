@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:healthpocket/app/app_router.dart';
+import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({required this.store, super.key});
+  const ProfileScreen({required this.store, super.key, this.authRepository});
 
   final ProfileStore store;
+  final AuthRepository? authRepository;
 
   Future<void> _editAccount(BuildContext context) async {
     final draft = await showModalBottomSheet<_AccountDraft>(
@@ -29,16 +32,27 @@ class ProfileScreen extends StatelessWidget {
     if (context.mounted) _showMessage(context, 'Account information updated');
   }
 
-  Future<void> _changePassword(BuildContext context) async {
-    final changed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => const _ChangePasswordSheet(),
-    );
-    if (changed == true && context.mounted) {
-      _showMessage(context, 'Demo password updated');
+  Future<void> _resetPassword(BuildContext context) async {
+    final email = authRepository?.currentUser?.email ?? store.profile.email;
+    if (email.isEmpty || authRepository == null) return;
+    try {
+      await authRepository!.sendPasswordResetEmail(email);
+      if (context.mounted) {
+        _showMessage(context, 'Password-reset instructions sent to $email');
+      }
+    } on AuthFailure catch (error) {
+      if (context.mounted) _showMessage(context, error.message);
     }
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    await authRepository?.signOut();
+    if (!context.mounted) return;
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoute.welcome.path,
+      (route) => false,
+    );
   }
 
   @override
@@ -83,10 +97,15 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   _SettingsTile(
                     icon: Icons.verified_user_outlined,
-                    title: 'Verification status',
-                    subtitle: _verificationLabel(profile),
+                    title: 'Email verification',
+                    subtitle:
+                        authRepository?.currentUser?.email ?? profile.email,
                     trailing: _StatusBadge(
-                      label: profile.demoKycComplete ? 'Demo KYC' : 'Pending',
+                      label:
+                          authRepository?.currentUser?.emailVerified == true ||
+                              profile.emailVerified
+                          ? 'Verified'
+                          : 'Pending',
                     ),
                   ),
                 ],
@@ -98,19 +117,11 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   _SettingsTile(
                     icon: Icons.lock_outline_rounded,
-                    title: 'Change password',
-                    subtitle: 'Keep your account protected',
-                    onTap: () => _changePassword(context),
-                  ),
-                  SwitchListTile.adaptive(
-                    key: const ValueKey('biometric-unlock-switch'),
-                    secondary: const _SettingsIcon(
-                      icon: Icons.fingerprint_rounded,
-                    ),
-                    title: const Text('Biometric unlock'),
-                    subtitle: const Text('Use your device security to sign in'),
-                    value: store.biometricUnlock,
-                    onChanged: store.setBiometricUnlock,
+                    title: 'Reset password',
+                    subtitle: 'Receive a secure reset link by email',
+                    onTap: authRepository == null
+                        ? null
+                        : () => _resetPassword(context),
                   ),
                 ],
               ),
@@ -184,13 +195,9 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               OutlinedButton.icon(
-                onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  AppRoute.welcome.path,
-                  (route) => false,
-                ),
+                onPressed: () => _signOut(context),
                 icon: const Icon(Icons.logout_rounded),
-                label: const Text('Log out of demo'),
+                label: const Text('Log out'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.error,
                   side: const BorderSide(color: AppColors.outline),
@@ -199,7 +206,7 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               const Text(
-                'HealthPocket demo • Version 1.0.0',
+                'HealthPocket MVP • Version 1.0.0',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
               ),
@@ -476,17 +483,19 @@ class _EditAccountSheetState extends State<_EditAccountSheet> {
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email address'),
-              validator: (value) => value == null || !value.contains('@')
-                  ? 'Enter a valid email address'
-                  : null,
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Email address',
+                helperText: 'Managed by your sign-in account',
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone number'),
-              validator: _required,
+              decoration: const InputDecoration(
+                labelText: 'Phone number (optional)',
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             TextFormField(
@@ -511,80 +520,6 @@ class _EditAccountSheetState extends State<_EditAccountSheet> {
                     stateOfResidence: _stateController.text.trim(),
                   ),
                 );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ChangePasswordSheet extends StatefulWidget {
-  const _ChangePasswordSheet();
-
-  @override
-  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
-}
-
-class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
-  final _formKey = GlobalKey<FormState>();
-  final _passwordController = TextEditingController();
-  final _confirmationController = TextEditingController();
-  bool _obscure = true;
-
-  @override
-  void dispose() {
-    _passwordController.dispose();
-    _confirmationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _SheetFrame(
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sheetTitle(context, 'Change password'),
-            const SizedBox(height: AppSpacing.lg),
-            TextFormField(
-              controller: _passwordController,
-              obscureText: _obscure,
-              decoration: InputDecoration(
-                labelText: 'New password',
-                suffixIcon: IconButton(
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                ),
-              ),
-              validator: (value) => value == null || value.length < 8
-                  ? 'Use at least 8 characters'
-                  : null,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: _confirmationController,
-              obscureText: _obscure,
-              decoration: const InputDecoration(labelText: 'Confirm password'),
-              validator: (value) => value != _passwordController.text
-                  ? 'Passwords do not match'
-                  : null,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            AppPrimaryButton(
-              label: 'Update demo password',
-              onPressed: () {
-                if (_formKey.currentState!.validate()) {
-                  Navigator.pop(context, true);
-                }
               },
             ),
           ],
@@ -697,19 +632,6 @@ String _initials(String name) => name
     .where((part) => part.isNotEmpty)
     .map((part) => part[0].toUpperCase())
     .join();
-
-String _verificationLabel(UserProfile profile) {
-  final contactStatus = profile.emailVerified && profile.phoneVerified
-      ? 'Email and phone verified'
-      : profile.phoneVerified
-      ? 'Phone verified • Email pending'
-      : profile.emailVerified
-      ? 'Email verified • Phone pending'
-      : 'Email and phone pending';
-  return profile.demoKycComplete
-      ? '$contactStatus • Demo KYC complete'
-      : '$contactStatus • Demo KYC pending';
-}
 
 String _personalInformationLabel(UserProfile profile) {
   final date = profile.dateOfBirth;

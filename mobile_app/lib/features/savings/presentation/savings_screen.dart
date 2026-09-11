@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
@@ -7,10 +8,23 @@ import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 
+typedef SavingsPlanSaveCallback = Future<void> Function({
+  required int contributionAmount,
+  required SavingsFrequency frequency,
+  required DateTime startDate,
+});
+
 class SavingsScreen extends StatelessWidget {
-  const SavingsScreen({required this.store, super.key});
+  const SavingsScreen({
+    required this.store,
+    super.key,
+    this.onSavePlan,
+    this.onTogglePlan,
+  });
 
   final SavingsStore store;
+  final SavingsPlanSaveCallback? onSavePlan;
+  final Future<void> Function()? onTogglePlan;
 
   Future<void> _openPlanForm(BuildContext context) async {
     final draft = await showModalBottomSheet<_PlanDraft>(
@@ -20,11 +34,59 @@ class SavingsScreen extends StatelessWidget {
       builder: (context) => _PlanFormSheet(plan: store.plan),
     );
     if (draft == null) return;
-    store.configurePlan(
-      contributionAmount: draft.contributionAmount,
-      frequency: draft.frequency,
-      startDate: draft.startDate,
-    );
+    try {
+      final savePlan = onSavePlan;
+      if (savePlan == null) {
+        store.configurePlan(
+          contributionAmount: draft.contributionAmount,
+          frequency: draft.frequency,
+          startDate: draft.startDate,
+        );
+      } else {
+        await savePlan(
+          contributionAmount: draft.contributionAmount,
+          frequency: draft.frequency,
+          startDate: draft.startDate,
+        );
+      }
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Failed to save savings plan: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'We could not save your plan. Check your connection and try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _togglePlan(BuildContext context) async {
+    try {
+      final togglePlan = onTogglePlan;
+      if (togglePlan == null) {
+        store.togglePlan();
+      } else {
+        await togglePlan();
+      }
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Failed to change savings plan status: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'We could not update your plan. Check your connection and try again.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _addContribution(BuildContext context) async {
@@ -67,7 +129,7 @@ class SavingsScreen extends StatelessWidget {
                 _PlanCard(
                   plan: plan,
                   onEdit: () => _openPlanForm(context),
-                  onToggle: store.togglePlan,
+                  onToggle: () => _togglePlan(context),
                   onContribute: () => _addContribution(context),
                 ),
               const SizedBox(height: AppSpacing.xl),
@@ -191,7 +253,7 @@ class _PlanCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_naira(plan.contributionAmount)} ${plan.frequency.toLowerCase()}',
+                      '${_naira(plan.contributionAmount)} ${plan.frequency.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -355,7 +417,7 @@ class _PlanFormSheet extends StatefulWidget {
 class _PlanFormSheetState extends State<_PlanFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _amountController;
-  late String _frequency;
+  late SavingsFrequency _frequency;
   late DateTime _startDate;
 
   @override
@@ -364,7 +426,7 @@ class _PlanFormSheetState extends State<_PlanFormSheet> {
     _amountController = TextEditingController(
       text: widget.plan?.contributionAmount.toString(),
     );
-    _frequency = widget.plan?.frequency ?? 'Monthly';
+    _frequency = widget.plan?.frequency ?? SavingsFrequency.monthly;
     _startDate = widget.plan?.startDate ?? DateTime.now();
   }
 
@@ -428,14 +490,17 @@ class _PlanFormSheetState extends State<_PlanFormSheet> {
               validator: _amountValidator,
             ),
             const SizedBox(height: AppSpacing.sm),
-            DropdownButtonFormField<String>(
+            DropdownButtonFormField<SavingsFrequency>(
               initialValue: _frequency,
               decoration: const InputDecoration(labelText: 'Save frequency'),
-              items: const [
-                DropdownMenuItem(value: 'Daily', child: Text('Daily')),
-                DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
-                DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
-              ],
+              items: SavingsFrequency.values
+                  .map(
+                    (frequency) => DropdownMenuItem(
+                      value: frequency,
+                      child: Text(frequency.label),
+                    ),
+                  )
+                  .toList(growable: false),
               onChanged: (value) => setState(() => _frequency = value!),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -550,7 +615,7 @@ class _PlanDraft {
   });
 
   final int contributionAmount;
-  final String frequency;
+  final SavingsFrequency frequency;
   final DateTime startDate;
 }
 

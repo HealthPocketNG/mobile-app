@@ -4,7 +4,7 @@ abstract final class MockSavingsData {
   static final plan = SavingsPlan(
     id: 'personal-savings-plan',
     contributionAmount: 5000,
-    frequency: 'Weekly',
+    frequency: SavingsFrequency.weekly,
     startDate: DateTime(2026, 9, 1),
     status: SavingsPlanStatus.active,
   );

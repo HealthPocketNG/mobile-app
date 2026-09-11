@@ -1,4 +1,6 @@
 import 'package:healthpocket/features/activity/domain/activity_record.dart';
+import 'package:healthpocket/features/auth/domain/app_pin.dart';
+import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
@@ -8,10 +10,36 @@ import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 /// Feature code depends on these contracts, never directly on Firebase or a
 /// future payment, KYC, banking, or investment provider.
 abstract interface class AuthRepository {
+  AuthUser? get currentUser;
   String? get currentUserId;
-  Stream<String?> watchUserId();
+  Stream<AuthUser?> watchUser();
   Future<bool> hasActiveSession();
+  Future<AuthResult> createAccountWithEmail({
+    required String fullName,
+    required String email,
+    required String password,
+  });
+  Future<AuthResult> signInWithEmail({
+    required String email,
+    required String password,
+  });
+  Future<AuthResult?> signInWithGoogle();
+  Future<void> sendEmailVerification();
+  Future<AuthUser?> reloadCurrentUser();
+  Future<void> sendPasswordResetEmail(String email);
+  Future<void> reauthenticateWithPassword(String password);
+  Future<bool> reauthenticateWithGoogle();
   Future<void> signOut();
+}
+
+abstract interface class AppPinRepository {
+  Future<bool> hasPin(String userId);
+  Future<void> setPin({required String userId, required String pin});
+  Future<PinVerificationResult> verifyPin({
+    required String userId,
+    required String pin,
+  });
+  Future<void> clearPin(String userId);
 }
 
 abstract interface class ProfileRepository {
@@ -39,6 +67,8 @@ class UserProfileDocumentData {
 abstract interface class SavingsRepository {
   Stream<PersonalHealthPocket?> watchPersonalPocket(String userId);
   Stream<SavingsPlan?> watchPlan(String userId);
+  Future<PersonalHealthPocket?> getPersonalPocket(String userId);
+  Future<SavingsPlan?> getPlan(String userId);
   Future<void> savePersonalPocket(PersonalHealthPocket pocket);
   Future<void> savePlan({
     required String userId,

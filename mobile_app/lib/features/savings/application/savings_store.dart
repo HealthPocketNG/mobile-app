@@ -19,6 +19,22 @@ class SavingsStore extends ChangeNotifier {
       .where((item) => item.status == SavingsContributionStatus.completed)
       .fold(0, (total, item) => total + item.amount);
 
+  void hydrate({
+    required SavingsPlan? plan,
+    List<SavingsContribution> contributions = const [],
+  }) {
+    _plan = plan;
+    _contributions
+      ..clear()
+      ..addAll(contributions);
+    notifyListeners();
+  }
+
+  void replacePlan(SavingsPlan plan) {
+    _plan = plan;
+    notifyListeners();
+  }
+
   void resetForOnboarding() {
     _plan = null;
     _contributions.clear();
@@ -27,7 +43,7 @@ class SavingsStore extends ChangeNotifier {
 
   void configurePlan({
     required int contributionAmount,
-    required String frequency,
+    required SavingsFrequency frequency,
     required DateTime startDate,
   }) {
     _plan = SavingsPlan(
@@ -42,7 +58,7 @@ class SavingsStore extends ChangeNotifier {
 
   void saveOnboardingPlan({
     required int contributionAmount,
-    required String frequency,
+    required SavingsFrequency frequency,
     required DateTime startDate,
   }) {
     _plan = SavingsPlan(

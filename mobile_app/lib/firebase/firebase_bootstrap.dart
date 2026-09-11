@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:healthpocket/app/health_pocket_app.dart';
+import 'package:healthpocket/core/data/firestore/firestore_repositories.dart';
+import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 
 enum AppEnvironment { development, production }
 
@@ -87,5 +89,19 @@ Future<void> bootstrapFirebase({
       8080,
     );
   }
-  runApp(const HealthPocketApp());
+  final authRepository = await FirebaseAuthRepository.initialize(
+    FirebaseAuth.instance,
+  );
+  final repositories = FirebaseRepositoryBundle(
+    auth: authRepository,
+    firestore: FirebaseFirestore.instance,
+  );
+  runApp(
+    HealthPocketApp(
+      authRepository: authRepository,
+      pinRepository: SecureAppPinRepository(storage: FlutterSecureValueStore()),
+      profileRepository: repositories.profiles,
+      savingsRepository: repositories.savings,
+    ),
+  );
 }
