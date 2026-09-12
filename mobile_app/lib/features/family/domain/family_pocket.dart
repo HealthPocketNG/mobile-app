@@ -67,24 +67,22 @@ class FamilyMembership {
   final DateTime? removedAt;
 }
 
-enum FamilyContributionStatus { completed, reversed }
-
-class FamilyContribution {
-  const FamilyContribution({
+class FamilyInvitation {
+  const FamilyInvitation({
     required this.id,
     required this.pocketId,
-    required this.memberName,
-    required this.amount,
+    required this.name,
+    required this.email,
+    required this.role,
+    required this.createdBy,
     required this.createdAt,
-    this.status = FamilyContributionStatus.completed,
-    this.source = 'mock',
   });
 
   final String id;
   final String pocketId;
-  final String memberName;
-  final int amount;
-  final DateTime createdAt;
-  final FamilyContributionStatus status;
-  final String source;
+  final String name;
+  final String email;
+  final FamilyRole role;
+  final String createdBy;
+  final DateTime? createdAt;
 }

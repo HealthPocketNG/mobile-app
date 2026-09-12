@@ -93,7 +93,7 @@ void main() {
         restoredState.savingsStore.plan?.frequency,
         SavingsFrequency.daily,
       );
-      expect(restoredState.savingsStore.currentBalance, 0);
+      expect(restoredState.savingsStore.developmentBalanceKobo, 0);
       expect(restoredState.familyPocketStore.pockets, isEmpty);
     },
   );
@@ -134,10 +134,59 @@ void main() {
     await appState.completeOnboarding();
     expect(appState.hasCompletedOnboarding, isTrue);
   });
+
+  test('persists notification preferences and restores them', () async {
+    final auth = InMemoryAuthRepository();
+    final profiles = _MemoryProfileRepository();
+    final savings = _MemorySavingsRepository();
+    final appState = AppState(
+      authRepository: auth,
+      profileRepository: profiles,
+      savingsRepository: savings,
+    );
+    addTearDown(appState.dispose);
+    addTearDown(auth.dispose);
+
+    final result = await auth.signInWithEmail(
+      email: 'amara@example.com',
+      password: 'secure-password',
+    );
+    await appState.acceptAuthentication(result);
+    appState.profileStore.beginRegistration(
+      fullName: 'Amara Okafor',
+      email: 'amara@example.com',
+      phoneNumber: '',
+      emailVerified: true,
+    );
+    appState.savingsStore.saveOnboardingPlan(
+      contributionAmount: 5000,
+      frequency: SavingsFrequency.weekly,
+      startDate: DateTime(2026, 10, 1),
+    );
+    await appState.completeOnboarding();
+
+    final updated = appState.profileStore.notifications.copyWith(
+      savingsReminders: false,
+    );
+    await appState.updateNotificationPreferences(updated);
+
+    expect(profiles.data?.notifications.savingsReminders, isFalse);
+    expect(appState.profileStore.notifications.savingsReminders, isFalse);
+
+    profiles.failSave = true;
+    await expectLater(
+      appState.updateNotificationPreferences(
+        updated.copyWith(savingsReminders: true),
+      ),
+      throwsStateError,
+    );
+    expect(appState.profileStore.notifications.savingsReminders, isFalse);
+  });
 }
 
 class _MemoryProfileRepository implements ProfileRepository {
   UserProfileDocumentData? data;
+  bool failSave = false;
 
   @override
   Future<UserProfileDocumentData?> getProfile(String userId) async => data;
@@ -148,6 +197,7 @@ class _MemoryProfileRepository implements ProfileRepository {
     required UserProfile profile,
     required NotificationPreferences notifications,
   }) async {
+    if (failSave) throw StateError('simulated profile write failure');
     data = UserProfileDocumentData(
       profile: profile,
       notifications: notifications,

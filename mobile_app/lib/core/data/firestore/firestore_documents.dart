@@ -211,24 +211,35 @@ class ContributionDocument {
         ),
         savingsPlanId: firestoreNullableString(data, 'savingsPlanId'),
         familyPocketId: firestoreNullableString(data, 'familyPocketId'),
-        amount: firestoreInt(data, 'amount'),
+        contributorName: firestoreNullableString(data, 'contributorName'),
+        amountKobo: firestoreInt(data, 'amountKobo'),
         currency: firestoreString(data, 'currency'),
         status: firestoreEnum(data, 'status', ContributionStatus.values),
-        source: firestoreEnum(data, 'source', ContributionSource.values),
+        origin: ContributionOrigin.fromFirestore(
+          firestoreString(data, 'origin'),
+        ),
+        moneyMovement: firestoreBool(data, 'moneyMovement'),
+        idempotencyKey: firestoreString(data, 'idempotencyKey'),
         note: firestoreNullableString(data, 'note'),
-        createdAt: firestoreDateTime(data, 'createdAt'),
+        createdAt: firestoreNullableDateTime(data, 'createdAt'),
       ),
     );
   }
 
-  Map<String, Object?> toMap() {
+  Map<String, Object?> toMap({Object? createdAtOverride}) {
     final data = <String, Object?>{
       'contributorUserId': contribution.contributorUserId,
-      'amount': contribution.amount,
+      'amountKobo': contribution.amountKobo,
       'currency': contribution.currency,
       'status': contribution.status.name,
-      'source': contribution.source.name,
-      'createdAt': firestoreTimestamp(contribution.createdAt),
+      'origin': contribution.origin.firestoreValue,
+      'moneyMovement': contribution.moneyMovement,
+      'idempotencyKey': contribution.idempotencyKey,
+      'createdAt':
+          createdAtOverride ??
+          (contribution.createdAt == null
+              ? null
+              : firestoreTimestamp(contribution.createdAt!)),
     };
     if (contribution.personalHealthPocketId case final pocketId?) {
       data['personalHealthPocketId'] = pocketId;
@@ -238,6 +249,9 @@ class ContributionDocument {
     }
     if (contribution.familyPocketId case final pocketId?) {
       data['familyPocketId'] = pocketId;
+    }
+    if (contribution.contributorName case final name?) {
+      data['contributorName'] = name;
     }
     if (contribution.note case final note?) data['note'] = note;
     return data;
@@ -277,14 +291,17 @@ class FamilyPocketDocument {
     );
   }
 
-  Map<String, Object?> toMap() => {
+  Map<String, Object?> toMap({
+    Object? createdAtOverride,
+    Object? updatedAtOverride,
+  }) => {
     'name': pocket.name,
     'beneficiary': pocket.beneficiary,
     'createdBy': createdBy,
     'currency': currency,
     'status': status.name,
-    'createdAt': firestoreTimestamp(createdAt),
-    'updatedAt': firestoreTimestamp(updatedAt),
+    'createdAt': createdAtOverride ?? firestoreTimestamp(createdAt),
+    'updatedAt': updatedAtOverride ?? firestoreTimestamp(updatedAt),
   };
 }
 
@@ -303,7 +320,7 @@ class FamilyMembershipDocument {
         pocketId: firestoreString(data, 'pocketId'),
         userId: firestoreNullableString(data, 'userId'),
         name: firestoreString(data, 'name'),
-        email: firestoreString(data, 'email'),
+        email: '',
         role: firestoreEnum(data, 'role', FamilyRole.values),
         invitationStatus: firestoreEnum(
           data,
@@ -316,18 +333,50 @@ class FamilyMembershipDocument {
     );
   }
 
-  Map<String, Object?> toMap() => {
+  Map<String, Object?> toMap({Object? joinedAtOverride}) => {
     'pocketId': membership.pocketId,
     'userId': membership.userId,
     'name': membership.name,
-    'email': membership.email,
     'role': membership.role.name,
     'invitationStatus': membership.invitationStatus.name,
-    'joinedAt': membership.joinedAt == null
-        ? null
-        : firestoreTimestamp(membership.joinedAt!),
+    'joinedAt':
+        joinedAtOverride ??
+        (membership.joinedAt == null
+            ? null
+            : firestoreTimestamp(membership.joinedAt!)),
     if (membership.removedAt != null)
       'removedAt': firestoreTimestamp(membership.removedAt!),
+  };
+}
+
+class FamilyInvitationDocument {
+  const FamilyInvitationDocument(this.invitation);
+
+  final FamilyInvitation invitation;
+
+  factory FamilyInvitationDocument.fromMap(
+    String id,
+    Map<String, dynamic> data,
+  ) => FamilyInvitationDocument(
+    FamilyInvitation(
+      id: id,
+      pocketId: firestoreString(data, 'pocketId'),
+      name: firestoreString(data, 'name'),
+      email: firestoreString(data, 'email'),
+      role: firestoreEnum(data, 'role', FamilyRole.values),
+      createdBy: firestoreString(data, 'createdBy'),
+      createdAt: firestoreNullableDateTime(data, 'createdAt'),
+    ),
+  );
+
+  Map<String, Object?> toMap({Object? createdAtOverride}) => {
+    'pocketId': invitation.pocketId,
+    'name': invitation.name,
+    'email': invitation.email,
+    'role': invitation.role.name,
+    'status': 'pending',
+    'createdBy': invitation.createdBy,
+    'createdAt': createdAtOverride ?? firestoreTimestamp(invitation.createdAt!),
   };
 }
 
@@ -424,6 +473,19 @@ abstract final class FirestoreDocumentCollections {
       .withConverter(
         fromFirestore: (snapshot, _) =>
             FamilyMembershipDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (document, _) => document.toMap(),
+      );
+
+  static CollectionReference<FamilyInvitationDocument> familyInvitations(
+    FirebaseFirestore firestore,
+    String pocketId,
+  ) => firestore
+      .collection('family_pockets')
+      .doc(pocketId)
+      .collection('invites')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            FamilyInvitationDocument.fromMap(snapshot.id, snapshot.data()!),
         toFirestore: (document, _) => document.toMap(),
       );
 

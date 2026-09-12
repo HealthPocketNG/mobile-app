@@ -9,11 +9,28 @@ import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({required this.store, super.key, this.authRepository});
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({
+    required this.store,
+    super.key,
+    this.authRepository,
+    this.onSaveNotificationPreferences,
+  });
 
   final ProfileStore store;
   final AuthRepository? authRepository;
+  final Future<void> Function(NotificationPreferences notifications)?
+  onSaveNotificationPreferences;
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _savingNotifications = false;
+
+  ProfileStore get store => widget.store;
+  AuthRepository? get authRepository => widget.authRepository;
 
   Future<void> _editAccount(BuildContext context) async {
     final draft = await showModalBottomSheet<_AccountDraft>(
@@ -53,6 +70,34 @@ class ProfileScreen extends StatelessWidget {
       AppRoute.welcome.path,
       (route) => false,
     );
+  }
+
+  Future<void> _saveNotifications(
+    BuildContext context,
+    NotificationPreferences notifications,
+  ) async {
+    if (_savingNotifications) return;
+    setState(() => _savingNotifications = true);
+    try {
+      final save = widget.onSaveNotificationPreferences;
+      if (save == null) {
+        store.replaceNotifications(notifications);
+      } else {
+        await save(notifications);
+      }
+      if (context.mounted) {
+        _showMessage(context, 'Notification preference saved');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        _showMessage(
+          context,
+          'We could not save that preference. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingNotifications = false);
+    }
   }
 
   @override
@@ -136,7 +181,14 @@ class ProfileScreen extends StatelessWidget {
                     title: 'Savings reminders',
                     subtitle: 'Plan schedule and contribution reminders',
                     value: store.notifications.savingsReminders,
-                    onChanged: store.setSavingsReminderNotifications,
+                    onChanged: _savingNotifications
+                        ? null
+                        : (value) => _saveNotifications(
+                            context,
+                            store.notifications.copyWith(
+                              savingsReminders: value,
+                            ),
+                          ),
                   ),
                   _PreferenceSwitch(
                     switchKey: const ValueKey('family-activity-switch'),
@@ -144,7 +196,12 @@ class ProfileScreen extends StatelessWidget {
                     title: 'Family activity',
                     subtitle: 'Invites and shared-pocket updates',
                     value: store.notifications.familyActivity,
-                    onChanged: store.setFamilyActivityNotifications,
+                    onChanged: _savingNotifications
+                        ? null
+                        : (value) => _saveNotifications(
+                            context,
+                            store.notifications.copyWith(familyActivity: value),
+                          ),
                   ),
                   _PreferenceSwitch(
                     switchKey: const ValueKey('health-reminders-switch'),
@@ -152,7 +209,14 @@ class ProfileScreen extends StatelessWidget {
                     title: 'Health reminders',
                     subtitle: 'Helpful prompts for your healthcare plans',
                     value: store.notifications.healthReminders,
-                    onChanged: store.setHealthReminders,
+                    onChanged: _savingNotifications
+                        ? null
+                        : (value) => _saveNotifications(
+                            context,
+                            store.notifications.copyWith(
+                              healthReminders: value,
+                            ),
+                          ),
                   ),
                   _PreferenceSwitch(
                     switchKey: const ValueKey('product-updates-switch'),
@@ -160,7 +224,12 @@ class ProfileScreen extends StatelessWidget {
                     title: 'Product updates',
                     subtitle: 'New HealthPocket feature announcements',
                     value: store.notifications.productUpdates,
-                    onChanged: store.setProductUpdates,
+                    onChanged: _savingNotifications
+                        ? null
+                        : (value) => _saveNotifications(
+                            context,
+                            store.notifications.copyWith(productUpdates: value),
+                          ),
                   ),
                 ],
               ),
@@ -411,7 +480,7 @@ class _PreferenceSwitch extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {

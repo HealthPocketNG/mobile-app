@@ -80,21 +80,31 @@ abstract interface class SavingsRepository {
 }
 
 abstract interface class ContributionRepository {
-  Stream<List<ContributionRecord>> watchPersonalContributions(
-    String personalHealthPocketId,
-  );
+  Future<List<ContributionRecord>> getPersonalContributions({
+    required String userId,
+    required String personalHealthPocketId,
+  });
+  Stream<List<ContributionRecord>> watchPersonalContributions({
+    required String userId,
+    required String personalHealthPocketId,
+  });
   Stream<List<ContributionRecord>> watchFamilyContributions(
     String familyPocketId,
   );
+  Future<List<ContributionRecord>> getFamilyContributions(
+    String familyPocketId,
+  );
 
-  /// Persists the ledger entry and its activity record atomically.
-  Future<void> recordContribution({
-    required ContributionRecord contribution,
-    required ActivityRecord activity,
-  });
+  /// Creates one immutable development record. Reusing its idempotency key is
+  /// a successful no-op and must never create a second record.
+  Future<void> recordDevelopmentContribution(ContributionRecord contribution);
+  Future<void> recordDevelopmentFamilyContribution(
+    ContributionRecord contribution,
+  );
 }
 
 abstract interface class FamilyPocketRepository {
+  Future<List<FamilyPocket>> getPocketsForUser(String userId);
   Stream<FamilyPocket?> watchPocket(String pocketId);
   Stream<List<FamilyMembership>> watchMembers(String pocketId);
   Stream<List<FamilyMembership>> watchMembershipsForUser(String userId);
@@ -106,11 +116,10 @@ abstract interface class FamilyPocketRepository {
     required FamilyMembership adminMembership,
   });
 
-  Future<void> saveMembership(FamilyMembership membership);
+  Future<void> createInvitation(FamilyInvitation invitation);
   Future<void> markContributorRemoved({
     required String pocketId,
     required String memberId,
-    required DateTime removedAt,
   });
 }
 

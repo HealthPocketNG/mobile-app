@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +7,7 @@ import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 
@@ -14,17 +17,30 @@ typedef SavingsPlanSaveCallback = Future<void> Function({
   required DateTime startDate,
 });
 
+typedef DevelopmentContributionCallback = Future<void> Function({
+  required int amountNaira,
+  required String idempotencyKey,
+});
+
 class SavingsScreen extends StatelessWidget {
   const SavingsScreen({
     required this.store,
     super.key,
     this.onSavePlan,
     this.onTogglePlan,
+    this.developmentContributionsEnabled = false,
+    this.onCreateContributionKey,
+    this.onRecordDevelopmentContribution,
+    this.onRetryContributions,
   });
 
   final SavingsStore store;
   final SavingsPlanSaveCallback? onSavePlan;
   final Future<void> Function()? onTogglePlan;
+  final bool developmentContributionsEnabled;
+  final String Function()? onCreateContributionKey;
+  final DevelopmentContributionCallback? onRecordDevelopmentContribution;
+  final VoidCallback? onRetryContributions;
 
   Future<void> _openPlanForm(BuildContext context) async {
     final draft = await showModalBottomSheet<_PlanDraft>(
@@ -96,7 +112,63 @@ class SavingsScreen extends StatelessWidget {
       useSafeArea: true,
       builder: (context) => const _ContributionSheet(),
     );
-    if (amount != null) store.recordContribution(amount);
+    if (amount == null) return;
+    if (!context.mounted) return;
+    final createKey = onCreateContributionKey;
+    final record = onRecordDevelopmentContribution;
+    if (!developmentContributionsEnabled ||
+        createKey == null ||
+        record == null) {
+      return;
+    }
+    final idempotencyKey = createKey();
+    await _persistDevelopmentContribution(
+      context,
+      amountNaira: amount,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<void> _persistDevelopmentContribution(
+    BuildContext context, {
+    required int amountNaira,
+    required String idempotencyKey,
+  }) async {
+    try {
+      await onRecordDevelopmentContribution!(
+        amountNaira: amountNaira,
+        idempotencyKey: idempotencyKey,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Development record saved — no money moved.'),
+        ),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Failed to save development contribution: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'We could not save this development record. No money moved.',
+          ),
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: () => unawaited(
+              _persistDevelopmentContribution(
+                context,
+                amountNaira: amountNaira,
+                idempotencyKey: idempotencyKey,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -115,7 +187,7 @@ class SavingsScreen extends StatelessWidget {
               AppSpacing.xl,
             ),
             children: [
-              _SavingsSummary(balance: store.currentBalance),
+              _SavingsSummary(balanceKobo: store.developmentBalanceKobo),
               const SizedBox(height: AppSpacing.xl),
               Text(
                 'Your savings plan',
@@ -130,7 +202,9 @@ class SavingsScreen extends StatelessWidget {
                   plan: plan,
                   onEdit: () => _openPlanForm(context),
                   onToggle: () => _togglePlan(context),
-                  onContribute: () => _addContribution(context),
+                  onContribute: developmentContributionsEnabled
+                      ? () => _addContribution(context)
+                      : null,
                 ),
               const SizedBox(height: AppSpacing.xl),
               Text(
@@ -139,12 +213,12 @@ class SavingsScreen extends StatelessWidget {
                     ?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: AppSpacing.sm),
-              if (store.contributions.isEmpty)
-                const _EmptyHistory()
-              else
-                ...store.contributions.map(
-                  (item) => _ContributionTile(contribution: item),
-                ),
+              _ContributionHistory(
+                store: store,
+                developmentContributionsEnabled:
+                    developmentContributionsEnabled,
+                onRetry: onRetryContributions,
+              ),
             ],
           ),
           bottomNavigationBar: const AppBottomNavigation(currentIndex: 1),
@@ -155,9 +229,9 @@ class SavingsScreen extends StatelessWidget {
 }
 
 class _SavingsSummary extends StatelessWidget {
-  const _SavingsSummary({required this.balance});
+  const _SavingsSummary({required this.balanceKobo});
 
-  final int balance;
+  final int balanceKobo;
 
   @override
   Widget build(BuildContext context) {
@@ -181,16 +255,16 @@ class _SavingsSummary extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  _naira(balance),
+                  _formatKobo(balanceKobo),
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 Text(
-                  balance == 0
+                  balanceKobo == 0
                       ? 'Your first contribution starts here'
-                      : 'Built one contribution at a time',
+                      : 'Development balance — no money moved',
                   style: const TextStyle(color: Colors.white70),
                 ),
               ],
@@ -220,13 +294,13 @@ class _PlanCard extends StatelessWidget {
     required this.plan,
     required this.onEdit,
     required this.onToggle,
-    required this.onContribute,
+    this.onContribute,
   });
 
   final SavingsPlan plan;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
-  final VoidCallback onContribute;
+  final VoidCallback? onContribute;
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +327,7 @@ class _PlanCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_naira(plan.contributionAmount)} ${plan.frequency.name}',
+                      '${_formatNaira(plan.contributionAmount)} ${plan.frequency.label.toLowerCase()}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -303,19 +377,21 @@ class _PlanCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onContribute,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Add savings'),
+          if (onContribute != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onContribute,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add development record'),
+              ),
             ),
-          ),
+          ],
           if (paused) ...[
             const SizedBox(height: AppSpacing.sm),
             const Text(
-              'Pausing stops future schedule instructions. You can still record a manual contribution.',
+              'Pausing stops future schedule instructions. Development records remain available in DEV.',
               style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
             ),
           ],
@@ -361,7 +437,7 @@ class _NoPlanCard extends StatelessWidget {
 class _ContributionTile extends StatelessWidget {
   const _ContributionTile({required this.contribution});
 
-  final SavingsContribution contribution;
+  final ContributionRecord contribution;
 
   @override
   Widget build(BuildContext context) {
@@ -372,12 +448,14 @@ class _ContributionTile extends StatelessWidget {
         child: Icon(Icons.south_west_rounded, color: AppColors.primary),
       ),
       title: const Text(
-        'Health savings contribution',
+        'Simulated savings contribution',
         style: TextStyle(fontWeight: FontWeight.w700),
       ),
-      subtitle: Text('${_dateLabel(contribution.createdAt)} • Demo record'),
+      subtitle: Text(
+        '${_dateLabel(contribution.createdAt)} • Development record — no money moved',
+      ),
       trailing: Text(
-        '+${_naira(contribution.amount)}',
+        '+${_formatKobo(contribution.amountKobo)}',
         style: const TextStyle(
           color: AppColors.success,
           fontWeight: FontWeight.w800,
@@ -399,7 +477,77 @@ class _EmptyHistory extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: const Text(
-        'No contributions yet. Add your first savings record when you are ready.',
+        'No development records yet. Add one to test your savings experience. No money will move.',
+      ),
+    );
+  }
+}
+
+class _ContributionHistory extends StatelessWidget {
+  const _ContributionHistory({
+    required this.store,
+    required this.developmentContributionsEnabled,
+    this.onRetry,
+  });
+
+  final SavingsStore store;
+  final bool developmentContributionsEnabled;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!developmentContributionsEnabled) {
+      return const Text(
+        'Simulated contribution controls are unavailable in production builds.',
+        style: TextStyle(color: AppColors.inkMuted),
+      );
+    }
+    return switch (store.contributionLoadStatus) {
+      ContributionLoadStatus.loading => const Padding(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      ContributionLoadStatus.failure => _ContributionLoadFailure(
+        onRetry: onRetry,
+      ),
+      ContributionLoadStatus.ready when store.contributions.isEmpty =>
+        const _EmptyHistory(),
+      ContributionLoadStatus.ready => Column(
+        children: store.contributions
+            .map((item) => _ContributionTile(contribution: item))
+            .toList(growable: false),
+      ),
+      ContributionLoadStatus.idle => const Text(
+        'Development records will load after your savings setup is restored.',
+        style: TextStyle(color: AppColors.inkMuted),
+      ),
+    };
+  }
+}
+
+class _ContributionLoadFailure extends StatelessWidget {
+  const _ContributionLoadFailure({this.onRetry});
+
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'We could not load your development records. No balance has been assumed.',
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            TextButton(onPressed: onRetry, child: const Text('Try again')),
+          ],
+        ],
       ),
     );
   }
@@ -557,7 +705,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
             ),
             const SizedBox(height: AppSpacing.xs),
             const Text(
-              'Demo only—this does not move money from a bank account.',
+              'Development record — no money moved from a bank account.',
               style: TextStyle(color: AppColors.inkMuted),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -574,7 +722,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
             ),
             const SizedBox(height: AppSpacing.lg),
             AppPrimaryButton(
-              label: 'Record mock contribution',
+              label: 'Record development contribution',
               onPressed: () {
                 if (_formKey.currentState!.validate()) {
                   Navigator.pop(context, int.parse(_amountController.text));
@@ -622,9 +770,11 @@ class _PlanDraft {
 String? _amountValidator(String? value) =>
     value == null || int.tryParse(value) == null || int.parse(value) < 100
     ? 'Enter at least ₦100'
+    : int.parse(value) > 1000000000
+    ? 'Enter no more than ₦1,000,000,000'
     : null;
 
-String _naira(int amount) {
+String _formatNaira(int amount) {
   final value = amount.toString().replaceAllMapped(
     RegExp(r'\B(?=(\d{3})+(?!\d))'),
     (match) => ',',
@@ -632,10 +782,18 @@ String _naira(int amount) {
   return '₦$value';
 }
 
+String _formatKobo(int amountKobo) {
+  final naira = amountKobo ~/ 100;
+  final kobo = amountKobo.remainder(100).abs();
+  final whole = _formatNaira(naira);
+  return kobo == 0 ? whole : '$whole.${kobo.toString().padLeft(2, '0')}';
+}
+
 String _shortDate(DateTime date) =>
     '${date.day} ${const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.month - 1]} ${date.year}';
 
-String _dateLabel(DateTime date) {
+String _dateLabel(DateTime? date) {
+  if (date == null) return 'Saving…';
   final now = DateTime.now();
   final difference = DateTime(
     now.year,

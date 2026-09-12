@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/app/health_pocket_app.dart';
 import 'package:healthpocket/core/widgets/app_brand_logo.dart';
+import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
 import 'package:healthpocket/features/family/presentation/family_pocket_screen.dart';
@@ -66,7 +69,7 @@ void main() {
     );
 
     expect(find.text('Health savings balance'), findsOneWidget);
-    expect(find.text('₦42,300'), findsOneWidget);
+    expect(find.text('₦0'), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
@@ -76,19 +79,82 @@ void main() {
     expect(find.text('Recent activity'), findsOneWidget);
   });
 
-  testWidgets('records a mock savings contribution', (tester) async {
+  testWidgets('pulling down refreshes dashboard data', (tester) async {
     final store = SavingsStore();
+    final profileStore = ProfileStore();
+    var refreshCount = 0;
     addTearDown(store.dispose);
-    await tester.pumpWidget(MaterialApp(home: SavingsScreen(store: store)));
+    addTearDown(profileStore.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardScreen(
+          savingsStore: store,
+          profileStore: profileStore,
+          onRefresh: () async => refreshCount++,
+        ),
+      ),
+    );
 
-    await tester.tap(find.text('Add savings').first);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 400));
+    await tester.pumpAndSettle();
+
+    expect(refreshCount, 1);
+  });
+
+  testWidgets('records a clearly labelled development contribution', (
+    tester,
+  ) async {
+    final store = SavingsStore();
+    final records = StreamController<List<ContributionRecord>>();
+    addTearDown(store.dispose);
+    addTearDown(records.close);
+    store.watchPersonalContributions(
+      userId: 'demo-user',
+      personalHealthPocketId: 'personal-demo-user',
+      streamFactory: () => records.stream,
+    );
+    records.add(const []);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SavingsScreen(
+          store: store,
+          developmentContributionsEnabled: true,
+          onCreateContributionKey: () => '0123456789abcdef',
+          onRecordDevelopmentContribution:
+              ({
+                required int amountNaira,
+                required String idempotencyKey,
+              }) async {
+                records.add([
+                  ContributionRecord(
+                    id: 'dev_demo-user_$idempotencyKey',
+                    contributorUserId: 'demo-user',
+                    personalHealthPocketId: 'personal-demo-user',
+                    savingsPlanId: 'personal-savings-plan',
+                    amountKobo: amountNaira * 100,
+                    currency: 'NGN',
+                    status: ContributionStatus.recorded,
+                    origin: ContributionOrigin.devSimulation,
+                    moneyMovement: false,
+                    idempotencyKey: idempotencyKey,
+                    createdAt: DateTime(2026, 9, 11),
+                  ),
+                ]);
+              },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Add development record'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).last, '5000');
-    await tester.tap(find.text('Record mock contribution'));
+    await tester.tap(find.text('Record development contribution'));
     await tester.pumpAndSettle();
 
-    expect(find.text('₦47,300'), findsOneWidget);
-    expect(store.contributions.first.amount, 5000);
+    expect(find.text('₦5,000'), findsWidgets);
+    expect(store.contributions.first.amountKobo, 500000);
+    expect(find.textContaining('no money moved'), findsWidgets);
   });
 
   testWidgets('opens a restored savings plan for editing', (tester) async {
@@ -112,6 +178,64 @@ void main() {
     );
   });
 
+  testWidgets('production UI exposes no simulated contribution action', (
+    tester,
+  ) async {
+    final store = SavingsStore();
+    addTearDown(store.dispose);
+    await tester.pumpWidget(MaterialApp(home: SavingsScreen(store: store)));
+
+    expect(find.text('Add development record'), findsNothing);
+    expect(find.text('Record development contribution'), findsNothing);
+  });
+
+  testWidgets('dashboard activity uses the ordered contribution records', (
+    tester,
+  ) async {
+    final store = SavingsStore();
+    final profileStore = ProfileStore();
+    final records = StreamController<List<ContributionRecord>>();
+    addTearDown(store.dispose);
+    addTearDown(profileStore.dispose);
+    addTearDown(records.close);
+    store.watchPersonalContributions(
+      userId: 'demo-user',
+      personalHealthPocketId: 'personal-demo-user',
+      streamFactory: () => records.stream,
+    );
+    records.add([
+      _developmentRecord(
+        key: 'aaaaaaaaaaaaaaaa',
+        amountKobo: 100000,
+        createdAt: DateTime(2026, 9, 9),
+      ),
+      _developmentRecord(
+        key: 'bbbbbbbbbbbbbbbb',
+        amountKobo: 200000,
+        createdAt: DateTime(2026, 9, 10),
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardScreen(
+          savingsStore: store,
+          profileStore: profileStore,
+          developmentContributionsEnabled: true,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(store.contributions.first.amountKobo, 200000);
+    expect(store.developmentBalanceKobo, 300000);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+    await tester.pumpAndSettle();
+    expect(find.text('+₦2,000'), findsOneWidget);
+    expect(find.text('+₦1,000'), findsOneWidget);
+    expect(find.textContaining('No money moved'), findsWidgets);
+  });
+
   testWidgets('invites a Family Pocket member', (tester) async {
     final store = FamilyPocketStore();
     addTearDown(store.dispose);
@@ -126,7 +250,7 @@ void main() {
       find.byType(TextFormField).at(1),
       'tola@example.com',
     );
-    await tester.tap(find.text('Send demo invite'));
+    await tester.tap(find.text('Record invitation'));
     await tester.pumpAndSettle();
 
     expect(find.text('Tola Adebayo'), findsOneWidget);
@@ -165,9 +289,29 @@ void main() {
     );
     expect(store.selectedContributions, hasLength(contributionCount));
     expect(
-      store.selectedContributions.any((item) => item.memberName == 'Grace'),
+      store.selectedContributions.any(
+        (item) => item.contributorName == 'Grace',
+      ),
       isTrue,
     );
+  });
+
+  testWidgets('production Family Pocket exposes no simulated contribution', (
+    tester,
+  ) async {
+    final store = FamilyPocketStore();
+    addTearDown(store.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FamilyPocketScreen(
+          store: store,
+          developmentContributionsEnabled: false,
+        ),
+      ),
+    );
+
+    expect(find.text('Dev record'), findsNothing);
+    expect(find.text('Shared funding is not enabled'), findsOneWidget);
   });
 
   testWidgets('updates a profile notification preference', (tester) async {
@@ -241,7 +385,25 @@ void main() {
     expect(appState.savingsStore.plan!.contributionAmount, 3000);
     expect(appState.savingsStore.plan!.frequency, SavingsFrequency.weekly);
     expect(appState.savingsStore.plan!.startDate, DateTime(2026, 10, 8));
-    expect(appState.savingsStore.currentBalance, 0);
+    expect(appState.savingsStore.developmentBalanceKobo, 0);
     expect(appState.hasCompletedOnboarding, isTrue);
   });
 }
+
+ContributionRecord _developmentRecord({
+  required String key,
+  required int amountKobo,
+  required DateTime createdAt,
+}) => ContributionRecord(
+  id: 'dev_demo-user_$key',
+  contributorUserId: 'demo-user',
+  personalHealthPocketId: 'personal-demo-user',
+  savingsPlanId: 'personal-savings-plan',
+  amountKobo: amountKobo,
+  currency: 'NGN',
+  status: ContributionStatus.recorded,
+  origin: ContributionOrigin.devSimulation,
+  moneyMovement: false,
+  idempotencyKey: key,
+  createdAt: createdAt,
+);

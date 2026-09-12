@@ -118,4 +118,9 @@ class ProfileStore extends ChangeNotifier {
     _notifications = _notifications.copyWith(productUpdates: value);
     notifyListeners();
   }
+
+  void replaceNotifications(NotificationPreferences notifications) {
+    _notifications = notifications;
+    notifyListeners();
+  }
 }

@@ -1,11 +1,17 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
 import 'package:healthpocket/features/auth/domain/app_pin.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
+import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
+import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
+import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
@@ -17,6 +23,9 @@ class AppState extends ChangeNotifier {
     AppPinRepository? pinRepository,
     this.profileRepository,
     this.savingsRepository,
+    this.contributionRepository,
+    this.familyPocketRepository,
+    this.developmentContributionsEnabled = false,
   }) : authRepository = authRepository ?? InMemoryAuthRepository(),
        pinRepository =
            pinRepository ??
@@ -26,11 +35,15 @@ class AppState extends ChangeNotifier {
   final AppPinRepository pinRepository;
   final ProfileRepository? profileRepository;
   final SavingsRepository? savingsRepository;
+  final ContributionRepository? contributionRepository;
+  final FamilyPocketRepository? familyPocketRepository;
+  final bool developmentContributionsEnabled;
   final FamilyPocketStore familyPocketStore = FamilyPocketStore();
   final ProfileStore profileStore = ProfileStore();
   final SavingsStore savingsStore = SavingsStore();
   bool _hasCompletedOnboarding = false;
   bool _pendingNewAccount = false;
+  String? _personalHealthPocketId;
 
   bool get hasCompletedOnboarding => _hasCompletedOnboarding;
 
@@ -86,10 +99,17 @@ class AppState extends ChangeNotifier {
 
   Future<void> signOut() async {
     _pendingNewAccount = false;
+    _personalHealthPocketId = null;
+    savingsStore.clearContributionState();
+    familyPocketStore.resetForNewUser(name: '', email: '');
     await authRepository.signOut();
   }
 
   Future<AuthFlowDestination> _destinationForVerifiedUser(AuthUser user) async {
+    // Clear account-scoped records before any asynchronous restore work so a
+    // previous account can never remain visible during an account switch.
+    _personalHealthPocketId = null;
+    savingsStore.clearContributionState();
     final profiles = profileRepository;
     final savings = savingsRepository;
     if (profiles != null && savings != null) {
@@ -115,7 +135,8 @@ class AppState extends ChangeNotifier {
           );
         }
         savingsStore.hydrate(plan: plan);
-        familyPocketStore.resetForNewUser(
+        _startFamilyPocketRestore(
+          userId: user.uid,
           name: profileStore.profile.fullName,
           email: profileStore.profile.email,
         );
@@ -128,7 +149,10 @@ class AppState extends ChangeNotifier {
         notifications: profileData.notifications,
       );
       savingsStore.hydrate(plan: plan);
-      familyPocketStore.resetForNewUser(
+      _personalHealthPocketId = pocket.id;
+      _watchPersonalContributions(userId: user.uid, pocketId: pocket.id);
+      _startFamilyPocketRestore(
+        userId: user.uid,
         name: profileData.profile.fullName,
         email: profileData.profile.email,
       );
@@ -159,8 +183,10 @@ class AppState extends ChangeNotifier {
 
   void beginRegistration() {
     _hasCompletedOnboarding = false;
+    _personalHealthPocketId = null;
     savingsStore.resetForOnboarding();
     familyPocketStore.resetForNewUser(
+      userId: authRepository.currentUserId ?? 'current-user',
       name: profileStore.profile.fullName,
       email: profileStore.profile.email,
     );
@@ -207,6 +233,7 @@ class AppState extends ChangeNotifier {
       notifications: profileStore.notifications,
     );
     savingsStore.hydrate(plan: plan);
+    _personalHealthPocketId = pocket.id;
 
     final profiles = profileRepository;
     final savings = savingsRepository;
@@ -224,6 +251,13 @@ class AppState extends ChangeNotifier {
         plan: plan,
       );
     }
+
+    _watchPersonalContributions(userId: user.uid, pocketId: pocket.id);
+    _startFamilyPocketRestore(
+      userId: user.uid,
+      name: profile.fullName,
+      email: profile.email,
+    );
 
     _hasCompletedOnboarding = true;
     notifyListeners();
@@ -261,6 +295,262 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  Future<void> updateNotificationPreferences(
+    NotificationPreferences notifications,
+  ) async {
+    final userId = authRepository.currentUserId;
+    if (userId == null) {
+      throw const AuthFailure('Your session has expired.');
+    }
+    final repository = profileRepository;
+    if (repository != null) {
+      await repository.saveProfile(
+        userId: userId,
+        profile: profileStore.profile,
+        notifications: notifications,
+      );
+    }
+    if (authRepository.currentUserId != userId) {
+      throw const AuthFailure('Your account changed while saving.');
+    }
+    profileStore.replaceNotifications(notifications);
+  }
+
+  Future<void> refreshDashboard() async {
+    final userId = authRepository.currentUserId;
+    final profiles = profileRepository;
+    final savings = savingsRepository;
+    if (userId == null) {
+      throw const AuthFailure('Your session has expired.');
+    }
+    if (profiles == null || savings == null) {
+      return;
+    }
+
+    final dashboardData = await Future.wait<Object?>([
+      profiles.getProfile(userId),
+      savings.getPersonalPocket(userId),
+      savings.getPlan(userId),
+    ]);
+    final profileData = dashboardData[0] as UserProfileDocumentData?;
+    final pocket = dashboardData[1] as PersonalHealthPocket?;
+    final plan = dashboardData[2] as SavingsPlan?;
+    if (profileData == null || pocket == null || plan == null) {
+      throw StateError('Your saved dashboard setup is incomplete.');
+    }
+
+    List<ContributionRecord>? contributions;
+    final contributionData = contributionRepository;
+    if (developmentContributionsEnabled && contributionData != null) {
+      contributions = await contributionData.getPersonalContributions(
+        userId: userId,
+        personalHealthPocketId: pocket.id,
+      );
+    }
+    if (authRepository.currentUserId != userId) {
+      throw const AuthFailure('Your account changed while refreshing.');
+    }
+
+    profileStore.hydrate(
+      profile: profileData.profile,
+      notifications: profileData.notifications,
+    );
+    savingsStore.replacePlan(plan);
+    if (_personalHealthPocketId != pocket.id) {
+      _personalHealthPocketId = pocket.id;
+      _watchPersonalContributions(userId: userId, pocketId: pocket.id);
+    }
+    if (contributions != null) {
+      savingsStore.replacePersonalContributions(
+        userId: userId,
+        personalHealthPocketId: pocket.id,
+        records: contributions,
+      );
+    }
+  }
+
+  Future<void> refreshFamilyPockets() async {
+    final userId = authRepository.currentUserId;
+    if (userId == null) {
+      throw const AuthFailure('Your session has expired.');
+    }
+    await _loadFamilyPockets(userId);
+  }
+
+  Future<void> createFamilyPocket({
+    required String name,
+    required String beneficiary,
+  }) async {
+    final userId = _requireUserId();
+    final repository = familyPocketRepository;
+    if (repository == null) {
+      familyPocketStore.createPocket(name: name, beneficiary: beneficiary);
+      return;
+    }
+    final now = DateTime.now();
+    final pocketId = 'family_${userId}_${createDevelopmentContributionKey()}';
+    await repository.createPocket(
+      pocket: FamilyPocket(
+        id: pocketId,
+        name: name.trim(),
+        beneficiary: beneficiary.trim(),
+        members: const [],
+      ),
+      createdBy: userId,
+      adminMembership: FamilyMembership(
+        id: userId,
+        pocketId: pocketId,
+        userId: userId,
+        name: profileStore.profile.fullName,
+        email: '',
+        role: FamilyRole.admin,
+        invitationStatus: FamilyInvitationStatus.accepted,
+        joinedAt: now,
+      ),
+    );
+    await _loadFamilyPockets(userId);
+  }
+
+  Future<void> inviteFamilyMember({
+    required String name,
+    required String email,
+    required FamilyRole role,
+  }) async {
+    final userId = _requireUserId();
+    final pocket = familyPocketStore.selectedPocket;
+    final repository = familyPocketRepository;
+    if (pocket == null || !familyPocketStore.canManageMembers) {
+      throw StateError('Only a Family Pocket admin can record invitations.');
+    }
+    if (repository == null) {
+      familyPocketStore.inviteMember(name: name, email: email, role: role);
+      return;
+    }
+    await repository.createInvitation(
+      FamilyInvitation(
+        id: 'invite_${userId}_${createDevelopmentContributionKey()}',
+        pocketId: pocket.id,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        role: role,
+        createdBy: userId,
+        createdAt: DateTime.now(),
+      ),
+    );
+    await _loadFamilyPockets(userId);
+  }
+
+  Future<void> removeFamilyContributor(String memberId) async {
+    final userId = _requireUserId();
+    final pocket = familyPocketStore.selectedPocket;
+    final repository = familyPocketRepository;
+    if (pocket == null || !familyPocketStore.canManageMembers) {
+      throw StateError('Only a Family Pocket admin can remove contributors.');
+    }
+    if (repository == null) {
+      if (!familyPocketStore.removeContributor(memberId)) {
+        throw StateError('This contributor cannot be removed.');
+      }
+      return;
+    }
+    await repository.markContributorRemoved(
+      pocketId: pocket.id,
+      memberId: memberId,
+    );
+    await _loadFamilyPockets(userId);
+  }
+
+  Future<void> recordDevelopmentFamilyContribution({
+    required int amountNaira,
+    required String idempotencyKey,
+  }) async {
+    if (!developmentContributionsEnabled) {
+      throw StateError(
+        'Simulated Family Pocket records are unavailable in this build.',
+      );
+    }
+    if (amountNaira <= 0 || amountNaira > 1000000000) {
+      throw ArgumentError.value(amountNaira, 'amountNaira');
+    }
+    final userId = _requireUserId();
+    final pocket = familyPocketStore.selectedPocket;
+    final repository = contributionRepository;
+    if (pocket == null || repository == null) {
+      throw StateError(
+        'Your Family Pocket is not ready. Refresh and try again.',
+      );
+    }
+    await repository.recordDevelopmentFamilyContribution(
+      ContributionRecord(
+        id: 'dev_family_${userId}_$idempotencyKey',
+        contributorUserId: userId,
+        familyPocketId: pocket.id,
+        contributorName: profileStore.profile.fullName,
+        amountKobo: amountNaira * 100,
+        currency: 'NGN',
+        status: ContributionStatus.recorded,
+        origin: ContributionOrigin.devSimulation,
+        moneyMovement: false,
+        idempotencyKey: idempotencyKey,
+        createdAt: null,
+      ),
+    );
+    await _loadFamilyPockets(userId);
+  }
+
+  String _requireUserId() {
+    final userId = authRepository.currentUserId;
+    if (userId == null) throw const AuthFailure('Your session has expired.');
+    return userId;
+  }
+
+  void _startFamilyPocketRestore({
+    required String userId,
+    required String name,
+    required String email,
+  }) {
+    familyPocketStore.resetForNewUser(userId: userId, name: name, email: email);
+    if (familyPocketRepository == null) return;
+    unawaited(
+      _loadFamilyPockets(userId).catchError((Object _) {
+        // The store already exposes the recoverable failure state.
+      }),
+    );
+  }
+
+  Future<void> _loadFamilyPockets(String userId) async {
+    final familyRepository = familyPocketRepository;
+    if (familyRepository == null) return;
+    familyPocketStore.beginLoad();
+    try {
+      final pockets = await familyRepository.getPocketsForUser(userId);
+      final contributions =
+          developmentContributionsEnabled && contributionRepository != null
+          ? (await Future.wait(
+              pockets.map(
+                (pocket) =>
+                    contributionRepository!.getFamilyContributions(pocket.id),
+              ),
+            )).expand((records) => records).toList(growable: false)
+          : <ContributionRecord>[];
+      if (authRepository.currentUserId != userId) {
+        throw const AuthFailure('Your account changed while refreshing.');
+      }
+      familyPocketStore.hydratePersistent(
+        userId: userId,
+        name: profileStore.profile.fullName,
+        email: profileStore.profile.email,
+        pockets: pockets,
+        contributions: contributions,
+      );
+    } catch (error) {
+      if (authRepository.currentUserId == userId) {
+        familyPocketStore.setLoadFailure(error);
+      }
+      rethrow;
+    }
+  }
+
   Future<void> _persistSavingsPlan(SavingsPlan plan) async {
     final savings = savingsRepository;
     if (savings != null) {
@@ -275,6 +565,83 @@ class AppState extends ChangeNotifier {
       );
     }
     savingsStore.replacePlan(plan);
+  }
+
+  String createDevelopmentContributionKey() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    return bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  Future<void> recordDevelopmentContribution({
+    required int amountNaira,
+    required String idempotencyKey,
+  }) async {
+    if (!developmentContributionsEnabled) {
+      throw StateError(
+        'Simulated contribution records are unavailable in this build.',
+      );
+    }
+    if (amountNaira <= 0 || amountNaira > 1000000000) {
+      throw ArgumentError.value(
+        amountNaira,
+        'amountNaira',
+        'Enter an amount from ₦1 to ₦1,000,000,000.',
+      );
+    }
+    if (!RegExp(r'^[A-Za-z0-9_-]{16,80}$').hasMatch(idempotencyKey)) {
+      throw ArgumentError.value(
+        idempotencyKey,
+        'idempotencyKey',
+        'Use a 16–80 character contribution request key.',
+      );
+    }
+    final userId = authRepository.currentUserId;
+    final pocketId = _personalHealthPocketId;
+    final plan = savingsStore.plan;
+    final repository = contributionRepository;
+    if (userId == null ||
+        pocketId == null ||
+        plan == null ||
+        repository == null) {
+      throw StateError(
+        'Your savings setup is not ready. Refresh and try again.',
+      );
+    }
+
+    await repository.recordDevelopmentContribution(
+      ContributionRecord(
+        id: 'dev_${userId}_$idempotencyKey',
+        contributorUserId: userId,
+        personalHealthPocketId: pocketId,
+        savingsPlanId: plan.id,
+        amountKobo: amountNaira * 100,
+        currency: 'NGN',
+        status: ContributionStatus.recorded,
+        origin: ContributionOrigin.devSimulation,
+        moneyMovement: false,
+        idempotencyKey: idempotencyKey,
+        createdAt: null,
+      ),
+    );
+  }
+
+  void retryContributionLoad() => savingsStore.retryContributionLoad();
+
+  void _watchPersonalContributions({
+    required String userId,
+    required String pocketId,
+  }) {
+    final repository = contributionRepository;
+    if (!developmentContributionsEnabled || repository == null) return;
+    savingsStore.watchPersonalContributions(
+      userId: userId,
+      personalHealthPocketId: pocketId,
+      streamFactory: () => repository.watchPersonalContributions(
+        userId: userId,
+        personalHealthPocketId: pocketId,
+      ),
+    );
   }
 
   @override

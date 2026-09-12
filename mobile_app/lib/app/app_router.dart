@@ -84,18 +84,40 @@ class AppRouter {
         AppRoute.dashboard => DashboardScreen(
           savingsStore: appState.savingsStore,
           profileStore: appState.profileStore,
+          developmentContributionsEnabled:
+              appState.developmentContributionsEnabled,
+          onRetryContributions: appState.retryContributionLoad,
+          onRefresh: appState.refreshDashboard,
         ),
         AppRoute.savings => SavingsScreen(
           store: appState.savingsStore,
           onSavePlan: appState.updateSavingsPlan,
           onTogglePlan: appState.toggleSavingsPlan,
+          developmentContributionsEnabled:
+              appState.developmentContributionsEnabled,
+          onCreateContributionKey: appState.createDevelopmentContributionKey,
+          onRecordDevelopmentContribution:
+              appState.recordDevelopmentContribution,
+          onRetryContributions: appState.retryContributionLoad,
         ),
         AppRoute.familyPocket => FamilyPocketScreen(
           store: appState.familyPocketStore,
+          onCreatePocket: appState.createFamilyPocket,
+          onInviteMember: appState.inviteFamilyMember,
+          onRemoveContributor: appState.removeFamilyContributor,
+          onRecordDevelopmentContribution: (amountNaira) =>
+              appState.recordDevelopmentFamilyContribution(
+                amountNaira: amountNaira,
+                idempotencyKey: appState.createDevelopmentContributionKey(),
+              ),
+          onRefresh: appState.refreshFamilyPockets,
+          developmentContributionsEnabled:
+              appState.developmentContributionsEnabled,
         ),
         AppRoute.profile => ProfileScreen(
           store: appState.profileStore,
           authRepository: appState.authRepository,
+          onSaveNotificationPreferences: appState.updateNotificationPreferences,
         ),
       },
     );

@@ -12,6 +12,7 @@
       "collectionGroup": "contributions",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "contributorUserId", "order": "ASCENDING" },
         { "fieldPath": "personalHealthPocketId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]

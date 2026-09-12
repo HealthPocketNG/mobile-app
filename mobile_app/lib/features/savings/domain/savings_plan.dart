@@ -40,23 +40,3 @@ class SavingsPlan {
     );
   }
 }
-
-enum SavingsContributionStatus { completed, reversed }
-
-class SavingsContribution {
-  const SavingsContribution({
-    required this.id,
-    required this.planId,
-    required this.amount,
-    required this.createdAt,
-    this.status = SavingsContributionStatus.completed,
-    this.source = 'mock',
-  });
-
-  final String id;
-  final String planId;
-  final int amount;
-  final DateTime createdAt;
-  final SavingsContributionStatus status;
-  final String source;
-}

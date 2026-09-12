@@ -374,19 +374,42 @@ class FirestoreContributionRepository implements ContributionRepository {
 
   final FirebaseFirestore _firestore;
 
-  @override
-  Stream<List<ContributionRecord>> watchPersonalContributions(
-    String personalHealthPocketId,
-  ) =>
+  Query<ContributionDocument> _personalContributionQuery({
+    required String userId,
+    required String personalHealthPocketId,
+  }) =>
       FirestoreDocumentCollections.contributions(_firestore)
+          .where('contributorUserId', isEqualTo: userId)
           .where('personalHealthPocketId', isEqualTo: personalHealthPocketId)
-          .orderBy('createdAt', descending: true)
-          .snapshots()
-          .map(
-            (snapshot) => snapshot.docs
-                .map((document) => document.data().contribution)
-                .toList(growable: false),
-          );
+          .orderBy('createdAt', descending: true);
+
+  @override
+  Future<List<ContributionRecord>> getPersonalContributions({
+    required String userId,
+    required String personalHealthPocketId,
+  }) async {
+    final snapshot = await _personalContributionQuery(
+      userId: userId,
+      personalHealthPocketId: personalHealthPocketId,
+    ).get();
+    return snapshot.docs
+        .map((document) => document.data().contribution)
+        .toList(growable: false);
+  }
+
+  @override
+  Stream<List<ContributionRecord>> watchPersonalContributions({
+    required String userId,
+    required String personalHealthPocketId,
+  }) =>
+      _personalContributionQuery(
+        userId: userId,
+        personalHealthPocketId: personalHealthPocketId,
+      ).snapshots().map(
+        (snapshot) => snapshot.docs
+            .map((document) => document.data().contribution)
+            .toList(growable: false),
+      );
 
   @override
   Stream<List<ContributionRecord>> watchFamilyContributions(
@@ -403,26 +426,125 @@ class FirestoreContributionRepository implements ContributionRepository {
           );
 
   @override
-  Future<void> recordContribution({
-    required ContributionRecord contribution,
-    required ActivityRecord activity,
-  }) {
-    if (activity.userId != contribution.contributorUserId) {
-      throw ArgumentError(
-        'Contribution and activity must belong to the same user.',
+  Future<List<ContributionRecord>> getFamilyContributions(
+    String familyPocketId,
+  ) async {
+    final snapshot =
+        await FirestoreDocumentCollections.contributions(_firestore)
+            .where('familyPocketId', isEqualTo: familyPocketId)
+            .orderBy('createdAt', descending: true)
+            .get();
+    return snapshot.docs
+        .map((document) => document.data().contribution)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> recordDevelopmentContribution(
+    ContributionRecord contribution,
+  ) async {
+    _validateDevelopmentContribution(contribution);
+    final reference = _firestore
+        .collection('contributions')
+        .doc(contribution.id);
+    await _firestore.runTransaction((transaction) async {
+      final existing = await transaction.get(reference);
+      if (existing.exists) {
+        final existingData = existing.data();
+        if (existingData?['contributorUserId'] !=
+                contribution.contributorUserId ||
+            existingData?['idempotencyKey'] != contribution.idempotencyKey ||
+            existingData?['personalHealthPocketId'] !=
+                contribution.personalHealthPocketId ||
+            existingData?['savingsPlanId'] != contribution.savingsPlanId ||
+            existingData?['amountKobo'] != contribution.amountKobo ||
+            existingData?['currency'] != contribution.currency) {
+          throw StateError('The contribution idempotency key is unavailable.');
+        }
+        return;
+      }
+      transaction.set(
+        reference,
+        ContributionDocument(contribution)
+            .toMap(createdAtOverride: FieldValue.serverTimestamp()),
       );
+    });
+  }
+
+  @override
+  Future<void> recordDevelopmentFamilyContribution(
+    ContributionRecord contribution,
+  ) async {
+    _validateDevelopmentFamilyContribution(contribution);
+    final reference = _firestore
+        .collection('contributions')
+        .doc(contribution.id);
+    await _firestore.runTransaction((transaction) async {
+      final existing = await transaction.get(reference);
+      if (existing.exists) {
+        final existingData = existing.data();
+        if (existingData?['contributorUserId'] !=
+                contribution.contributorUserId ||
+            existingData?['idempotencyKey'] != contribution.idempotencyKey ||
+            existingData?['familyPocketId'] != contribution.familyPocketId ||
+            existingData?['amountKobo'] != contribution.amountKobo ||
+            existingData?['currency'] != contribution.currency ||
+            existingData?['contributorName'] != contribution.contributorName) {
+          throw StateError('The contribution idempotency key is unavailable.');
+        }
+        return;
+      }
+      transaction.set(
+        reference,
+        ContributionDocument(contribution)
+            .toMap(createdAtOverride: FieldValue.serverTimestamp()),
+      );
+    });
+  }
+
+  void _validateDevelopmentContribution(ContributionRecord contribution) {
+    final expectedId =
+        'dev_${contribution.contributorUserId}_${contribution.idempotencyKey}';
+    final validKey = RegExp(r'^[A-Za-z0-9_-]{16,80}$');
+    if (contribution.id != expectedId ||
+        !validKey.hasMatch(contribution.idempotencyKey) ||
+        contribution.personalHealthPocketId == null ||
+        contribution.familyPocketId != null ||
+        contribution.contributorName != null ||
+        contribution.savingsPlanId == null ||
+        contribution.amountKobo <= 0 ||
+        contribution.amountKobo > 100000000000 ||
+        contribution.currency != 'NGN' ||
+        contribution.status != ContributionStatus.recorded ||
+        contribution.origin != ContributionOrigin.devSimulation ||
+        contribution.moneyMovement ||
+        contribution.createdAt != null) {
+      throw ArgumentError('Invalid development contribution record.');
     }
-    final batch = _firestore.batch();
-    batch.set(
-      FirestoreDocumentCollections.contributions(_firestore)
-          .doc(contribution.id),
-      ContributionDocument(contribution),
-    );
-    batch.set(
-      FirestoreDocumentCollections.activities(_firestore).doc(activity.id),
-      ActivityRecordDocument(activity),
-    );
-    return batch.commit();
+  }
+
+  void _validateDevelopmentFamilyContribution(ContributionRecord contribution) {
+    final expectedId =
+        'dev_family_${contribution.contributorUserId}_${contribution.idempotencyKey}';
+    final validKey = RegExp(r'^[A-Za-z0-9_-]{16,80}$');
+    final name = contribution.contributorName;
+    if (contribution.id != expectedId ||
+        !validKey.hasMatch(contribution.idempotencyKey) ||
+        contribution.personalHealthPocketId != null ||
+        contribution.savingsPlanId != null ||
+        contribution.familyPocketId == null ||
+        name == null ||
+        name.trim().isEmpty ||
+        name.length > 100 ||
+        contribution.amountKobo <= 0 ||
+        contribution.amountKobo > 100000000000 ||
+        contribution.currency != 'NGN' ||
+        contribution.status != ContributionStatus.recorded ||
+        contribution.origin != ContributionOrigin.devSimulation ||
+        contribution.moneyMovement ||
+        contribution.createdAt != null) {
+      throw ArgumentError('Invalid Family Pocket development contribution.');
+    }
   }
 }
 
@@ -430,6 +552,74 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
   FirestoreFamilyPocketRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+
+  @override
+  Future<List<FamilyPocket>> getPocketsForUser(String userId) async {
+    final membershipSnapshot = await _firestore
+        .collectionGroup('members')
+        .where('userId', isEqualTo: userId)
+        .where('invitationStatus', isEqualTo: 'accepted')
+        .orderBy('joinedAt', descending: true)
+        .withConverter<FamilyMembershipDocument>(
+          fromFirestore: (snapshot, _) =>
+              FamilyMembershipDocument.fromMap(snapshot.id, snapshot.data()!),
+          toFirestore: (document, _) => document.toMap(),
+        )
+        .get();
+
+    final pockets = await Future.wait(
+      membershipSnapshot.docs.map((ownMembershipDocument) async {
+        final ownMembership = ownMembershipDocument.data().membership;
+        final pocketDocument = await FirestoreDocumentCollections.familyPockets(
+          _firestore,
+        ).doc(ownMembership.pocketId).get();
+        final pocket = pocketDocument.data()?.pocket;
+        if (pocket == null) return null;
+
+        final memberSnapshot = await FirestoreDocumentCollections.familyMembers(
+          _firestore,
+          pocket.id,
+        ).get();
+        final members = memberSnapshot.docs
+            .map((document) => document.data().membership)
+            .where(
+              (membership) =>
+                  membership.invitationStatus != FamilyInvitationStatus.removed,
+            )
+            .map(
+              (membership) => FamilyMember(
+                id: membership.id,
+                name: membership.name,
+                email: '',
+                role: membership.role,
+              ),
+            )
+            .toList();
+
+        if (ownMembership.role == FamilyRole.admin) {
+          final inviteSnapshot =
+              await FirestoreDocumentCollections.familyInvitations(
+                _firestore,
+                pocket.id,
+              ).orderBy('createdAt', descending: true).get();
+          members.addAll(
+            inviteSnapshot.docs.map((document) {
+              final invitation = document.data().invitation;
+              return FamilyMember(
+                id: invitation.id,
+                name: invitation.name,
+                email: invitation.email,
+                role: invitation.role,
+                isPending: true,
+              );
+            }),
+          );
+        }
+        return pocket.copyWith(members: members);
+      }),
+    );
+    return pockets.whereType<FamilyPocket>().toList(growable: false);
+  }
 
   @override
   Stream<FamilyPocket?> watchPocket(String pocketId) =>
@@ -485,8 +675,8 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
     }
     final now = DateTime.now();
     final batch = _firestore.batch();
-    batch.set(
-      FirestoreDocumentCollections.familyPockets(_firestore).doc(pocket.id),
+    batch.set<Map<String, Object?>>(
+      _firestore.collection('family_pockets').doc(pocket.id),
       FamilyPocketDocument(
         pocket: pocket,
         createdBy: createdBy,
@@ -494,35 +684,43 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
         status: FamilyPocketStatus.active,
         createdAt: now,
         updatedAt: now,
+      ).toMap(
+        createdAtOverride: FieldValue.serverTimestamp(),
+        updatedAtOverride: FieldValue.serverTimestamp(),
       ),
     );
-    batch.set(
-      FirestoreDocumentCollections.familyMembers(
-        _firestore,
-        pocket.id,
-      ).doc(adminMembership.id),
-      FamilyMembershipDocument(adminMembership),
+    batch.set<Map<String, Object?>>(
+      _firestore
+          .collection('family_pockets')
+          .doc(pocket.id)
+          .collection('members')
+          .doc(adminMembership.id),
+      FamilyMembershipDocument(adminMembership)
+          .toMap(joinedAtOverride: FieldValue.serverTimestamp()),
     );
     return batch.commit();
   }
 
   @override
-  Future<void> saveMembership(FamilyMembership membership) =>
-      FirestoreDocumentCollections.familyMembers(
-        _firestore,
-        membership.pocketId,
-      ).doc(membership.id).set(FamilyMembershipDocument(membership));
+  Future<void> createInvitation(FamilyInvitation invitation) => _firestore
+      .collection('family_pockets')
+      .doc(invitation.pocketId)
+      .collection('invites')
+      .doc(invitation.id)
+      .set(
+        FamilyInvitationDocument(invitation)
+            .toMap(createdAtOverride: FieldValue.serverTimestamp()),
+      );
 
   @override
   Future<void> markContributorRemoved({
     required String pocketId,
     required String memberId,
-    required DateTime removedAt,
   }) => FirestoreDocumentCollections.familyMembers(_firestore, pocketId)
       .doc(memberId)
       .update({
         'invitationStatus': FamilyInvitationStatus.removed.name,
-        'removedAt': Timestamp.fromDate(removedAt),
+        'removedAt': FieldValue.serverTimestamp(),
       });
 }
 

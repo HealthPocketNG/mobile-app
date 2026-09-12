@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/data/mock_family_data.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
+
+enum FamilyPocketLoadStatus { idle, loading, ready, failure }
 
 class FamilyPocketStore extends ChangeNotifier {
   FamilyPocketStore()
@@ -8,13 +11,14 @@ class FamilyPocketStore extends ChangeNotifier {
       _contributions = List.of(MockFamilyData.contributions),
       _selectedPocketId = MockFamilyData.pockets.first.id;
 
-  static const currentUserId = 'current-user';
-
   final List<FamilyPocket> _pockets;
-  final List<FamilyContribution> _contributions;
+  final List<ContributionRecord> _contributions;
   String? _selectedPocketId;
+  String _currentUserId = 'current-user';
   String _currentUserName = 'Samson Adebayo';
   String _currentUserEmail = 'samson@example.com';
+  FamilyPocketLoadStatus _loadStatus = FamilyPocketLoadStatus.ready;
+  Object? _loadError;
 
   List<FamilyPocket> get pockets => List.unmodifiable(_pockets);
   FamilyPocket? get selectedPocket {
@@ -23,34 +27,88 @@ class FamilyPocketStore extends ChangeNotifier {
     return _pockets.where((pocket) => pocket.id == pocketId).firstOrNull;
   }
 
-  List<FamilyContribution> get selectedContributions {
+  List<ContributionRecord> get selectedContributions {
     final pocketId = _selectedPocketId;
     if (pocketId == null) return const [];
     return List.unmodifiable(
-      _contributions.where((item) => item.pocketId == pocketId),
+      _contributions.where((item) => item.familyPocketId == pocketId),
     );
   }
 
-  int get selectedBalance => selectedContributions
+  int get selectedBalanceKobo => selectedContributions
       .where(
         (contribution) =>
-            contribution.status == FamilyContributionStatus.completed,
+            contribution.familyPocketId != null &&
+            contribution.status == ContributionStatus.recorded &&
+            contribution.origin == ContributionOrigin.devSimulation &&
+            !contribution.moneyMovement &&
+            contribution.currency == 'NGN' &&
+            contribution.amountKobo > 0,
       )
-      .fold(0, (total, contribution) => total + contribution.amount);
+      .fold(0, (total, contribution) => total + contribution.amountKobo);
+
+  FamilyPocketLoadStatus get loadStatus => _loadStatus;
+  Object? get loadError => _loadError;
 
   bool get canManageMembers =>
       selectedPocket?.members.any(
         (member) =>
-            member.id == currentUserId && member.role == FamilyRole.admin,
+            member.id == _currentUserId && member.role == FamilyRole.admin,
       ) ??
       false;
 
-  void resetForNewUser({required String name, required String email}) {
+  void resetForNewUser({
+    String userId = 'current-user',
+    required String name,
+    required String email,
+  }) {
+    _currentUserId = userId;
     _currentUserName = name;
     _currentUserEmail = email;
     _pockets.clear();
     _contributions.clear();
     _selectedPocketId = null;
+    _loadStatus = FamilyPocketLoadStatus.idle;
+    _loadError = null;
+    notifyListeners();
+  }
+
+  void beginLoad() {
+    _loadStatus = FamilyPocketLoadStatus.loading;
+    _loadError = null;
+    notifyListeners();
+  }
+
+  void hydratePersistent({
+    required String userId,
+    required String name,
+    required String email,
+    required List<FamilyPocket> pockets,
+    required List<ContributionRecord> contributions,
+  }) {
+    final previousSelection = _selectedPocketId;
+    _currentUserId = userId;
+    _currentUserName = name;
+    _currentUserEmail = email;
+    _pockets
+      ..clear()
+      ..addAll(pockets);
+    final ordered = List<ContributionRecord>.of(contributions)
+      ..sort(_newestFirst);
+    _contributions
+      ..clear()
+      ..addAll(ordered);
+    _selectedPocketId = pockets.any((pocket) => pocket.id == previousSelection)
+        ? previousSelection
+        : pockets.firstOrNull?.id;
+    _loadStatus = FamilyPocketLoadStatus.ready;
+    _loadError = null;
+    notifyListeners();
+  }
+
+  void setLoadFailure(Object error) {
+    _loadStatus = FamilyPocketLoadStatus.failure;
+    _loadError = error;
     notifyListeners();
   }
 
@@ -73,7 +131,7 @@ class FamilyPocketStore extends ChangeNotifier {
         beneficiary: beneficiary,
         members: [
           FamilyMember(
-            id: currentUserId,
+            id: _currentUserId,
             name: _currentUserName,
             email: _currentUserEmail,
             role: FamilyRole.admin,
@@ -116,7 +174,7 @@ class FamilyPocketStore extends ChangeNotifier {
         .where((item) => item.id == memberId)
         .firstOrNull;
     if (member == null ||
-        member.id == currentUserId ||
+        member.id == _currentUserId ||
         member.role != FamilyRole.contributor) {
       return false;
     }
@@ -133,14 +191,33 @@ class FamilyPocketStore extends ChangeNotifier {
     if (pocket == null) return;
     _contributions.insert(
       0,
-      FamilyContribution(
+      ContributionRecord(
         id: 'family-contribution-${DateTime.now().microsecondsSinceEpoch}',
-        pocketId: pocket.id,
-        memberName: _currentUserName,
-        amount: amount,
+        contributorUserId: _currentUserId,
+        familyPocketId: pocket.id,
+        contributorName: _currentUserName,
+        amountKobo: amount * 100,
+        currency: 'NGN',
+        status: ContributionStatus.recorded,
+        origin: ContributionOrigin.devSimulation,
+        moneyMovement: false,
+        idempotencyKey:
+            'local${DateTime.now().microsecondsSinceEpoch.toString()}',
         createdAt: DateTime.now(),
       ),
     );
     notifyListeners();
+  }
+
+  static int _newestFirst(ContributionRecord first, ContributionRecord second) {
+    final firstTime = first.createdAt;
+    final secondTime = second.createdAt;
+    if (firstTime == null && secondTime != null) return -1;
+    if (firstTime != null && secondTime == null) return 1;
+    if (firstTime != null && secondTime != null) {
+      final byTime = secondTime.compareTo(firstTime);
+      if (byTime != 0) return byTime;
+    }
+    return second.id.compareTo(first.id);
   }
 }

@@ -102,6 +102,10 @@ Future<void> bootstrapFirebase({
       pinRepository: SecureAppPinRepository(storage: FlutterSecureValueStore()),
       profileRepository: repositories.profiles,
       savingsRepository: repositories.savings,
+      contributionRepository: repositories.contributions,
+      familyPocketRepository: repositories.familyPockets,
+      developmentContributionsEnabled:
+          environment == AppEnvironment.development,
     ),
   );
 }

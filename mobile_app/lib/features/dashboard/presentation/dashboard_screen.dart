@@ -13,10 +13,35 @@ class DashboardScreen extends StatelessWidget {
     required this.savingsStore,
     required this.profileStore,
     super.key,
+    this.developmentContributionsEnabled = false,
+    this.onRetryContributions,
+    this.onRefresh,
   });
 
   final SavingsStore savingsStore;
   final ProfileStore profileStore;
+  final bool developmentContributionsEnabled;
+  final VoidCallback? onRetryContributions;
+  final Future<void> Function()? onRefresh;
+
+  Future<void> _refresh(BuildContext context) async {
+    final refresh = onRefresh;
+    if (refresh == null) return;
+    try {
+      await refresh();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Updates could not be refreshed. Check your connection and try again.',
+            ),
+          ),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,8 +50,11 @@ class DashboardScreen extends StatelessWidget {
       builder: (context, child) => Scaffold(
         body: SafeArea(
           bottom: false,
-          child: CustomScrollView(
-            slivers: [
+          child: RefreshIndicator(
+            onRefresh: () => _refresh(context),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg,
@@ -38,19 +66,31 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     _DashboardHeader(profileStore: profileStore),
                     const SizedBox(height: AppSpacing.lg),
-                    _BalanceCard(store: savingsStore),
+                    _BalanceCard(
+                      store: savingsStore,
+                      developmentContributionsEnabled:
+                          developmentContributionsEnabled,
+                    ),
                     const SizedBox(height: AppSpacing.xl),
-                    _CoverageSection(balance: savingsStore.currentBalance),
+                    _CoverageSection(
+                      balanceKobo: savingsStore.developmentBalanceKobo,
+                    ),
                     const SizedBox(height: AppSpacing.lg),
                     _SavingsPlanCard(plan: savingsStore.plan),
                     const SizedBox(height: AppSpacing.md),
                     const _FamilyPocketCard(),
                     const SizedBox(height: AppSpacing.xl),
-                    _ActivitySection(store: savingsStore),
+                    _ActivitySection(
+                      store: savingsStore,
+                      developmentContributionsEnabled:
+                          developmentContributionsEnabled,
+                      onRetry: onRetryContributions,
+                    ),
                   ],
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
         bottomNavigationBar: const AppBottomNavigation(currentIndex: 0),
@@ -112,13 +152,17 @@ class _DashboardHeader extends StatelessWidget {
 }
 
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.store});
+  const _BalanceCard({
+    required this.store,
+    required this.developmentContributionsEnabled,
+  });
 
   final SavingsStore store;
+  final bool developmentContributionsEnabled;
 
   @override
   Widget build(BuildContext context) {
-    final balance = store.currentBalance;
+    final balanceKobo = store.developmentBalanceKobo;
     final plan = store.plan;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -140,19 +184,21 @@ class _BalanceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Expanded(
                 child: Text(
-                  'Health savings balance',
-                  style: TextStyle(
+                  developmentContributionsEnabled
+                      ? 'Development savings balance'
+                      : 'Health savings balance',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
                   ),
                 ),
               ),
-              Icon(
+              const Icon(
                 Icons.account_balance_wallet_rounded,
                 color: Color(0xFF71F1C9),
                 size: 34,
@@ -161,15 +207,17 @@ class _BalanceCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            _naira(balance),
+            _formatKobo(balanceKobo),
             style: Theme.of(context).textTheme.displaySmall
                 ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            balance == 0
-                ? 'Start small. Every contribution builds health security.'
-                : 'Your available healthcare savings',
+            developmentContributionsEnabled
+                ? balanceKobo == 0
+                      ? 'Development record — no money moved.'
+                      : 'Simulated records only — no money moved.'
+                : 'Savings balance is not enabled in this build.',
             style: const TextStyle(color: Colors.white70),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -182,34 +230,40 @@ class _BalanceCard extends StatelessWidget {
                   label: 'Savings plan',
                   value: plan == null
                       ? 'Not set'
-                      : '${_naira(plan.contributionAmount)} ${plan.frequency.name}',
+                      : '${_formatNaira(plan.contributionAmount)} ${plan.frequency.label.toLowerCase()}',
                 ),
               ),
               Container(width: 1, height: 42, color: Colors.white24),
               Expanded(
                 child: _BalanceMetric(
                   label: 'Contributions',
-                  value: '${store.contributions.length} recorded',
+                  value: developmentContributionsEnabled
+                      ? '${store.contributions.length} development records'
+                      : 'Not enabled',
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.primaryDark,
-              ),
-              onPressed: () =>
-                  Navigator.pushNamed(context, AppRoute.savings.path),
-              icon: const Icon(Icons.add_rounded),
-              label: Text(
-                balance == 0 ? 'Add your first savings' : 'Add savings',
+          if (developmentContributionsEnabled) ...[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: AppColors.primaryDark,
+                ),
+                onPressed: () =>
+                    Navigator.pushNamed(context, AppRoute.savings.path),
+                icon: const Icon(Icons.add_rounded),
+                label: Text(
+                  balanceKobo == 0
+                      ? 'Add development record'
+                      : 'Add another development record',
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -251,9 +305,9 @@ class _BalanceMetric extends StatelessWidget {
 }
 
 class _CoverageSection extends StatelessWidget {
-  const _CoverageSection({required this.balance});
+  const _CoverageSection({required this.balanceKobo});
 
-  final int balance;
+  final int balanceKobo;
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +333,7 @@ class _CoverageSection extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
             itemBuilder: (context, index) => _CoverageCard(
               guide: MockDashboardData.coverageGuides[index],
-              balance: balance,
+              balanceKobo: balanceKobo,
             ),
           ),
         ),
@@ -289,15 +343,16 @@ class _CoverageSection extends StatelessWidget {
 }
 
 class _CoverageCard extends StatelessWidget {
-  const _CoverageCard({required this.guide, required this.balance});
+  const _CoverageCard({required this.guide, required this.balanceKobo});
 
   final HealthcareCostGuide guide;
-  final int balance;
+  final int balanceKobo;
 
   @override
   Widget build(BuildContext context) {
-    final enough = balance >= guide.referenceCost;
-    final difference = guide.referenceCost - balance;
+    final referenceCostKobo = guide.referenceCost * 100;
+    final enough = balanceKobo >= referenceCostKobo;
+    final differenceKobo = referenceCostKobo - balanceKobo;
     return Container(
       width: 145,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -322,18 +377,18 @@ class _CoverageCard extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           Text(
-            'Estimate ${_naira(guide.referenceCost)}',
+            'Estimate ${_formatNaira(guide.referenceCost)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: AppColors.inkMuted, fontSize: 11),
           ),
           const SizedBox(height: 5),
           Text(
-            balance == 0
+            balanceKobo == 0
                 ? 'Start saving'
                 : enough
                 ? 'Within your balance'
-                : '${_naira(difference)} more may help',
+                : '${_formatKobo(differenceKobo)} more may help',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -383,7 +438,7 @@ class _SavingsPlanCard extends StatelessWidget {
                     Text(
                       currentPlan == null
                           ? 'Set up your savings plan'
-                          : '${_naira(currentPlan.contributionAmount)} ${currentPlan.frequency.name}',
+                          : '${_formatNaira(currentPlan.contributionAmount)} ${currentPlan.frequency.label.toLowerCase()}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -463,9 +518,15 @@ class _FamilyPocketCard extends StatelessWidget {
 }
 
 class _ActivitySection extends StatelessWidget {
-  const _ActivitySection({required this.store});
+  const _ActivitySection({
+    required this.store,
+    required this.developmentContributionsEnabled,
+    this.onRetry,
+  });
 
   final SavingsStore store;
+  final bool developmentContributionsEnabled;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -478,9 +539,29 @@ class _ActivitySection extends StatelessWidget {
               ?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.sm),
-        if (store.contributions.isEmpty)
+        if (!developmentContributionsEnabled)
           const Text(
-            'No contributions yet. Your savings activity will appear here.',
+            'Savings activity is not enabled in this build.',
+            style: TextStyle(color: AppColors.inkMuted),
+          )
+        else if (store.contributionLoadStatus == ContributionLoadStatus.loading)
+          const Center(child: CircularProgressIndicator())
+        else if (store.contributionLoadStatus == ContributionLoadStatus.failure)
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Development records could not be loaded. No balance has been assumed.',
+                  style: TextStyle(color: AppColors.inkMuted),
+                ),
+              ),
+              if (onRetry != null)
+                TextButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          )
+        else if (store.contributions.isEmpty)
+          const Text(
+            'No development records yet. No money has moved.',
             style: TextStyle(color: AppColors.inkMuted),
           )
         else
@@ -497,12 +578,12 @@ class _ActivitySection extends StatelessWidget {
                     ),
                   ),
                   title: const Text(
-                    'Health savings contribution',
+                    'Simulated savings contribution',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                   subtitle: Text(_activityDate(activity.createdAt)),
                   trailing: Text(
-                    '+${_naira(activity.amount)}',
+                    '+${_formatKobo(activity.amountKobo)}',
                     style: const TextStyle(
                       color: AppColors.success,
                       fontWeight: FontWeight.w700,
@@ -521,7 +602,7 @@ String _firstName(String fullName) {
   return value.split(RegExp(r'\s+')).first;
 }
 
-String _naira(int amount) {
+String _formatNaira(int amount) {
   final value = amount.toString().replaceAllMapped(
     RegExp(r'\B(?=(\d{3})+(?!\d))'),
     (match) => ',',
@@ -529,14 +610,22 @@ String _naira(int amount) {
   return '₦$value';
 }
 
-String _activityDate(DateTime date) {
+String _formatKobo(int amountKobo) {
+  final naira = amountKobo ~/ 100;
+  final kobo = amountKobo.remainder(100).abs();
+  final whole = _formatNaira(naira);
+  return kobo == 0 ? whole : '$whole.${kobo.toString().padLeft(2, '0')}';
+}
+
+String _activityDate(DateTime? date) {
+  if (date == null) return 'Development record • Saving… • No money moved';
   final now = DateTime.now();
   final days = DateTime(
     now.year,
     now.month,
     now.day,
   ).difference(DateTime(date.year, date.month, date.day)).inDays;
-  if (days == 0) return 'Demo record • Today';
-  if (days == 1) return 'Demo record • Yesterday';
-  return 'Demo record • $days days ago';
+  if (days == 0) return 'Development record • Today • No money moved';
+  if (days == 1) return 'Development record • Yesterday • No money moved';
+  return 'Development record • $days days ago • No money moved';
 }

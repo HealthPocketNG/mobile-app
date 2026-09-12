@@ -11,11 +11,13 @@ service cloud.firestore {
     // createdAt, updatedAt. It never stores a mutable balance.
     // savings_plans/{id}: owner/pocket IDs, recurring amount/frequency, schedule,
     // optional funding reference, lifecycle status, and timestamps.
-    // contributions/{id}: append-only positive NGN entry belonging to exactly one
-    // personal or family pocket, with optional plan/note references.
+    // contributions/dev_{uid}_{key} or dev_family_{uid}_{key}: immutable
+    // DEV-only personal/family record. amountKobo is integer kobo;
+    // moneyMovement is always false; createdAt is a server timestamp.
     // family_pockets/{id}: private member-scoped pocket metadata and timestamps.
-    // family_pockets/{id}/members/{memberId}: PII-bearing membership, role,
-    // invitation state, and optional joined/removed timestamps.
+    // family_pockets/{id}/members/{uid}: non-PII membership display data, role,
+    // state, and optional joined/removed timestamps.
+    // family_pockets/{id}/invites/{inviteId}: admin-only pending invite PII.
     // activities/{id}: append-only, narrowly typed audit event and small metadata.
 
     // ===============================================================
@@ -85,8 +87,50 @@ service cloud.firestore {
         && get(personalPocketPath(pocketId)).data.userId == request.auth.uid;
     }
 
+    function savingsPlanPath(planId) {
+      return /databases/$(database)/documents/savings_plans/$(planId);
+    }
+
+    function ownsSavingsPlanForPocket(planId, pocketId) {
+      return hasVerifiedIdentity()
+        && validId(planId)
+        && exists(savingsPlanPath(planId))
+        && get(savingsPlanPath(planId)).data.userId == request.auth.uid
+        && get(savingsPlanPath(planId)).data.personalHealthPocketId == pocketId;
+    }
+
+    function isCurrentUserDevContributionId(contributionId) {
+      return hasVerifiedIdentity()
+        && validString(contributionId, 24, 256)
+        && contributionId.matches(
+          '^dev_' + request.auth.uid + '_[A-Za-z0-9_-]{16,80}$'
+        );
+    }
+
+    function contributionPath(contributionId) {
+      return /databases/$(database)/documents/contributions/$(contributionId);
+    }
+
+    function canGetCurrentUserDevContribution(contributionId) {
+      return isCurrentUserDevContributionId(contributionId)
+        && (
+          !exists(contributionPath(contributionId))
+          || (
+            resource.data.contributorUserId == request.auth.uid
+            && ownsPersonalPocket(resource.data.personalHealthPocketId)
+          )
+        );
+    }
+
     function familyPocketPath(pocketId) {
       return /databases/$(database)/documents/family_pockets/$(pocketId);
+    }
+
+    function currentProfileNameMatches(value) {
+      return hasVerifiedIdentity()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && value
+          == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.fullName;
     }
 
     function memberPath(pocketId, userId) {
@@ -115,6 +159,31 @@ service cloud.firestore {
     function isAdmin(pocketId) {
       return isActiveMember(pocketId)
         && get(memberPath(pocketId, request.auth.uid)).data.role == 'admin';
+    }
+
+    function canContributeToFamilyPocket(pocketId) {
+      return isActiveMember(pocketId)
+        && get(memberPath(pocketId, request.auth.uid)).data.role
+          in ['admin', 'contributor'];
+    }
+
+    function isCurrentUserFamilyDevContributionId(contributionId) {
+      return hasVerifiedIdentity()
+        && validString(contributionId, 31, 263)
+        && contributionId.matches(
+          '^dev_family_' + request.auth.uid + '_[A-Za-z0-9_-]{16,80}$'
+        );
+    }
+
+    function canGetCurrentUserFamilyDevContribution(contributionId) {
+      return isCurrentUserFamilyDevContributionId(contributionId)
+        && (
+          !exists(contributionPath(contributionId))
+          || (
+            resource.data.contributorUserId == request.auth.uid
+            && canContributeToFamilyPocket(resource.data.familyPocketId)
+          )
+        );
     }
 
     // ===============================================================
@@ -223,40 +292,74 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
-    function hasExactlyOnePocket(data) {
-      return ('personalHealthPocketId' in data) != ('familyPocketId' in data);
-    }
-
-    function isValidContribution(data) {
+    function isValidDevelopmentContribution(contributionId, data) {
       return data.keys().hasOnly([
           'contributorUserId', 'personalHealthPocketId', 'savingsPlanId',
-          'familyPocketId', 'amount', 'currency', 'status', 'source', 'note',
-          'createdAt'
+          'amountKobo', 'currency', 'status', 'origin', 'moneyMovement',
+          'idempotencyKey', 'note', 'createdAt'
         ])
         && data.keys().hasAll([
-          'contributorUserId', 'amount', 'currency', 'status', 'source',
-          'createdAt'
+          'contributorUserId', 'personalHealthPocketId', 'savingsPlanId',
+          'amountKobo', 'currency', 'status', 'origin', 'moneyMovement',
+          'idempotencyKey', 'createdAt'
         ])
         && validId(data.contributorUserId)
         && data.contributorUserId == request.auth.uid
-        && (!('personalHealthPocketId' in data)
-          || validId(data.personalHealthPocketId))
-        && (!('savingsPlanId' in data) || validId(data.savingsPlanId))
-        && (!('familyPocketId' in data) || validId(data.familyPocketId))
+        && validId(data.personalHealthPocketId)
+        && validId(data.savingsPlanId)
+        && validString(data.idempotencyKey, 16, 80)
+        && data.idempotencyKey.matches('^[A-Za-z0-9_-]{16,80}$')
+        && contributionId
+          == 'dev_' + request.auth.uid + '_' + data.idempotencyKey
         && (!('note' in data) || validString(data.note, 0, 280))
-        && data.amount is int
-        && data.amount > 0
-        && data.amount <= 1000000000
+        && data.amountKobo is int
+        && data.amountKobo > 0
+        && data.amountKobo <= 100000000000
         && data.currency == 'NGN'
-        && data.status in ['recorded', 'completed']
-        && data.source in ['mock', 'manual']
+        && data.status == 'recorded'
+        && data.origin == 'dev_simulation'
+        && data.moneyMovement == false
         && data.createdAt is timestamp
-        && hasExactlyOnePocket(data)
-        && (
-          ('personalHealthPocketId' in data
-            && ownsPersonalPocket(data.personalHealthPocketId))
-          || ('familyPocketId' in data && isActiveMember(data.familyPocketId))
+        && data.createdAt == request.time
+        && ownsPersonalPocket(data.personalHealthPocketId)
+        && ownsSavingsPlanForPocket(
+          data.savingsPlanId,
+          data.personalHealthPocketId
         );
+    }
+
+    function isValidFamilyDevelopmentContribution(contributionId, data) {
+      return data.keys().hasOnly([
+          'contributorUserId', 'familyPocketId', 'contributorName',
+          'amountKobo', 'currency', 'status', 'origin', 'moneyMovement',
+          'idempotencyKey', 'note', 'createdAt'
+        ])
+        && data.keys().hasAll([
+          'contributorUserId', 'familyPocketId', 'contributorName',
+          'amountKobo', 'currency', 'status', 'origin', 'moneyMovement',
+          'idempotencyKey', 'createdAt'
+        ])
+        && data.contributorUserId == request.auth.uid
+        && validId(data.contributorUserId)
+        && validId(data.familyPocketId)
+        && validString(data.contributorName, 1, 100)
+        && data.contributorName
+          == get(memberPath(data.familyPocketId, request.auth.uid)).data.name
+        && validString(data.idempotencyKey, 16, 80)
+        && data.idempotencyKey.matches('^[A-Za-z0-9_-]{16,80}$')
+        && contributionId
+          == 'dev_family_' + request.auth.uid + '_' + data.idempotencyKey
+        && (!('note' in data) || validString(data.note, 0, 280))
+        && data.amountKobo is int
+        && data.amountKobo > 0
+        && data.amountKobo <= 100000000000
+        && data.currency == 'NGN'
+        && data.status == 'recorded'
+        && data.origin == 'dev_simulation'
+        && data.moneyMovement == false
+        && data.createdAt is timestamp
+        && data.createdAt == request.time
+        && canContributeToFamilyPocket(data.familyPocketId);
     }
 
     function isValidFamilyPocket(data) {
@@ -279,17 +382,16 @@ service cloud.firestore {
 
     function isValidFamilyMembership(data) {
       return data.keys().hasOnly([
-          'pocketId', 'userId', 'name', 'email', 'role',
+          'pocketId', 'userId', 'name', 'role',
           'invitationStatus', 'joinedAt', 'removedAt'
         ])
         && data.keys().hasAll([
-          'pocketId', 'userId', 'name', 'email', 'role',
+          'pocketId', 'userId', 'name', 'role',
           'invitationStatus', 'joinedAt'
         ])
         && validId(data.pocketId)
         && (data.userId == null || validId(data.userId))
         && validString(data.name, 1, 100)
-        && validEmail(data.email)
         && data.role in ['admin', 'contributor', 'beneficiary']
         && data.invitationStatus in ['pending', 'accepted', 'removed']
         && validOptionalTimestamp(data.joinedAt)
@@ -297,9 +399,22 @@ service cloud.firestore {
         && (data.invitationStatus == 'removed') == ('removedAt' in data);
     }
 
-    function validMembershipTransition() {
-      return resource.data.invitationStatus != 'removed'
-        || request.resource.data.invitationStatus == 'removed';
+    function isValidFamilyInvitation(data) {
+      return data.keys().hasOnly([
+          'pocketId', 'name', 'email', 'role', 'status', 'createdBy',
+          'createdAt'
+        ])
+        && data.keys().hasAll([
+          'pocketId', 'name', 'email', 'role', 'status', 'createdBy',
+          'createdAt'
+        ])
+        && validId(data.pocketId)
+        && validString(data.name, 1, 100)
+        && validEmail(data.email)
+        && data.role in ['contributor', 'beneficiary']
+        && data.status == 'pending'
+        && validId(data.createdBy)
+        && data.createdAt is timestamp;
     }
 
     function isValidActivityMetadata(data) {
@@ -383,14 +498,29 @@ service cloud.firestore {
     }
 
     match /contributions/{contributionId} {
-      allow read: if hasVerifiedIdentity() && (
-        ('personalHealthPocketId' in resource.data
-          && ownsPersonalPocket(resource.data.personalHealthPocketId))
-        || ('familyPocketId' in resource.data
-          && isActiveMember(resource.data.familyPocketId))
-      );
+      // The deterministic owner prefix permits a transaction to read a missing
+      // idempotent path. Existing documents remain private to their owner.
+      allow get: if canGetCurrentUserDevContribution(contributionId)
+        || canGetCurrentUserFamilyDevContribution(contributionId);
+      allow list: if hasVerifiedIdentity()
+        && (
+          (resource.data.contributorUserId == request.auth.uid
+            && ('personalHealthPocketId' in resource.data)
+            && ownsPersonalPocket(resource.data.personalHealthPocketId))
+          || (('familyPocketId' in resource.data)
+            && isActiveMember(resource.data.familyPocketId))
+        );
       allow create: if hasVerifiedIdentity()
-        && isValidContribution(request.resource.data);
+        && (
+          isValidDevelopmentContribution(
+            contributionId,
+            request.resource.data
+          )
+          || isValidFamilyDevelopmentContribution(
+            contributionId,
+            request.resource.data
+          )
+        );
       allow update, delete: if false;
     }
 
@@ -399,6 +529,8 @@ service cloud.firestore {
       allow create: if hasVerifiedIdentity()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
         && isValidFamilyPocket(request.resource.data);
       allow update: if isAdmin(pocketId)
         && request.resource.data.createdBy == resource.data.createdBy
@@ -415,22 +547,48 @@ service cloud.firestore {
         allow create: if hasVerifiedIdentity()
           && request.resource.data.pocketId == pocketId
           && isValidFamilyMembership(request.resource.data)
-          && (
-            isAdmin(pocketId)
-            || (willBePocketCreator(pocketId)
-              && memberId == request.auth.uid
-              && request.resource.data.userId == request.auth.uid
-              && request.resource.data.role == 'admin'
-              && request.resource.data.invitationStatus == 'accepted')
-          );
+          && willBePocketCreator(pocketId)
+          && memberId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.role == 'admin'
+          && currentProfileNameMatches(request.resource.data.name)
+          && request.resource.data.invitationStatus == 'accepted'
+          && request.resource.data.joinedAt == request.time;
         allow update: if isAdmin(pocketId)
           && request.resource.data.pocketId == resource.data.pocketId
           && request.resource.data.userId == resource.data.userId
           && request.resource.data.joinedAt == resource.data.joinedAt
-          && validMembershipTransition()
+          && resource.data.role == 'contributor'
+          && resource.data.invitationStatus == 'accepted'
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.name == resource.data.name
+          && request.resource.data.invitationStatus == 'removed'
+          && request.resource.data.removedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['invitationStatus', 'removedAt'])
           && isValidFamilyMembership(request.resource.data);
         allow delete: if false;
       }
+
+      match /invites/{inviteId} {
+        allow read: if isAdmin(pocketId);
+        allow create: if isAdmin(pocketId)
+          && request.resource.data.pocketId == pocketId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && isValidFamilyInvitation(request.resource.data);
+        allow update, delete: if false;
+      }
+    }
+
+    // Collection-group discovery is restricted to the authenticated user's
+    // own accepted membership records. Pocket-scoped member reads continue to
+    // use the stricter rules above.
+    match /{path=**}/members/{memberId} {
+      allow list: if hasVerifiedIdentity()
+        && resource.data.userId == request.auth.uid
+        && resource.data.invitationStatus == 'accepted'
+        && !('removedAt' in resource.data);
     }
 
     match /activities/{activityId} {

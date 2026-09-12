@@ -56,10 +56,12 @@ void main() {
         contributorUserId: 'user-1',
         personalHealthPocketId: 'personal-1',
         savingsPlanId: 'plan-1',
-        amount: 5000,
+        amountKobo: 500000,
         currency: 'NGN',
-        status: ContributionStatus.completed,
-        source: ContributionSource.manual,
+        status: ContributionStatus.recorded,
+        origin: ContributionOrigin.devSimulation,
+        moneyMovement: false,
+        idempotencyKey: '0123456789abcdef',
         createdAt: createdAt,
       ),
     );
@@ -72,8 +74,11 @@ void main() {
 
     expect(encoded, containsPair('personalHealthPocketId', 'personal-1'));
     expect(encoded, isNot(contains('familyPocketId')));
-    expect(decoded.amount, 5000);
-    expect(decoded.createdAt.toUtc(), createdAt);
+    expect(encoded, containsPair('amountKobo', 500000));
+    expect(encoded, containsPair('origin', 'dev_simulation'));
+    expect(encoded, containsPair('moneyMovement', false));
+    expect(decoded.amountKobo, 500000);
+    expect(decoded.createdAt?.toUtc(), createdAt);
   });
 
   test('savings frequency round-trips as a typed lowercase value', () {
@@ -115,12 +120,69 @@ void main() {
       ),
     );
 
+    final encoded = document.toMap();
     final decoded = FamilyMembershipDocument.fromMap(
       'user-2',
-      document.toMap(),
+      encoded,
     ).membership;
 
+    expect(encoded, isNot(contains('email')));
     expect(decoded.invitationStatus, FamilyInvitationStatus.removed);
     expect(decoded.removedAt?.toUtc(), removedAt);
+  });
+
+  test('Family invite keeps PII in its separate document', () {
+    final createdAt = DateTime.utc(2026, 4, 5, 8);
+    final document = FamilyInvitationDocument(
+      FamilyInvitation(
+        id: 'invite-1',
+        pocketId: 'family-1',
+        name: 'Tola Bello',
+        email: 'tola@example.com',
+        role: FamilyRole.contributor,
+        createdBy: 'admin-1',
+        createdAt: createdAt,
+      ),
+    );
+
+    final encoded = document.toMap();
+    final decoded = FamilyInvitationDocument.fromMap(
+      'invite-1',
+      encoded,
+    ).invitation;
+
+    expect(encoded['email'], 'tola@example.com');
+    expect(encoded['status'], 'pending');
+    expect(decoded.role, FamilyRole.contributor);
+  });
+
+  test('Family contribution round-trips with integer kobo', () {
+    final createdAt = DateTime.utc(2026, 4, 5, 8);
+    final document = ContributionDocument(
+      ContributionRecord(
+        id: 'dev_family_user-1_0123456789abcdef',
+        contributorUserId: 'user-1',
+        familyPocketId: 'family-1',
+        contributorName: 'Tayo Bello',
+        amountKobo: 750050,
+        currency: 'NGN',
+        status: ContributionStatus.recorded,
+        origin: ContributionOrigin.devSimulation,
+        moneyMovement: false,
+        idempotencyKey: '0123456789abcdef',
+        createdAt: createdAt,
+      ),
+    );
+
+    final encoded = document.toMap();
+    final decoded = ContributionDocument.fromMap(
+      'dev_family_user-1_0123456789abcdef',
+      encoded,
+    ).contribution;
+
+    expect(encoded, containsPair('familyPocketId', 'family-1'));
+    expect(encoded, isNot(contains('personalHealthPocketId')));
+    expect(decoded.amountKobo, 750050);
+    expect(decoded.contributorName, 'Tayo Bello');
   });
 }

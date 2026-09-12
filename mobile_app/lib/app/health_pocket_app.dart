@@ -11,12 +11,18 @@ class HealthPocketApp extends StatefulWidget {
     this.pinRepository,
     this.profileRepository,
     this.savingsRepository,
+    this.contributionRepository,
+    this.familyPocketRepository,
+    this.developmentContributionsEnabled = false,
   });
 
   final AuthRepository? authRepository;
   final AppPinRepository? pinRepository;
   final ProfileRepository? profileRepository;
   final SavingsRepository? savingsRepository;
+  final ContributionRepository? contributionRepository;
+  final FamilyPocketRepository? familyPocketRepository;
+  final bool developmentContributionsEnabled;
 
   @override
   State<HealthPocketApp> createState() => _HealthPocketAppState();
@@ -33,6 +39,9 @@ class _HealthPocketAppState extends State<HealthPocketApp> {
       pinRepository: widget.pinRepository,
       profileRepository: widget.profileRepository,
       savingsRepository: widget.savingsRepository,
+      contributionRepository: widget.contributionRepository,
+      familyPocketRepository: widget.familyPocketRepository,
+      developmentContributionsEnabled: widget.developmentContributionsEnabled,
     );
   }
 
