@@ -104,7 +104,9 @@ class AppRouter {
           store: appState.familyPocketStore,
           onCreatePocket: appState.createFamilyPocket,
           onInviteMember: appState.inviteFamilyMember,
-          onRemoveContributor: appState.removeFamilyContributor,
+          onRespondToInvitation: appState.respondToFamilyInvitation,
+          onCancelInvitation: appState.cancelFamilyInvitation,
+          onRemoveMember: appState.removeFamilyMember,
           onRecordDevelopmentContribution: (amountNaira) =>
               appState.recordDevelopmentFamilyContribution(
                 amountNaira: amountNaira,

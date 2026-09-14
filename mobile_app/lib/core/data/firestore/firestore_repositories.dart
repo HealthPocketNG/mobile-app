@@ -555,20 +555,30 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
 
   @override
   Future<List<FamilyPocket>> getPocketsForUser(String userId) async {
-    final membershipSnapshot = await _firestore
-        .collectionGroup('members')
-        .where('userId', isEqualTo: userId)
-        .where('invitationStatus', isEqualTo: 'accepted')
-        .orderBy('joinedAt', descending: true)
-        .withConverter<FamilyMembershipDocument>(
-          fromFirestore: (snapshot, _) =>
-              FamilyMembershipDocument.fromMap(snapshot.id, snapshot.data()!),
-          toFirestore: (document, _) => document.toMap(),
-        )
-        .get();
+    Query<FamilyMembershipDocument> membershipQuery(String statusField) =>
+        _firestore
+            .collectionGroup('members')
+            .where('userId', isEqualTo: userId)
+            .where(statusField, isEqualTo: 'accepted')
+            .orderBy('joinedAt', descending: true)
+            .withConverter<FamilyMembershipDocument>(
+              fromFirestore: (snapshot, _) => FamilyMembershipDocument.fromMap(
+                snapshot.id,
+                snapshot.data()!,
+              ),
+              toFirestore: (document, _) => document.toMap(),
+            );
+    final membershipSnapshots = await Future.wait([
+      membershipQuery('status').get(),
+      membershipQuery('invitationStatus').get(),
+    ]);
+    final membershipDocuments = {
+      for (final snapshot in membershipSnapshots)
+        for (final document in snapshot.docs) document.reference.path: document,
+    }.values;
 
     final pockets = await Future.wait(
-      membershipSnapshot.docs.map((ownMembershipDocument) async {
+      membershipDocuments.map((ownMembershipDocument) async {
         final ownMembership = ownMembershipDocument.data().membership;
         final pocketDocument = await FirestoreDocumentCollections.familyPockets(
           _firestore,
@@ -584,41 +594,61 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
             .map((document) => document.data().membership)
             .where(
               (membership) =>
-                  membership.invitationStatus != FamilyInvitationStatus.removed,
+                  membership.status != FamilyMembershipStatus.removed,
             )
             .map(
               (membership) => FamilyMember(
                 id: membership.id,
                 name: membership.name,
-                email: '',
                 role: membership.role,
+                canContribute: membership.canContribute,
+                isBeneficiary: membership.isBeneficiary,
+                beneficiarySlot: membership.beneficiarySlot,
               ),
             )
             .toList();
 
+        var invitations = const <FamilyInvitation>[];
         if (ownMembership.role == FamilyRole.admin) {
           final inviteSnapshot =
               await FirestoreDocumentCollections.familyInvitations(
                 _firestore,
                 pocket.id,
               ).orderBy('createdAt', descending: true).get();
-          members.addAll(
-            inviteSnapshot.docs.map((document) {
-              final invitation = document.data().invitation;
-              return FamilyMember(
-                id: invitation.id,
-                name: invitation.name,
-                email: invitation.email,
-                role: invitation.role,
-                isPending: true,
-              );
-            }),
-          );
+          invitations = inviteSnapshot.docs
+              .map((document) => document.data().invitation)
+              .toList(growable: false);
         }
-        return pocket.copyWith(members: members);
+        return pocket.copyWith(members: members, invitations: invitations);
       }),
     );
     return pockets.whereType<FamilyPocket>().toList(growable: false);
+  }
+
+  @override
+  Future<List<FamilyInvitation>> getPendingInvitationsForEmail(
+    String email,
+  ) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.isEmpty) return const [];
+    final snapshot = await _firestore
+        .collectionGroup('invites')
+        .where('email', isEqualTo: normalizedEmail)
+        .where('status', isEqualTo: FamilyInvitationStatus.pending.name)
+        .orderBy('createdAt', descending: true)
+        .withConverter<FamilyInvitationDocument>(
+          fromFirestore: (snapshot, _) =>
+              FamilyInvitationDocument.fromMap(snapshot.id, snapshot.data()!),
+          toFirestore: (document, _) => document.toMap(),
+        )
+        .get();
+    return snapshot.docs
+        .map((document) => document.data().invitation)
+        .where(
+          (invitation) =>
+              invitation.effectiveStatus == FamilyInvitationStatus.pending,
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -631,7 +661,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
   @override
   Stream<List<FamilyMembership>> watchMembers(String pocketId) =>
       FirestoreDocumentCollections.familyMembers(_firestore, pocketId)
-          .where('invitationStatus', whereNotIn: ['removed'])
+          .where('status', isEqualTo: 'accepted')
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -644,7 +674,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
       _firestore
           .collectionGroup('members')
           .where('userId', isEqualTo: userId)
-          .where('invitationStatus', isEqualTo: 'accepted')
+          .where('status', isEqualTo: 'accepted')
           .orderBy('joinedAt', descending: true)
           .withConverter<FamilyMembershipDocument>(
             fromFirestore: (snapshot, _) =>
@@ -668,7 +698,9 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
         adminMembership.userId != createdBy ||
         adminMembership.pocketId != pocket.id ||
         adminMembership.role != FamilyRole.admin ||
-        adminMembership.invitationStatus != FamilyInvitationStatus.accepted) {
+        adminMembership.status != FamilyMembershipStatus.accepted ||
+        !adminMembership.canContribute ||
+        adminMembership.isBeneficiary) {
       throw ArgumentError(
         'The founding membership must be the accepted admin.',
       );
@@ -702,26 +734,183 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
   }
 
   @override
-  Future<void> createInvitation(FamilyInvitation invitation) => _firestore
-      .collection('family_pockets')
-      .doc(invitation.pocketId)
-      .collection('invites')
-      .doc(invitation.id)
-      .set(
-        FamilyInvitationDocument(invitation)
+  Future<void> createInvitation(FamilyInvitation invitation) async {
+    if (invitation.status != FamilyInvitationStatus.pending ||
+        (!invitation.canContribute && !invitation.isBeneficiary) ||
+        invitation.email != invitation.email.toLowerCase() ||
+        invitation.expiresAt.isBefore(DateTime.now())) {
+      throw ArgumentError('Invalid Family Pocket invitation.');
+    }
+    final duplicate = await _firestore
+        .collection('family_pockets')
+        .doc(invitation.pocketId)
+        .collection('invites')
+        .where('email', isEqualTo: invitation.email)
+        .where('status', isEqualTo: FamilyInvitationStatus.pending.name)
+        .limit(1)
+        .get();
+    if (duplicate.docs.isNotEmpty) {
+      throw StateError('This person already has a pending invitation.');
+    }
+
+    final pocketReference = _firestore
+        .collection('family_pockets')
+        .doc(invitation.pocketId);
+    final invitationReference = pocketReference
+        .collection('invites')
+        .doc(invitation.id);
+    await _firestore.runTransaction((transaction) async {
+      int? beneficiarySlot;
+      DocumentReference<Map<String, dynamic>>? slotReference;
+      if (invitation.isBeneficiary) {
+        final first = pocketReference.collection('beneficiary_slots').doc('1');
+        final second = pocketReference.collection('beneficiary_slots').doc('2');
+        final firstSnapshot = await transaction.get(first);
+        final secondSnapshot = await transaction.get(second);
+        if (!firstSnapshot.exists) {
+          beneficiarySlot = 1;
+          slotReference = first;
+        } else if (!secondSnapshot.exists) {
+          beneficiarySlot = 2;
+          slotReference = second;
+        } else {
+          throw StateError('This pocket already has two beneficiary slots.');
+        }
+      }
+      final storedInvitation = FamilyInvitation(
+        id: invitation.id,
+        pocketId: invitation.pocketId,
+        pocketName: invitation.pocketName,
+        inviteeName: invitation.inviteeName,
+        email: invitation.email,
+        inviterName: invitation.inviterName,
+        canContribute: invitation.canContribute,
+        isBeneficiary: invitation.isBeneficiary,
+        beneficiarySlot: beneficiarySlot,
+        status: invitation.status,
+        createdBy: invitation.createdBy,
+        createdAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt,
+      );
+      transaction.set(
+        invitationReference,
+        FamilyInvitationDocument(storedInvitation)
             .toMap(createdAtOverride: FieldValue.serverTimestamp()),
       );
+      if (slotReference != null) {
+        transaction.set(slotReference, {
+          'pocketId': invitation.pocketId,
+          'slot': beneficiarySlot,
+          'state': 'reserved',
+          'invitationId': invitation.id,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    });
+  }
 
   @override
-  Future<void> markContributorRemoved({
+  Future<void> respondToInvitation({
+    required FamilyInvitation invitation,
+    required String userId,
+    required String userName,
+    required bool accept,
+  }) async {
+    final pocketReference = _firestore
+        .collection('family_pockets')
+        .doc(invitation.pocketId);
+    final invitationReference = pocketReference
+        .collection('invites')
+        .doc(invitation.id);
+    final memberReference = pocketReference.collection('members').doc(userId);
+    final slot = invitation.beneficiarySlot;
+    final slotReference = slot == null
+        ? null
+        : pocketReference.collection('beneficiary_slots').doc('$slot');
+    await _firestore.runTransaction((transaction) async {
+      final current = await transaction.get(invitationReference);
+      if (!current.exists || current.data()?['status'] != 'pending') {
+        throw StateError('This invitation is no longer pending.');
+      }
+      transaction.update(invitationReference, {
+        'status': accept ? 'accepted' : 'declined',
+        'respondedBy': userId,
+        'respondedAt': FieldValue.serverTimestamp(),
+      });
+      if (accept) {
+        transaction.set(
+          memberReference,
+          FamilyMembershipDocument(
+            FamilyMembership(
+              id: userId,
+              pocketId: invitation.pocketId,
+              userId: userId,
+              invitationId: invitation.id,
+              name: userName,
+              role: FamilyRole.member,
+              canContribute: invitation.canContribute,
+              isBeneficiary: invitation.isBeneficiary,
+              beneficiarySlot: slot,
+              status: FamilyMembershipStatus.accepted,
+              joinedAt: null,
+            ),
+          ).toMap(joinedAtOverride: FieldValue.serverTimestamp()),
+        );
+        if (slotReference != null) {
+          transaction.update(slotReference, {
+            'state': 'accepted',
+            'memberUserId': userId,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      } else if (slotReference != null) {
+        transaction.delete(slotReference);
+      }
+    });
+  }
+
+  @override
+  Future<void> cancelInvitation(FamilyInvitation invitation) async {
+    final pocketReference = _firestore
+        .collection('family_pockets')
+        .doc(invitation.pocketId);
+    final batch = _firestore.batch();
+    batch.update(pocketReference.collection('invites').doc(invitation.id), {
+      'status': FamilyInvitationStatus.cancelled.name,
+      'respondedBy': invitation.createdBy,
+      'respondedAt': FieldValue.serverTimestamp(),
+    });
+    final slot = invitation.beneficiarySlot;
+    if (slot != null) {
+      batch.delete(
+        pocketReference.collection('beneficiary_slots').doc('$slot'),
+      );
+    }
+    await batch.commit();
+  }
+
+  @override
+  Future<void> markMemberRemoved({
     required String pocketId,
     required String memberId,
-  }) => FirestoreDocumentCollections.familyMembers(_firestore, pocketId)
-      .doc(memberId)
-      .update({
-        'invitationStatus': FamilyInvitationStatus.removed.name,
-        'removedAt': FieldValue.serverTimestamp(),
-      });
+    required bool wasBeneficiary,
+    int? beneficiarySlot,
+  }) async {
+    final pocketReference = _firestore
+        .collection('family_pockets')
+        .doc(pocketId);
+    final batch = _firestore.batch();
+    batch.update(pocketReference.collection('members').doc(memberId), {
+      'status': FamilyMembershipStatus.removed.name,
+      'removedAt': FieldValue.serverTimestamp(),
+    });
+    if (wasBeneficiary && beneficiarySlot != null) {
+      batch.delete(
+        pocketReference.collection('beneficiary_slots').doc('$beneficiarySlot'),
+      );
+    }
+    await batch.commit();
+  }
 }
 
 class FirestoreActivityRepository implements ActivityRepository {

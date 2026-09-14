@@ -105,6 +105,7 @@ abstract interface class ContributionRepository {
 
 abstract interface class FamilyPocketRepository {
   Future<List<FamilyPocket>> getPocketsForUser(String userId);
+  Future<List<FamilyInvitation>> getPendingInvitationsForEmail(String email);
   Stream<FamilyPocket?> watchPocket(String pocketId);
   Stream<List<FamilyMembership>> watchMembers(String pocketId);
   Stream<List<FamilyMembership>> watchMembershipsForUser(String userId);
@@ -117,9 +118,18 @@ abstract interface class FamilyPocketRepository {
   });
 
   Future<void> createInvitation(FamilyInvitation invitation);
-  Future<void> markContributorRemoved({
+  Future<void> respondToInvitation({
+    required FamilyInvitation invitation,
+    required String userId,
+    required String userName,
+    required bool accept,
+  });
+  Future<void> cancelInvitation(FamilyInvitation invitation);
+  Future<void> markMemberRemoved({
     required String pocketId,
     required String memberId,
+    required bool wasBeneficiary,
+    int? beneficiarySlot,
   });
 }
 

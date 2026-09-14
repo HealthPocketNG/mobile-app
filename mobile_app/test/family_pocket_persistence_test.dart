@@ -36,23 +36,26 @@ void main() {
         email: 'amara@example.com',
       );
 
-      await appState.createFamilyPocket(
-        name: 'Okafor Family Care',
-        beneficiary: 'The Okafor family',
-      );
+      await appState.createFamilyPocket(name: 'Okafor Family Care');
       expect(appState.familyPocketStore.pockets, hasLength(1));
       expect(appState.familyPocketStore.canManageMembers, isTrue);
 
       await appState.inviteFamilyMember(
         name: 'Tola Okafor',
         email: 'tola@example.com',
-        role: FamilyRole.contributor,
+        canContribute: true,
+        isBeneficiary: true,
       );
       expect(
-        appState.familyPocketStore.selectedPocket!.members.where(
-          (member) => member.isPending,
+        appState.familyPocketStore.selectedPocket!.invitations.where(
+          (invitation) =>
+              invitation.effectiveStatus == FamilyInvitationStatus.pending,
         ),
         hasLength(1),
+      );
+      expect(
+        appState.familyPocketStore.selectedPocket!.reservedBeneficiaryCount,
+        1,
       );
 
       const key = 'familyrecord0001';
@@ -89,7 +92,7 @@ void main() {
         ),
       );
       await appState.refreshFamilyPockets();
-      await appState.removeFamilyContributor('contributor-1');
+      await appState.removeFamilyMember('contributor-1');
 
       expect(
         appState.familyPocketStore.selectedPocket!.members.any(
@@ -132,21 +135,20 @@ class _MemoryFamilyPocketRepository implements FamilyPocketRepository {
       .where((pocket) => pocket.members.any((member) => member.id == userId))
       .map((pocket) {
         final invitations = _invitations[pocket.id] ?? const [];
-        return pocket.copyWith(
-          members: [
-            ...pocket.members,
-            ...invitations.map(
-              (invite) => FamilyMember(
-                id: invite.id,
-                name: invite.name,
-                email: invite.email,
-                role: invite.role,
-                isPending: true,
-              ),
-            ),
-          ],
-        );
+        return pocket.copyWith(invitations: invitations);
       })
+      .toList(growable: false);
+
+  @override
+  Future<List<FamilyInvitation>> getPendingInvitationsForEmail(
+    String email,
+  ) async => _invitations.values
+      .expand((items) => items)
+      .where(
+        (invite) =>
+            invite.email == email &&
+            invite.effectiveStatus == FamilyInvitationStatus.pending,
+      )
       .toList(growable: false);
 
   @override
@@ -161,8 +163,9 @@ class _MemoryFamilyPocketRepository implements FamilyPocketRepository {
           FamilyMember(
             id: adminMembership.id,
             name: adminMembership.name,
-            email: '',
             role: FamilyRole.admin,
+            canContribute: true,
+            isBeneficiary: false,
           ),
         ],
       ),
@@ -171,7 +174,36 @@ class _MemoryFamilyPocketRepository implements FamilyPocketRepository {
 
   @override
   Future<void> createInvitation(FamilyInvitation invitation) async {
-    _invitations.putIfAbsent(invitation.pocketId, () => []).add(invitation);
+    final invitations = _invitations.putIfAbsent(invitation.pocketId, () => []);
+    final usedSlots = invitations
+        .where(
+          (item) =>
+              item.isBeneficiary &&
+              item.effectiveStatus == FamilyInvitationStatus.pending,
+        )
+        .map((item) => item.beneficiarySlot)
+        .whereType<int>()
+        .toSet();
+    final slot = invitation.isBeneficiary
+        ? [1, 2].firstWhere((candidate) => !usedSlots.contains(candidate))
+        : null;
+    invitations.add(
+      FamilyInvitation(
+        id: invitation.id,
+        pocketId: invitation.pocketId,
+        pocketName: invitation.pocketName,
+        inviteeName: invitation.inviteeName,
+        email: invitation.email,
+        inviterName: invitation.inviterName,
+        canContribute: invitation.canContribute,
+        isBeneficiary: invitation.isBeneficiary,
+        beneficiarySlot: slot,
+        status: invitation.status,
+        createdBy: invitation.createdBy,
+        createdAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt,
+      ),
+    );
   }
 
   void addAcceptedContributor({
@@ -187,17 +219,20 @@ class _MemoryFamilyPocketRepository implements FamilyPocketRepository {
         FamilyMember(
           id: userId,
           name: name,
-          email: '',
-          role: FamilyRole.contributor,
+          role: FamilyRole.member,
+          canContribute: true,
+          isBeneficiary: false,
         ),
       ],
     );
   }
 
   @override
-  Future<void> markContributorRemoved({
+  Future<void> markMemberRemoved({
     required String pocketId,
     required String memberId,
+    required bool wasBeneficiary,
+    int? beneficiarySlot,
   }) async {
     final index = _pockets.indexWhere((pocket) => pocket.id == pocketId);
     final pocket = _pockets[index];
@@ -205,6 +240,53 @@ class _MemoryFamilyPocketRepository implements FamilyPocketRepository {
       members: pocket.members
           .where((member) => member.id != memberId)
           .toList(growable: false),
+    );
+  }
+
+  @override
+  Future<void> respondToInvitation({
+    required FamilyInvitation invitation,
+    required String userId,
+    required String userName,
+    required bool accept,
+  }) async {
+    final invitations = _invitations[invitation.pocketId]!;
+    final index = invitations.indexWhere((item) => item.id == invitation.id);
+    invitations[index] = invitation.copyWith(
+      status: accept
+          ? FamilyInvitationStatus.accepted
+          : FamilyInvitationStatus.declined,
+      respondedBy: userId,
+      respondedAt: DateTime.now(),
+    );
+    if (!accept) return;
+    final pocketIndex = _pockets.indexWhere(
+      (pocket) => pocket.id == invitation.pocketId,
+    );
+    final pocket = _pockets[pocketIndex];
+    _pockets[pocketIndex] = pocket.copyWith(
+      members: [
+        ...pocket.members,
+        FamilyMember(
+          id: userId,
+          name: userName,
+          role: FamilyRole.member,
+          canContribute: invitation.canContribute,
+          isBeneficiary: invitation.isBeneficiary,
+          beneficiarySlot: invitation.beneficiarySlot,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<void> cancelInvitation(FamilyInvitation invitation) async {
+    final invitations = _invitations[invitation.pocketId]!;
+    final index = invitations.indexWhere((item) => item.id == invitation.id);
+    invitations[index] = invitation.copyWith(
+      status: FamilyInvitationStatus.cancelled,
+      respondedBy: invitation.createdBy,
+      respondedAt: DateTime.now(),
     );
   }
 

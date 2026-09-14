@@ -15,9 +15,13 @@ service cloud.firestore {
     // DEV-only personal/family record. amountKobo is integer kobo;
     // moneyMovement is always false; createdAt is a server timestamp.
     // family_pockets/{id}: private member-scoped pocket metadata and timestamps.
-    // family_pockets/{id}/members/{uid}: non-PII membership display data, role,
-    // state, and optional joined/removed timestamps.
-    // family_pockets/{id}/invites/{inviteId}: admin-only pending invite PII.
+    // family_pockets/{id}/members/{uid}: non-PII membership display data,
+    // authority role, contribution/beneficiary capabilities, lifecycle state,
+    // and optional joined/removed timestamps.
+    // family_pockets/{id}/invites/{inviteId}: admin/invitee-scoped invitation
+    // PII, assigned capabilities, seven-day expiry, and response state.
+    // family_pockets/{id}/beneficiary_slots/{1|2}: coordination record proving
+    // that no more than two pending or accepted beneficiaries are reserved.
     // activities/{id}: append-only, narrowly typed audit event and small metadata.
 
     // ===============================================================
@@ -38,6 +42,15 @@ service cloud.firestore {
             && request.auth.token.phone_number is string
             && request.auth.token.phone_number.size() > 0)
         );
+    }
+
+    function hasVerifiedEmailIdentity() {
+      return isAuthenticated()
+        && ('email' in request.auth.token)
+        && request.auth.token.email is string
+        && validEmail(request.auth.token.email)
+        && ('email_verified' in request.auth.token)
+        && request.auth.token.email_verified == true;
     }
 
     function isOwner(userId) {
@@ -137,6 +150,14 @@ service cloud.firestore {
       return /databases/$(database)/documents/family_pockets/$(pocketId)/members/$(userId);
     }
 
+    function invitationPath(pocketId, invitationId) {
+      return /databases/$(database)/documents/family_pockets/$(pocketId)/invites/$(invitationId);
+    }
+
+    function beneficiarySlotPath(pocketId, slot) {
+      return /databases/$(database)/documents/family_pockets/$(pocketId)/beneficiary_slots/$(slot);
+    }
+
     function isPocketCreator(pocketId) {
       return hasVerifiedIdentity()
         && exists(familyPocketPath(pocketId))
@@ -151,8 +172,12 @@ service cloud.firestore {
 
     function isActiveMember(pocketId) {
       return hasVerifiedIdentity()
+        && exists(familyPocketPath(pocketId))
         && exists(memberPath(pocketId, request.auth.uid))
-        && get(memberPath(pocketId, request.auth.uid)).data.invitationStatus == 'accepted'
+        && (
+          get(memberPath(pocketId, request.auth.uid)).data.get('status', '') == 'accepted'
+          || get(memberPath(pocketId, request.auth.uid)).data.get('invitationStatus', '') == 'accepted'
+        )
         && !('removedAt' in get(memberPath(pocketId, request.auth.uid)).data);
     }
 
@@ -163,8 +188,11 @@ service cloud.firestore {
 
     function canContributeToFamilyPocket(pocketId) {
       return isActiveMember(pocketId)
-        && get(memberPath(pocketId, request.auth.uid)).data.role
-          in ['admin', 'contributor'];
+        && (
+          get(memberPath(pocketId, request.auth.uid)).data.get('canContribute', false) == true
+          || get(memberPath(pocketId, request.auth.uid)).data.role
+            in ['admin', 'contributor']
+        );
     }
 
     function isCurrentUserFamilyDevContributionId(contributionId) {
@@ -364,15 +392,15 @@ service cloud.firestore {
 
     function isValidFamilyPocket(data) {
       return data.keys().hasOnly([
-          'name', 'beneficiary', 'createdBy', 'currency', 'status',
+          'name', 'beneficiaryLimit', 'createdBy', 'currency', 'status',
           'createdAt', 'updatedAt'
         ])
         && data.keys().hasAll([
-          'name', 'beneficiary', 'createdBy', 'currency', 'status',
+          'name', 'beneficiaryLimit', 'createdBy', 'currency', 'status',
           'createdAt', 'updatedAt'
         ])
         && validString(data.name, 1, 80)
-        && validString(data.beneficiary, 1, 120)
+        && data.beneficiaryLimit == 2
         && validId(data.createdBy)
         && data.currency == 'NGN'
         && data.status in ['active', 'archived']
@@ -382,39 +410,94 @@ service cloud.firestore {
 
     function isValidFamilyMembership(data) {
       return data.keys().hasOnly([
-          'pocketId', 'userId', 'name', 'role',
-          'invitationStatus', 'joinedAt', 'removedAt'
+          'pocketId', 'userId', 'invitationId', 'name', 'role',
+          'canContribute', 'isBeneficiary', 'beneficiarySlot', 'status',
+          'joinedAt', 'removedAt'
         ])
         && data.keys().hasAll([
-          'pocketId', 'userId', 'name', 'role',
-          'invitationStatus', 'joinedAt'
+          'pocketId', 'userId', 'name', 'role', 'canContribute',
+          'isBeneficiary', 'status', 'joinedAt'
         ])
         && validId(data.pocketId)
-        && (data.userId == null || validId(data.userId))
+        && validId(data.userId)
+        && (!('invitationId' in data) || validId(data.invitationId))
         && validString(data.name, 1, 100)
-        && data.role in ['admin', 'contributor', 'beneficiary']
-        && data.invitationStatus in ['pending', 'accepted', 'removed']
+        && data.role in ['admin', 'member']
+        && data.canContribute is bool
+        && data.isBeneficiary is bool
+        && (
+          (data.isBeneficiary == true
+            && ('beneficiarySlot' in data)
+            && data.beneficiarySlot in [1, 2])
+          || (data.isBeneficiary == false && !('beneficiarySlot' in data))
+        )
+        && data.status in ['accepted', 'removed']
         && validOptionalTimestamp(data.joinedAt)
         && (!('removedAt' in data) || data.removedAt is timestamp)
-        && (data.invitationStatus == 'removed') == ('removedAt' in data);
+        && (data.status == 'removed') == ('removedAt' in data);
     }
 
     function isValidFamilyInvitation(data) {
       return data.keys().hasOnly([
-          'pocketId', 'name', 'email', 'role', 'status', 'createdBy',
-          'createdAt'
+          'pocketId', 'pocketName', 'inviteeName', 'email', 'inviterName',
+          'role', 'canContribute', 'isBeneficiary', 'beneficiarySlot',
+          'status', 'createdBy', 'createdAt', 'expiresAt', 'respondedBy',
+          'respondedAt'
         ])
         && data.keys().hasAll([
-          'pocketId', 'name', 'email', 'role', 'status', 'createdBy',
-          'createdAt'
+          'pocketId', 'pocketName', 'inviteeName', 'email', 'inviterName',
+          'role', 'canContribute', 'isBeneficiary', 'status', 'createdBy',
+          'createdAt', 'expiresAt'
         ])
         && validId(data.pocketId)
-        && validString(data.name, 1, 100)
+        && validString(data.pocketName, 1, 80)
+        && validString(data.inviteeName, 1, 100)
         && validEmail(data.email)
-        && data.role in ['contributor', 'beneficiary']
-        && data.status == 'pending'
+        && validString(data.inviterName, 1, 100)
+        && data.role == 'member'
+        && data.canContribute is bool
+        && data.isBeneficiary is bool
+        && (data.canContribute == true || data.isBeneficiary == true)
+        && (
+          (data.isBeneficiary == true
+            && ('beneficiarySlot' in data)
+            && data.beneficiarySlot in [1, 2])
+          || (data.isBeneficiary == false && !('beneficiarySlot' in data))
+        )
+        && data.status in ['pending', 'accepted', 'declined', 'cancelled']
         && validId(data.createdBy)
-        && data.createdAt is timestamp;
+        && data.createdAt is timestamp
+        && data.expiresAt is timestamp
+        && data.expiresAt > data.createdAt
+        && (
+          (data.status == 'pending'
+            && !('respondedBy' in data)
+            && !('respondedAt' in data))
+          || (data.status != 'pending'
+            && validId(data.respondedBy)
+            && data.respondedAt is timestamp)
+        );
+    }
+
+    function isValidBeneficiarySlot(slotId, data) {
+      return slotId in ['1', '2']
+        && data.keys().hasOnly([
+          'pocketId', 'slot', 'state', 'invitationId', 'memberUserId',
+          'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'pocketId', 'slot', 'state', 'invitationId', 'updatedAt'
+        ])
+        && validId(data.pocketId)
+        && ((slotId == '1' && data.slot == 1)
+          || (slotId == '2' && data.slot == 2))
+        && data.state in ['reserved', 'accepted']
+        && validId(data.invitationId)
+        && data.updatedAt is timestamp
+        && (
+          (data.state == 'reserved' && !('memberUserId' in data))
+          || (data.state == 'accepted' && validId(data.memberUserId))
+        );
     }
 
     function isValidActivityMetadata(data) {
@@ -547,37 +630,217 @@ service cloud.firestore {
         allow create: if hasVerifiedIdentity()
           && request.resource.data.pocketId == pocketId
           && isValidFamilyMembership(request.resource.data)
-          && willBePocketCreator(pocketId)
           && memberId == request.auth.uid
           && request.resource.data.userId == request.auth.uid
-          && request.resource.data.role == 'admin'
           && currentProfileNameMatches(request.resource.data.name)
-          && request.resource.data.invitationStatus == 'accepted'
-          && request.resource.data.joinedAt == request.time;
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.joinedAt == request.time
+          && (
+            (willBePocketCreator(pocketId)
+              && !exists(familyPocketPath(pocketId))
+              && request.resource.data.role == 'admin'
+              && request.resource.data.canContribute == true
+              && request.resource.data.isBeneficiary == false
+              && !('invitationId' in request.resource.data))
+            || (
+              request.resource.data.role == 'member'
+              && ('invitationId' in request.resource.data)
+              && get(invitationPath(pocketId, request.resource.data.invitationId)).data.status == 'pending'
+              && existsAfter(invitationPath(
+                pocketId,
+                request.resource.data.invitationId
+              ))
+              && getAfter(invitationPath(
+                pocketId,
+                request.resource.data.invitationId
+              )).data.status == 'accepted'
+              && getAfter(invitationPath(
+                pocketId,
+                request.resource.data.invitationId
+              )).data.respondedBy == request.auth.uid
+              && getAfter(invitationPath(
+                pocketId,
+                request.resource.data.invitationId
+              )).data.canContribute == request.resource.data.canContribute
+              && getAfter(invitationPath(
+                pocketId,
+                request.resource.data.invitationId
+              )).data.isBeneficiary == request.resource.data.isBeneficiary
+              && (
+                request.resource.data.isBeneficiary == false
+                || (
+                  getAfter(invitationPath(
+                    pocketId,
+                    request.resource.data.invitationId
+                  )).data.beneficiarySlot
+                    == request.resource.data.beneficiarySlot
+                  && existsAfter(beneficiarySlotPath(
+                    pocketId,
+                    request.resource.data.beneficiarySlot
+                  ))
+                  && getAfter(beneficiarySlotPath(pocketId, request.resource.data.beneficiarySlot)).data.state == 'accepted'
+                  && getAfter(beneficiarySlotPath(pocketId, request.resource.data.beneficiarySlot)).data.memberUserId == request.auth.uid
+                )
+              )
+            )
+          );
         allow update: if isAdmin(pocketId)
           && request.resource.data.pocketId == resource.data.pocketId
           && request.resource.data.userId == resource.data.userId
           && request.resource.data.joinedAt == resource.data.joinedAt
-          && resource.data.role == 'contributor'
-          && resource.data.invitationStatus == 'accepted'
+          && resource.data.role == 'member'
+          && resource.data.status == 'accepted'
           && request.resource.data.role == resource.data.role
           && request.resource.data.name == resource.data.name
-          && request.resource.data.invitationStatus == 'removed'
+          && request.resource.data.canContribute == resource.data.canContribute
+          && request.resource.data.isBeneficiary == resource.data.isBeneficiary
+          && request.resource.data.status == 'removed'
           && request.resource.data.removedAt == request.time
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['invitationStatus', 'removedAt'])
-          && isValidFamilyMembership(request.resource.data);
+            .hasOnly(['status', 'removedAt'])
+          && isValidFamilyMembership(request.resource.data)
+          && (
+            resource.data.isBeneficiary == false
+            || !existsAfter(beneficiarySlotPath(
+              pocketId,
+              resource.data.beneficiarySlot
+            ))
+          );
         allow delete: if false;
       }
 
       match /invites/{inviteId} {
-        allow read: if isAdmin(pocketId);
+        allow read: if isAdmin(pocketId)
+          || (hasVerifiedEmailIdentity()
+            && resource.data.email == request.auth.token.email);
         allow create: if isAdmin(pocketId)
           && request.resource.data.pocketId == pocketId
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.createdAt == request.time
-          && isValidFamilyInvitation(request.resource.data);
-        allow update, delete: if false;
+          && request.resource.data.expiresAt > request.time
+          && request.resource.data.expiresAt
+            <= request.time + duration.value(14, 'd')
+          && request.resource.data.status == 'pending'
+          && get(familyPocketPath(pocketId)).data.name
+            == request.resource.data.pocketName
+          && currentProfileNameMatches(request.resource.data.inviterName)
+          && isValidFamilyInvitation(request.resource.data)
+          && (
+            request.resource.data.isBeneficiary == false
+            || (
+              existsAfter(beneficiarySlotPath(
+                pocketId,
+                request.resource.data.beneficiarySlot
+              ))
+              && getAfter(beneficiarySlotPath(
+                pocketId,
+                request.resource.data.beneficiarySlot
+              )).data.invitationId == inviteId
+            )
+          );
+        allow update: if exists(familyPocketPath(pocketId))
+          && isValidFamilyInvitation(request.resource.data)
+          && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'respondedBy', 'respondedAt'])
+          && request.resource.data.respondedAt == request.time
+          && (
+            (hasVerifiedEmailIdentity()
+              && resource.data.email == request.auth.token.email
+              && request.time < resource.data.expiresAt
+              && request.resource.data.respondedBy == request.auth.uid
+              && request.resource.data.status in ['accepted', 'declined']
+              && (
+                (request.resource.data.status == 'accepted'
+                  && !exists(memberPath(pocketId, request.auth.uid))
+                  && existsAfter(memberPath(pocketId, request.auth.uid))
+                  && getAfter(memberPath(pocketId, request.auth.uid)).data.invitationId == inviteId)
+                || (request.resource.data.status == 'declined'
+                  && (resource.data.isBeneficiary == false
+                    || !existsAfter(beneficiarySlotPath(
+                      pocketId,
+                      resource.data.beneficiarySlot
+                    ))))
+              ))
+            || (isAdmin(pocketId)
+              && request.resource.data.respondedBy == request.auth.uid
+              && request.resource.data.status == 'cancelled'
+              && (resource.data.isBeneficiary == false
+                || !existsAfter(beneficiarySlotPath(
+                  pocketId,
+                  resource.data.beneficiarySlot
+                ))))
+          );
+        allow delete: if false;
+      }
+
+      match /beneficiary_slots/{slotId} {
+        allow read: if isActiveMember(pocketId);
+        allow create: if isAdmin(pocketId)
+          && !exists(invitationPath(pocketId, request.resource.data.invitationId))
+          && request.resource.data.pocketId == pocketId
+          && request.resource.data.state == 'reserved'
+          && request.resource.data.updatedAt == request.time
+          && isValidBeneficiarySlot(slotId, request.resource.data)
+          && existsAfter(invitationPath(
+            pocketId,
+            request.resource.data.invitationId
+          ))
+          && getAfter(invitationPath(
+            pocketId,
+            request.resource.data.invitationId
+          )).data.isBeneficiary == true
+          && getAfter(invitationPath(
+            pocketId,
+            request.resource.data.invitationId
+          )).data.beneficiarySlot == request.resource.data.slot;
+        allow update: if hasVerifiedEmailIdentity()
+          && resource.data.state == 'reserved'
+          && request.resource.data.state == 'accepted'
+          && request.resource.data.memberUserId == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['state', 'memberUserId', 'updatedAt'])
+          && isValidBeneficiarySlot(slotId, request.resource.data)
+          && getAfter(invitationPath(
+            pocketId,
+            resource.data.invitationId
+          )).data.status == 'accepted'
+          && getAfter(invitationPath(
+            pocketId,
+            resource.data.invitationId
+          )).data.respondedBy == request.auth.uid
+          && existsAfter(memberPath(pocketId, request.auth.uid));
+        allow delete: if (
+            hasVerifiedEmailIdentity()
+            && getAfter(invitationPath(
+              pocketId,
+              resource.data.invitationId
+            )).data.status == 'declined'
+            && getAfter(invitationPath(
+              pocketId,
+              resource.data.invitationId
+            )).data.respondedBy == request.auth.uid
+          ) || (
+            isAdmin(pocketId)
+            && (
+              getAfter(invitationPath(
+                pocketId,
+                resource.data.invitationId
+              )).data.status == 'cancelled'
+              || (
+                resource.data.state == 'accepted'
+                && existsAfter(memberPath(
+                  pocketId,
+                  resource.data.memberUserId
+                ))
+                && getAfter(memberPath(
+                  pocketId,
+                  resource.data.memberUserId
+                )).data.status == 'removed'
+              )
+            )
+          );
       }
     }
 
@@ -587,8 +850,15 @@ service cloud.firestore {
     match /{path=**}/members/{memberId} {
       allow list: if hasVerifiedIdentity()
         && resource.data.userId == request.auth.uid
-        && resource.data.invitationStatus == 'accepted'
+        && (resource.data.get('status', '') == 'accepted'
+          || resource.data.get('invitationStatus', '') == 'accepted')
         && !('removedAt' in resource.data);
+    }
+
+    match /{path=**}/invites/{inviteId} {
+      allow list: if hasVerifiedEmailIdentity()
+        && resource.data.email == request.auth.token.email
+        && resource.data.status == 'pending';
     }
 
     match /activities/{activityId} {

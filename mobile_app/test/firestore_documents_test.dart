@@ -111,10 +111,12 @@ void main() {
         id: 'user-2',
         pocketId: 'family-1',
         userId: 'user-2',
+        invitationId: 'invite-1',
         name: 'Tayo Bello',
-        email: 'tayo@example.com',
-        role: FamilyRole.contributor,
-        invitationStatus: FamilyInvitationStatus.removed,
+        role: FamilyRole.member,
+        canContribute: true,
+        isBeneficiary: false,
+        status: FamilyMembershipStatus.removed,
         joinedAt: DateTime.utc(2026, 1, 1),
         removedAt: removedAt,
       ),
@@ -127,7 +129,7 @@ void main() {
     ).membership;
 
     expect(encoded, isNot(contains('email')));
-    expect(decoded.invitationStatus, FamilyInvitationStatus.removed);
+    expect(decoded.status, FamilyMembershipStatus.removed);
     expect(decoded.removedAt?.toUtc(), removedAt);
   });
 
@@ -137,11 +139,17 @@ void main() {
       FamilyInvitation(
         id: 'invite-1',
         pocketId: 'family-1',
-        name: 'Tola Bello',
+        pocketName: 'Bello Family',
+        inviteeName: 'Tola Bello',
         email: 'tola@example.com',
-        role: FamilyRole.contributor,
+        inviterName: 'Tayo Bello',
+        canContribute: true,
+        isBeneficiary: true,
+        beneficiarySlot: 1,
+        status: FamilyInvitationStatus.pending,
         createdBy: 'admin-1',
         createdAt: createdAt,
+        expiresAt: createdAt.add(const Duration(days: 7)),
       ),
     );
 
@@ -153,7 +161,9 @@ void main() {
 
     expect(encoded['email'], 'tola@example.com');
     expect(encoded['status'], 'pending');
-    expect(decoded.role, FamilyRole.contributor);
+    expect(decoded.canContribute, isTrue);
+    expect(decoded.isBeneficiary, isTrue);
+    expect(decoded.beneficiarySlot, 1);
   });
 
   test('Family contribution round-trips with integer kobo', () {

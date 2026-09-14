@@ -13,14 +13,16 @@ class FamilyPocketStore extends ChangeNotifier {
 
   final List<FamilyPocket> _pockets;
   final List<ContributionRecord> _contributions;
+  final List<FamilyInvitation> _receivedInvitations = [];
   String? _selectedPocketId;
   String _currentUserId = 'current-user';
   String _currentUserName = 'Samson Adebayo';
-  String _currentUserEmail = 'samson@example.com';
   FamilyPocketLoadStatus _loadStatus = FamilyPocketLoadStatus.ready;
   Object? _loadError;
 
   List<FamilyPocket> get pockets => List.unmodifiable(_pockets);
+  List<FamilyInvitation> get receivedInvitations =>
+      List.unmodifiable(_receivedInvitations);
   FamilyPocket? get selectedPocket {
     final pocketId = _selectedPocketId;
     if (pocketId == null) return null;
@@ -57,6 +59,12 @@ class FamilyPocketStore extends ChangeNotifier {
       ) ??
       false;
 
+  bool get canContribute =>
+      selectedPocket?.members.any(
+        (member) => member.id == _currentUserId && member.canContribute,
+      ) ??
+      false;
+
   void resetForNewUser({
     String userId = 'current-user',
     required String name,
@@ -64,9 +72,9 @@ class FamilyPocketStore extends ChangeNotifier {
   }) {
     _currentUserId = userId;
     _currentUserName = name;
-    _currentUserEmail = email;
     _pockets.clear();
     _contributions.clear();
+    _receivedInvitations.clear();
     _selectedPocketId = null;
     _loadStatus = FamilyPocketLoadStatus.idle;
     _loadError = null;
@@ -85,11 +93,11 @@ class FamilyPocketStore extends ChangeNotifier {
     required String email,
     required List<FamilyPocket> pockets,
     required List<ContributionRecord> contributions,
+    List<FamilyInvitation> receivedInvitations = const [],
   }) {
     final previousSelection = _selectedPocketId;
     _currentUserId = userId;
     _currentUserName = name;
-    _currentUserEmail = email;
     _pockets
       ..clear()
       ..addAll(pockets);
@@ -98,6 +106,9 @@ class FamilyPocketStore extends ChangeNotifier {
     _contributions
       ..clear()
       ..addAll(ordered);
+    _receivedInvitations
+      ..clear()
+      ..addAll(receivedInvitations);
     _selectedPocketId = pockets.any((pocket) => pocket.id == previousSelection)
         ? previousSelection
         : pockets.firstOrNull?.id;
@@ -121,20 +132,20 @@ class FamilyPocketStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void createPocket({required String name, required String beneficiary}) {
+  void createPocket({required String name}) {
     final id = 'pocket-${DateTime.now().microsecondsSinceEpoch}';
     _pockets.insert(
       0,
       FamilyPocket(
         id: id,
         name: name,
-        beneficiary: beneficiary,
         members: [
           FamilyMember(
             id: _currentUserId,
             name: _currentUserName,
-            email: _currentUserEmail,
             role: FamilyRole.admin,
+            canContribute: true,
+            isBeneficiary: false,
           ),
         ],
       ),
@@ -146,20 +157,36 @@ class FamilyPocketStore extends ChangeNotifier {
   bool inviteMember({
     required String name,
     required String email,
-    required FamilyRole role,
+    required bool canContribute,
+    required bool isBeneficiary,
   }) {
     final pocket = selectedPocket;
     if (pocket == null || !canManageMembers) return false;
+    if (!canContribute && !isBeneficiary) return false;
+    if (isBeneficiary &&
+        pocket.reservedBeneficiaryCount >= pocket.beneficiaryLimit) {
+      return false;
+    }
     final index = _pockets.indexWhere((item) => item.id == pocket.id);
     _pockets[index] = pocket.copyWith(
-      members: [
-        ...pocket.members,
-        FamilyMember(
-          id: 'member-${DateTime.now().microsecondsSinceEpoch}',
-          name: name,
-          email: email,
-          role: role,
-          isPending: true,
+      invitations: [
+        ...pocket.invitations,
+        FamilyInvitation(
+          id: 'invite-${DateTime.now().microsecondsSinceEpoch}',
+          pocketId: pocket.id,
+          pocketName: pocket.name,
+          inviteeName: name,
+          email: email.toLowerCase(),
+          inviterName: _currentUserName,
+          canContribute: canContribute,
+          isBeneficiary: isBeneficiary,
+          beneficiarySlot: isBeneficiary
+              ? pocket.reservedBeneficiaryCount + 1
+              : null,
+          status: FamilyInvitationStatus.pending,
+          createdBy: _currentUserId,
+          createdAt: DateTime.now(),
+          expiresAt: DateTime.now().add(const Duration(days: 7)),
         ),
       ],
     );
@@ -167,7 +194,7 @@ class FamilyPocketStore extends ChangeNotifier {
     return true;
   }
 
-  bool removeContributor(String memberId) {
+  bool removeMember(String memberId) {
     final pocket = selectedPocket;
     if (pocket == null || !canManageMembers) return false;
     final member = pocket.members
@@ -175,12 +202,71 @@ class FamilyPocketStore extends ChangeNotifier {
         .firstOrNull;
     if (member == null ||
         member.id == _currentUserId ||
-        member.role != FamilyRole.contributor) {
+        member.role == FamilyRole.admin) {
       return false;
     }
     final index = _pockets.indexWhere((item) => item.id == pocket.id);
     _pockets[index] = pocket.copyWith(
       members: pocket.members.where((item) => item.id != memberId).toList(),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  bool respondToInvitation(String invitationId, {required bool accept}) {
+    final invitation = _receivedInvitations
+        .where((item) => item.id == invitationId)
+        .firstOrNull;
+    if (invitation == null ||
+        invitation.effectiveStatus != FamilyInvitationStatus.pending) {
+      return false;
+    }
+    _receivedInvitations.removeWhere((item) => item.id == invitationId);
+    if (accept) {
+      final pocket = _pockets
+          .where((item) => item.id == invitation.pocketId)
+          .firstOrNull;
+      if (pocket != null) {
+        final index = _pockets.indexOf(pocket);
+        _pockets[index] = pocket.copyWith(
+          members: [
+            ...pocket.members,
+            FamilyMember(
+              id: _currentUserId,
+              name: _currentUserName,
+              role: FamilyRole.member,
+              canContribute: invitation.canContribute,
+              isBeneficiary: invitation.isBeneficiary,
+              beneficiarySlot: invitation.beneficiarySlot,
+            ),
+          ],
+        );
+        _selectedPocketId = pocket.id;
+      }
+    }
+    notifyListeners();
+    return true;
+  }
+
+  bool cancelInvitation(String invitationId) {
+    final pocket = selectedPocket;
+    if (pocket == null || !canManageMembers) return false;
+    final invitation = pocket.invitations
+        .where((item) => item.id == invitationId)
+        .firstOrNull;
+    if (invitation == null ||
+        invitation.status != FamilyInvitationStatus.pending) {
+      return false;
+    }
+    final index = _pockets.indexOf(pocket);
+    _pockets[index] = pocket.copyWith(
+      invitations: pocket.invitations
+          .map(
+            (item) => item.id == invitationId
+                ? item.copyWith(status: FamilyInvitationStatus.cancelled)
+                : item,
+          )
+          .toList(growable: false),
     );
     notifyListeners();
     return true;

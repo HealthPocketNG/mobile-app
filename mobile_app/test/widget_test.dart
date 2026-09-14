@@ -8,6 +8,7 @@ import 'package:healthpocket/core/widgets/app_brand_logo.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
+import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/family/presentation/family_pocket_screen.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/profile/presentation/profile_screen.dart';
@@ -253,8 +254,16 @@ void main() {
     await tester.tap(find.text('Record invitation'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Tola Adebayo'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Tola Adebayo'), findsOneWidget);
-    expect(store.selectedPocket!.members.last.isPending, isTrue);
+    expect(
+      store.selectedPocket!.invitations.last.effectiveStatus,
+      FamilyInvitationStatus.pending,
+    );
   });
 
   testWidgets('allows an admin to remove a Family Pocket contributor', (
@@ -280,7 +289,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(removeButton);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Remove contributor'));
+    await tester.tap(find.text('Remove member'));
     await tester.pumpAndSettle();
 
     expect(

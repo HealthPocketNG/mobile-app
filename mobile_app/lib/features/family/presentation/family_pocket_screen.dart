@@ -8,14 +8,16 @@ import 'package:healthpocket/features/contributions/domain/contribution_record.d
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 
-typedef CreateFamilyPocket = Future<void> Function({
-  required String name,
-  required String beneficiary,
-});
+typedef CreateFamilyPocket = Future<void> Function({required String name});
 typedef InviteFamilyMember = Future<void> Function({
   required String name,
   required String email,
-  required FamilyRole role,
+  required bool canContribute,
+  required bool isBeneficiary,
+});
+typedef RespondToFamilyInvitation = Future<void> Function(
+  FamilyInvitation invitation, {
+  required bool accept,
 });
 
 class FamilyPocketScreen extends StatefulWidget {
@@ -24,7 +26,9 @@ class FamilyPocketScreen extends StatefulWidget {
     super.key,
     this.onCreatePocket,
     this.onInviteMember,
-    this.onRemoveContributor,
+    this.onRespondToInvitation,
+    this.onCancelInvitation,
+    this.onRemoveMember,
     this.onRecordDevelopmentContribution,
     this.onRefresh,
     this.developmentContributionsEnabled = true,
@@ -33,7 +37,9 @@ class FamilyPocketScreen extends StatefulWidget {
   final FamilyPocketStore store;
   final CreateFamilyPocket? onCreatePocket;
   final InviteFamilyMember? onInviteMember;
-  final Future<void> Function(String memberId)? onRemoveContributor;
+  final RespondToFamilyInvitation? onRespondToInvitation;
+  final Future<void> Function(FamilyInvitation invitation)? onCancelInvitation;
+  final Future<void> Function(String memberId)? onRemoveMember;
   final Future<void> Function(int amountNaira)? onRecordDevelopmentContribution;
   final Future<void> Function()? onRefresh;
   final bool developmentContributionsEnabled;
@@ -82,9 +88,9 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
     await _runAction(context, () async {
       final create = widget.onCreatePocket;
       if (create == null) {
-        store.createPocket(name: draft.name, beneficiary: draft.beneficiary);
+        store.createPocket(name: draft.name);
       } else {
-        await create(name: draft.name, beneficiary: draft.beneficiary);
+        await create(name: draft.name);
       }
     }, successMessage: 'Family Pocket created');
   }
@@ -103,14 +109,16 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
         final invited = store.inviteMember(
           name: invite.name,
           email: invite.email,
-          role: invite.role,
+          canContribute: invite.canContribute,
+          isBeneficiary: invite.isBeneficiary,
         );
         if (!invited) throw StateError('Not a Family Pocket admin.');
       } else {
         await persistInvite(
           name: invite.name,
           email: invite.email,
-          role: invite.role,
+          canContribute: invite.canContribute,
+          isBeneficiary: invite.isBeneficiary,
         );
       }
     }, successMessage: 'Invitation recorded');
@@ -136,14 +144,11 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
     }, successMessage: 'Development contribution recorded — no money moved');
   }
 
-  Future<void> _removeContributor(
-    BuildContext context,
-    FamilyMember member,
-  ) async {
+  Future<void> _removeMember(BuildContext context, FamilyMember member) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove contributor?'),
+        title: const Text('Remove family member?'),
         content: Text(
           '${member.name} will lose access to this Family Pocket. Their previous contributions will remain in the history.',
         ),
@@ -154,22 +159,55 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove contributor'),
+            child: const Text('Remove member'),
           ),
         ],
       ),
     );
     if (confirmed != true || !context.mounted) return;
     await _runAction(context, () async {
-      final remove = widget.onRemoveContributor;
+      final remove = widget.onRemoveMember;
       if (remove == null) {
-        if (!store.removeContributor(member.id)) {
-          throw StateError('Contributor cannot be removed.');
+        if (!store.removeMember(member.id)) {
+          throw StateError('Member cannot be removed.');
         }
       } else {
         await remove(member.id);
       }
     }, successMessage: '${member.name} was removed.');
+  }
+
+  Future<void> _respondToInvitation(
+    BuildContext context,
+    FamilyInvitation invitation, {
+    required bool accept,
+  }) async {
+    await _runAction(context, () async {
+      final respond = widget.onRespondToInvitation;
+      if (respond == null) {
+        if (!store.respondToInvitation(invitation.id, accept: accept)) {
+          throw StateError('Invitation is no longer pending.');
+        }
+      } else {
+        await respond(invitation, accept: accept);
+      }
+    }, successMessage: accept ? 'Family Pocket joined' : 'Invitation declined');
+  }
+
+  Future<void> _cancelInvitation(
+    BuildContext context,
+    FamilyInvitation invitation,
+  ) async {
+    await _runAction(context, () async {
+      final cancel = widget.onCancelInvitation;
+      if (cancel == null) {
+        if (!store.cancelInvitation(invitation.id)) {
+          throw StateError('Invitation is no longer pending.');
+        }
+      } else {
+        await cancel(invitation);
+      }
+    }, successMessage: 'Invitation cancelled');
   }
 
   Future<void> _refresh(BuildContext context) async {
@@ -207,6 +245,13 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                     ? const Center(child: CircularProgressIndicator())
                     : _EmptyPocketView(
                         onCreate: () => _createPocket(context),
+                        invitations: store.receivedInvitations,
+                        submitting: _submitting,
+                        onRespond: (invitation, accept) => _respondToInvitation(
+                          context,
+                          invitation,
+                          accept: accept,
+                        ),
                         loadFailed:
                             store.loadStatus == FamilyPocketLoadStatus.failure,
                         onRetry: widget.onRefresh == null
@@ -224,6 +269,27 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                       AppSpacing.xl,
                     ),
                     children: [
+                      if (store.receivedInvitations.isNotEmpty) ...[
+                        const _SectionHeader(title: 'Pending invitations'),
+                        const SizedBox(height: AppSpacing.sm),
+                        ...store.receivedInvitations.map(
+                          (invitation) => _ReceivedInvitationCard(
+                            invitation: invitation,
+                            submitting: _submitting,
+                            onAccept: () => _respondToInvitation(
+                              context,
+                              invitation,
+                              accept: true,
+                            ),
+                            onDecline: () => _respondToInvitation(
+                              context,
+                              invitation,
+                              accept: false,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
                       if (store.pockets.length > 1) ...[
                         DropdownButtonFormField<String>(
                           key: ValueKey(pocket.id),
@@ -270,7 +336,7 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                               child: _PocketAction(
                                 icon: Icons.add_card_outlined,
                                 label: 'Dev record',
-                                onTap: _submitting
+                                onTap: _submitting || !store.canContribute
                                     ? null
                                     : () => _recordContribution(context),
                               ),
@@ -312,10 +378,9 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                                 member: pocket.members[index],
                                 canRemove:
                                     store.canManageMembers &&
-                                    !pocket.members[index].isPending &&
-                                    pocket.members[index].role ==
-                                        FamilyRole.contributor,
-                                onRemove: () => _removeContributor(
+                                    pocket.members[index].role !=
+                                        FamilyRole.admin,
+                                onRemove: () => _removeMember(
                                   context,
                                   pocket.members[index],
                                 ),
@@ -326,6 +391,27 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                           ],
                         ),
                       ),
+                      if (store.canManageMembers &&
+                          pocket.invitations.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        _SectionHeader(
+                          title: 'Invitations',
+                          action:
+                              '${pocket.invitations.where((item) => item.effectiveStatus == FamilyInvitationStatus.pending).length} pending',
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        ...pocket.invitations.map(
+                          (invitation) => _AdminInvitationTile(
+                            invitation: invitation,
+                            onCancel:
+                                !_submitting &&
+                                    invitation.status ==
+                                        FamilyInvitationStatus.pending
+                                ? () => _cancelInvitation(context, invitation)
+                                : null,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.xl),
                       const _SectionHeader(
                         title: 'Shared contribution history',
@@ -350,11 +436,17 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
 class _EmptyPocketView extends StatelessWidget {
   const _EmptyPocketView({
     required this.onCreate,
+    required this.invitations,
+    required this.submitting,
+    required this.onRespond,
     required this.loadFailed,
     this.onRetry,
   });
 
   final VoidCallback onCreate;
+  final List<FamilyInvitation> invitations;
+  final bool submitting;
+  final void Function(FamilyInvitation invitation, bool accept) onRespond;
   final bool loadFailed;
   final VoidCallback? onRetry;
 
@@ -365,6 +457,26 @@ class _EmptyPocketView extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           children: [
+            if (invitations.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Pending invitations',
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              ...invitations.map(
+                (invitation) => _ReceivedInvitationCard(
+                  invitation: invitation,
+                  submitting: submitting,
+                  onAccept: () => onRespond(invitation, true),
+                  onDecline: () => onRespond(invitation, false),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+            ],
             const CircleAvatar(
               radius: 42,
               backgroundColor: AppColors.primarySoft,
@@ -458,7 +570,7 @@ class _PocketHero extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'For ${pocket.beneficiary}',
+                      '${pocket.reservedBeneficiaryCount} of ${pocket.beneficiaryLimit} beneficiary slots reserved',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.white70),
@@ -604,7 +716,7 @@ class _MemberTile extends StatelessWidget {
         .join();
     return ListTile(
       leading: CircleAvatar(
-        backgroundColor: member.role == FamilyRole.beneficiary
+        backgroundColor: member.isBeneficiary
             ? AppColors.secondarySoft
             : AppColors.primarySoft,
         child: Text(
@@ -616,11 +728,7 @@ class _MemberTile extends StatelessWidget {
         ),
       ),
       title: Text(member.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        member.isPending
-            ? '${_roleLabel(member.role)} • Invite pending'
-            : _roleLabel(member.role),
-      ),
+      subtitle: Text(_memberCapabilities(member)),
       trailing: member.role == FamilyRole.admin
           ? const Icon(Icons.shield_outlined, color: AppColors.accent)
           : canRemove
@@ -632,6 +740,98 @@ class _MemberTile extends StatelessWidget {
               tooltip: 'Remove ${member.name}',
             )
           : null,
+    );
+  }
+}
+
+class _ReceivedInvitationCard extends StatelessWidget {
+  const _ReceivedInvitationCard({
+    required this.invitation,
+    required this.submitting,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  final FamilyInvitation invitation;
+  final bool submitting;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            invitation.pocketName,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text('${invitation.inviterName} invited you to join this pocket.'),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            _invitationCapabilities(invitation),
+            style: const TextStyle(color: AppColors.inkMuted),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: submitting ? null : onDecline,
+                  child: const Text('Decline'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: submitting ? null : onAccept,
+                  child: const Text('Accept invite'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminInvitationTile extends StatelessWidget {
+  const _AdminInvitationTile({
+    required this.invitation,
+    required this.onCancel,
+  });
+
+  final FamilyInvitation invitation;
+  final VoidCallback? onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = invitation.effectiveStatus;
+    return Material(
+      color: AppColors.surface,
+      child: ListTile(
+        leading: const CircleAvatar(
+          backgroundColor: AppColors.primarySoft,
+          child: Icon(Icons.mail_outline, color: AppColors.primary),
+        ),
+        title: Text(invitation.inviteeName),
+        subtitle: Text(
+          '${_invitationCapabilities(invitation)} • ${_invitationStatusLabel(status)}',
+        ),
+        trailing: onCancel == null
+            ? null
+            : TextButton(onPressed: onCancel, child: const Text('Cancel')),
+      ),
     );
   }
 }
@@ -693,12 +893,10 @@ class _CreatePocketSheet extends StatefulWidget {
 class _CreatePocketSheetState extends State<_CreatePocketSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _beneficiaryController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
-    _beneficiaryController.dispose();
     super.dispose();
   }
 
@@ -724,15 +922,6 @@ class _CreatePocketSheetState extends State<_CreatePocketSheet> {
               decoration: const InputDecoration(labelText: 'Pocket name'),
               validator: _required,
             ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: _beneficiaryController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Who is this pocket for?',
-              ),
-              validator: _required,
-            ),
             const SizedBox(height: AppSpacing.lg),
             AppPrimaryButton(
               label: 'Create pocket',
@@ -740,10 +929,7 @@ class _CreatePocketSheetState extends State<_CreatePocketSheet> {
                 if (!_formKey.currentState!.validate()) return;
                 Navigator.pop(
                   context,
-                  _PocketDraft(
-                    name: _nameController.text.trim(),
-                    beneficiary: _beneficiaryController.text.trim(),
-                  ),
+                  _PocketDraft(name: _nameController.text.trim()),
                 );
               },
             ),
@@ -765,7 +951,8 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  FamilyRole _role = FamilyRole.contributor;
+  bool _canContribute = true;
+  bool _isBeneficiary = false;
 
   @override
   void dispose() {
@@ -806,32 +993,46 @@ class _InviteMemberSheetState extends State<_InviteMemberSheet> {
                   : null,
             ),
             const SizedBox(height: AppSpacing.sm),
-            DropdownButtonFormField<FamilyRole>(
-              initialValue: _role,
-              decoration: const InputDecoration(labelText: 'Role'),
-              items: const [
-                DropdownMenuItem(
-                  value: FamilyRole.contributor,
-                  child: Text('Contributor'),
-                ),
-                DropdownMenuItem(
-                  value: FamilyRole.beneficiary,
-                  child: Text('Beneficiary'),
-                ),
-              ],
-              onChanged: (value) => setState(() => _role = value!),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Can contribute'),
+              subtitle: const Text('Can add funds to the shared pocket'),
+              value: _canContribute,
+              onChanged: (value) =>
+                  setState(() => _canContribute = value ?? false),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Beneficiary'),
+              subtitle: const Text(
+                'Uses one of the two care beneficiary slots',
+              ),
+              value: _isBeneficiary,
+              onChanged: (value) =>
+                  setState(() => _isBeneficiary = value ?? false),
             ),
             const SizedBox(height: AppSpacing.lg),
             AppPrimaryButton(
               label: 'Record invitation',
               onPressed: () {
                 if (!_formKey.currentState!.validate()) return;
+                if (!_canContribute && !_isBeneficiary) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Choose at least one permission for this family member.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
                 Navigator.pop(
                   context,
                   _InviteDraft(
                     name: _nameController.text.trim(),
                     email: _emailController.text.trim(),
-                    role: _role,
+                    canContribute: _canContribute,
+                    isBeneficiary: _isBeneficiary,
                   ),
                 );
               },
@@ -926,22 +1127,23 @@ class _SheetFrame extends StatelessWidget {
 }
 
 class _PocketDraft {
-  const _PocketDraft({required this.name, required this.beneficiary});
+  const _PocketDraft({required this.name});
 
   final String name;
-  final String beneficiary;
 }
 
 class _InviteDraft {
   const _InviteDraft({
     required this.name,
     required this.email,
-    required this.role,
+    required this.canContribute,
+    required this.isBeneficiary,
   });
 
   final String name;
   final String email;
-  final FamilyRole role;
+  final bool canContribute;
+  final bool isBeneficiary;
 }
 
 Widget _sheetTitle(BuildContext context, String title) => Text(
@@ -958,11 +1160,31 @@ String? _amountValidator(String? value) =>
     ? 'Enter an amount of at least ₦100'
     : null;
 
-String _roleLabel(FamilyRole role) => switch (role) {
-  FamilyRole.admin => 'Admin',
-  FamilyRole.contributor => 'Contributor',
-  FamilyRole.beneficiary => 'Beneficiary',
-};
+String _memberCapabilities(FamilyMember member) {
+  if (member.role == FamilyRole.admin) return 'Admin • Can contribute';
+  if (member.canContribute && member.isBeneficiary) {
+    return 'Contributor • Beneficiary';
+  }
+  if (member.canContribute) return 'Contributor';
+  return 'Beneficiary';
+}
+
+String _invitationCapabilities(FamilyInvitation invitation) {
+  if (invitation.canContribute && invitation.isBeneficiary) {
+    return 'Contributor and beneficiary';
+  }
+  if (invitation.canContribute) return 'Contributor';
+  return 'Beneficiary';
+}
+
+String _invitationStatusLabel(FamilyInvitationStatus status) =>
+    switch (status) {
+      FamilyInvitationStatus.pending => 'Pending',
+      FamilyInvitationStatus.accepted => 'Accepted',
+      FamilyInvitationStatus.declined => 'Declined',
+      FamilyInvitationStatus.cancelled => 'Cancelled',
+      FamilyInvitationStatus.expired => 'Expired',
+    };
 
 String _naira(int amount) {
   final value = amount.toString().replaceAllMapped(

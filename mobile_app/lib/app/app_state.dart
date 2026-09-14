@@ -377,34 +377,27 @@ class AppState extends ChangeNotifier {
     await _loadFamilyPockets(userId);
   }
 
-  Future<void> createFamilyPocket({
-    required String name,
-    required String beneficiary,
-  }) async {
+  Future<void> createFamilyPocket({required String name}) async {
     final userId = _requireUserId();
     final repository = familyPocketRepository;
     if (repository == null) {
-      familyPocketStore.createPocket(name: name, beneficiary: beneficiary);
+      familyPocketStore.createPocket(name: name);
       return;
     }
     final now = DateTime.now();
     final pocketId = 'family_${userId}_${createDevelopmentContributionKey()}';
     await repository.createPocket(
-      pocket: FamilyPocket(
-        id: pocketId,
-        name: name.trim(),
-        beneficiary: beneficiary.trim(),
-        members: const [],
-      ),
+      pocket: FamilyPocket(id: pocketId, name: name.trim(), members: const []),
       createdBy: userId,
       adminMembership: FamilyMembership(
         id: userId,
         pocketId: pocketId,
         userId: userId,
         name: profileStore.profile.fullName,
-        email: '',
         role: FamilyRole.admin,
-        invitationStatus: FamilyInvitationStatus.accepted,
+        canContribute: true,
+        isBeneficiary: false,
+        status: FamilyMembershipStatus.accepted,
         joinedAt: now,
       ),
     );
@@ -414,7 +407,8 @@ class AppState extends ChangeNotifier {
   Future<void> inviteFamilyMember({
     required String name,
     required String email,
-    required FamilyRole role,
+    required bool canContribute,
+    required bool isBeneficiary,
   }) async {
     final userId = _requireUserId();
     final pocket = familyPocketStore.selectedPocket;
@@ -423,24 +417,74 @@ class AppState extends ChangeNotifier {
       throw StateError('Only a Family Pocket admin can record invitations.');
     }
     if (repository == null) {
-      familyPocketStore.inviteMember(name: name, email: email, role: role);
+      final invited = familyPocketStore.inviteMember(
+        name: name,
+        email: email,
+        canContribute: canContribute,
+        isBeneficiary: isBeneficiary,
+      );
+      if (!invited) {
+        throw StateError('This invitation cannot be created.');
+      }
       return;
     }
     await repository.createInvitation(
       FamilyInvitation(
         id: 'invite_${userId}_${createDevelopmentContributionKey()}',
         pocketId: pocket.id,
-        name: name.trim(),
+        pocketName: pocket.name,
+        inviteeName: name.trim(),
         email: email.trim().toLowerCase(),
-        role: role,
+        inviterName: profileStore.profile.fullName,
+        canContribute: canContribute,
+        isBeneficiary: isBeneficiary,
+        status: FamilyInvitationStatus.pending,
         createdBy: userId,
         createdAt: DateTime.now(),
+        expiresAt: DateTime.now().add(const Duration(days: 7)),
       ),
     );
     await _loadFamilyPockets(userId);
   }
 
-  Future<void> removeFamilyContributor(String memberId) async {
+  Future<void> respondToFamilyInvitation(
+    FamilyInvitation invitation, {
+    required bool accept,
+  }) async {
+    final userId = _requireUserId();
+    final repository = familyPocketRepository;
+    if (repository == null) {
+      if (!familyPocketStore.respondToInvitation(
+        invitation.id,
+        accept: accept,
+      )) {
+        throw StateError('This invitation is no longer pending.');
+      }
+      return;
+    }
+    await repository.respondToInvitation(
+      invitation: invitation,
+      userId: userId,
+      userName: profileStore.profile.fullName,
+      accept: accept,
+    );
+    await _loadFamilyPockets(userId);
+  }
+
+  Future<void> cancelFamilyInvitation(FamilyInvitation invitation) async {
+    final userId = _requireUserId();
+    final repository = familyPocketRepository;
+    if (repository == null) {
+      if (!familyPocketStore.cancelInvitation(invitation.id)) {
+        throw StateError('This invitation is no longer pending.');
+      }
+      return;
+    }
+    await repository.cancelInvitation(invitation);
+    await _loadFamilyPockets(userId);
+  }
+
+  Future<void> removeFamilyMember(String memberId) async {
     final userId = _requireUserId();
     final pocket = familyPocketStore.selectedPocket;
     final repository = familyPocketRepository;
@@ -448,14 +492,20 @@ class AppState extends ChangeNotifier {
       throw StateError('Only a Family Pocket admin can remove contributors.');
     }
     if (repository == null) {
-      if (!familyPocketStore.removeContributor(memberId)) {
-        throw StateError('This contributor cannot be removed.');
+      if (!familyPocketStore.removeMember(memberId)) {
+        throw StateError('This member cannot be removed.');
       }
       return;
     }
-    await repository.markContributorRemoved(
+    final member = pocket.members
+        .where((item) => item.id == memberId)
+        .firstOrNull;
+    if (member == null) throw StateError('This member no longer exists.');
+    await repository.markMemberRemoved(
       pocketId: pocket.id,
       memberId: memberId,
+      wasBeneficiary: member.isBeneficiary,
+      beneficiarySlot: member.beneficiarySlot,
     );
     await _loadFamilyPockets(userId);
   }
@@ -523,7 +573,17 @@ class AppState extends ChangeNotifier {
     if (familyRepository == null) return;
     familyPocketStore.beginLoad();
     try {
-      final pockets = await familyRepository.getPocketsForUser(userId);
+      final authUser = authRepository.currentUser;
+      final email = authUser?.email?.trim().toLowerCase() ?? '';
+      final results = await Future.wait<Object>([
+        familyRepository.getPocketsForUser(userId),
+        if (authUser?.emailVerified == true && email.isNotEmpty)
+          familyRepository.getPendingInvitationsForEmail(email)
+        else
+          Future<List<FamilyInvitation>>.value(const []),
+      ]);
+      final pockets = results[0] as List<FamilyPocket>;
+      final receivedInvitations = results[1] as List<FamilyInvitation>;
       final contributions =
           developmentContributionsEnabled && contributionRepository != null
           ? (await Future.wait(
@@ -542,6 +602,7 @@ class AppState extends ChangeNotifier {
         email: profileStore.profile.email,
         pockets: pockets,
         contributions: contributions,
+        receivedInvitations: receivedInvitations,
       );
     } catch (error) {
       if (authRepository.currentUserId == userId) {

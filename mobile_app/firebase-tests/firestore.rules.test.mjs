@@ -84,29 +84,46 @@ const seedPersonalSavings = async (uid = 'owner') => {
 const seedFamilyPocket = async () => {
   await environment.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
+    for (const uid of ['admin', 'member', 'beneficiary']) {
+      await setDoc(doc(db, `users/${uid}`), profileFor(uid));
+    }
     await setDoc(doc(db, 'family_pockets/family-secure'), {
       name: 'Secure Family',
-      beneficiary: 'The family',
+      beneficiaryLimit: 2,
       createdBy: 'admin',
       currency: 'NGN',
       status: 'active',
       createdAt: now,
       updatedAt: now,
     });
-    for (const [uid, role] of [
-      ['admin', 'admin'],
-      ['member', 'contributor'],
-      ['beneficiary', 'beneficiary'],
+    for (const [uid, role, canContribute, isBeneficiary] of [
+      ['admin', 'admin', true, false],
+      ['member', 'member', true, false],
+      ['beneficiary', 'member', false, true],
     ]) {
       await setDoc(doc(db, `family_pockets/family-secure/members/${uid}`), {
         pocketId: 'family-secure',
         userId: uid,
         name: uid,
         role,
-        invitationStatus: 'accepted',
+        canContribute,
+        isBeneficiary,
+        ...(isBeneficiary ? { beneficiarySlot: 1 } : {}),
+        status: 'accepted',
         joinedAt: now,
       });
     }
+    await setDoc(
+      doc(db, 'family_pockets/family-secure/beneficiary_slots/1'),
+      {
+        pocketId: 'family-secure',
+        slot: 1,
+        state: 'accepted',
+        invitationId: 'historical-beneficiary-invite',
+        memberUserId: 'beneficiary',
+        updatedAt: now,
+      },
+    );
   });
 };
 
@@ -315,7 +332,7 @@ test('Family Pocket and founding admin are created atomically', async () => {
   const batch = writeBatch(ownerDb);
   batch.set(doc(ownerDb, 'family_pockets/family-1'), {
     name: 'Nwosu Family',
-    beneficiary: 'The family',
+    beneficiaryLimit: 2,
     createdBy: 'owner',
     currency: 'NGN',
     status: 'active',
@@ -327,7 +344,9 @@ test('Family Pocket and founding admin are created atomically', async () => {
     userId: 'owner',
     name: 'Ada Nwosu',
     role: 'admin',
-    invitationStatus: 'accepted',
+    canContribute: true,
+    isBeneficiary: false,
+    status: 'accepted',
     joinedAt: serverTimestamp(),
   });
 
@@ -336,7 +355,7 @@ test('Family Pocket and founding admin are created atomically', async () => {
     getDocs(query(
       collectionGroup(ownerDb, 'members'),
       where('userId', '==', 'owner'),
-      where('invitationStatus', '==', 'accepted'),
+      where('status', '==', 'accepted'),
       orderBy('joinedAt', 'desc'),
     )),
   );
@@ -358,7 +377,7 @@ test('only an admin can soft-remove a Family Pocket contributor', async () => {
     const db = context.firestore();
     await setDoc(doc(db, 'family_pockets/family-1'), {
       name: 'Nwosu Family',
-      beneficiary: 'The family',
+      beneficiaryLimit: 2,
       createdBy: 'admin',
       currency: 'NGN',
       status: 'active',
@@ -370,15 +389,19 @@ test('only an admin can soft-remove a Family Pocket contributor', async () => {
       userId: 'admin',
       name: 'Admin',
       role: 'admin',
-      invitationStatus: 'accepted',
+      canContribute: true,
+      isBeneficiary: false,
+      status: 'accepted',
       joinedAt: now,
     });
     await setDoc(doc(db, 'family_pockets/family-1/members/member'), {
       pocketId: 'family-1',
       userId: 'member',
       name: 'Member',
-      role: 'contributor',
-      invitationStatus: 'accepted',
+      role: 'member',
+      canContribute: true,
+      isBeneficiary: false,
+      status: 'accepted',
       joinedAt: now,
     });
   });
@@ -386,7 +409,7 @@ test('only an admin can soft-remove a Family Pocket contributor', async () => {
   const contributorDb = verifiedContext('member').firestore();
   await assertFails(
     updateDoc(doc(contributorDb, 'family_pockets/family-1/members/member'), {
-      invitationStatus: 'removed',
+      status: 'removed',
       removedAt: now,
     }),
   );
@@ -400,53 +423,250 @@ test('only an admin can soft-remove a Family Pocket contributor', async () => {
   const adminDb = verifiedContext('admin').firestore();
   await assertSucceeds(
     updateDoc(doc(adminDb, 'family_pockets/family-1/members/member'), {
-      invitationStatus: 'removed',
+      status: 'removed',
       removedAt: serverTimestamp(),
     }),
   );
 });
 
-test('Family invitations keep email PII admin-only', async () => {
+test('an invitee can discover and accept only their verified-email invite', async () => {
   await seedFamilyPocket();
   const adminDb = verifiedContext('admin').firestore();
   const memberDb = verifiedContext('member').firestore();
+  const inviteeDb = verifiedContext('invitee', 'tola@example.com').firestore();
+  await assertSucceeds(
+    setDoc(
+      doc(inviteeDb, 'users/invitee'),
+      profileFor('invitee', 'tola@example.com'),
+    ),
+  );
   const invitePath = 'family_pockets/family-secure/invites/invite-1';
   await assertSucceeds(
     setDoc(doc(adminDb, invitePath), {
       pocketId: 'family-secure',
-      name: 'Tola Family',
+      pocketName: 'Secure Family',
+      inviteeName: 'Tola Family',
       email: 'tola@example.com',
-      role: 'contributor',
+      inviterName: 'HealthPocket User',
+      role: 'member',
+      canContribute: true,
+      isBeneficiary: false,
       status: 'pending',
       createdBy: 'admin',
       createdAt: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
     }),
   );
   await assertSucceeds(getDoc(doc(adminDb, invitePath)));
   await assertFails(getDoc(doc(memberDb, invitePath)));
+  await assertSucceeds(getDoc(doc(inviteeDb, invitePath)));
+  const unverifiedInviteeDb = environment.authenticatedContext(
+    'unverified-invitee',
+    { email: 'tola@example.com', email_verified: false },
+  ).firestore();
+  await assertFails(getDoc(doc(unverifiedInviteeDb, invitePath)));
+  await assertFails(
+    updateDoc(doc(inviteeDb, invitePath), {
+      status: 'accepted',
+      respondedBy: 'invitee',
+      respondedAt: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    updateDoc(doc(inviteeDb, invitePath), {
+      status: 'declined',
+      canContribute: false,
+      respondedBy: 'invitee',
+      respondedAt: serverTimestamp(),
+    }),
+  );
+  const ownInvites = query(
+    collectionGroup(inviteeDb, 'invites'),
+    where('email', '==', 'tola@example.com'),
+    where('status', '==', 'pending'),
+    orderBy('createdAt', 'desc'),
+  );
+  const ownSnapshot = await assertSucceeds(getDocs(ownInvites));
+  if (ownSnapshot.size !== 1) {
+    throw new Error(`Expected one matching invitation, got ${ownSnapshot.size}.`);
+  }
+  await assertFails(
+    getDocs(query(
+      collectionGroup(memberDb, 'invites'),
+      where('email', '==', 'tola@example.com'),
+      where('status', '==', 'pending'),
+      orderBy('createdAt', 'desc'),
+    )),
+  );
+
+  const acceptance = writeBatch(inviteeDb);
+  acceptance.update(doc(inviteeDb, invitePath), {
+    status: 'accepted',
+    respondedBy: 'invitee',
+    respondedAt: serverTimestamp(),
+  });
+  acceptance.set(
+    doc(inviteeDb, 'family_pockets/family-secure/members/invitee'),
+    {
+      pocketId: 'family-secure',
+      userId: 'invitee',
+      invitationId: 'invite-1',
+      name: 'HealthPocket User',
+      role: 'member',
+      canContribute: true,
+      isBeneficiary: false,
+      status: 'accepted',
+      joinedAt: serverTimestamp(),
+    },
+  );
+  await assertSucceeds(acceptance.commit());
+  await assertSucceeds(getDoc(doc(inviteeDb, 'family_pockets/family-secure')));
+
   await assertFails(
     setDoc(doc(memberDb, 'family_pockets/family-secure/invites/attack'), {
       pocketId: 'family-secure',
-      name: 'Attack',
+      pocketName: 'Secure Family',
+      inviteeName: 'Attack',
       email: 'attack@example.com',
-      role: 'contributor',
+      inviterName: 'Member',
+      role: 'member',
+      canContribute: true,
+      isBeneficiary: false,
       status: 'pending',
       createdBy: 'member',
       createdAt: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
     }),
   );
   await assertFails(
     setDoc(doc(adminDb, 'family_pockets/family-secure/invites/polluted'), {
       pocketId: 'family-secure',
-      name: 'x'.repeat(101),
+      pocketName: 'Secure Family',
+      inviteeName: 'x'.repeat(101),
       email: 'bad@example.com',
+      inviterName: 'HealthPocket User',
       role: 'admin',
-      status: 'accepted',
+      canContribute: true,
+      isBeneficiary: false,
+      status: 'pending',
       createdBy: 'admin',
-      createdAt: now,
+      createdAt: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
       extraData: true,
     }),
   );
+});
+
+test('beneficiary invitations reserve at most two slots and release declined slots', async () => {
+  await seedFamilyPocket();
+  const adminDb = verifiedContext('admin').firestore();
+  const expiry = Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  const reserve = async (id, email, slot) => {
+    const batch = writeBatch(adminDb);
+    batch.set(doc(adminDb, `family_pockets/family-secure/invites/${id}`), {
+      pocketId: 'family-secure',
+      pocketName: 'Secure Family',
+      inviteeName: `Beneficiary ${slot}`,
+      email,
+      inviterName: 'HealthPocket User',
+      role: 'member',
+      canContribute: false,
+      isBeneficiary: true,
+      beneficiarySlot: slot,
+      status: 'pending',
+      createdBy: 'admin',
+      createdAt: serverTimestamp(),
+      expiresAt: expiry,
+    });
+    batch.set(
+      doc(adminDb, `family_pockets/family-secure/beneficiary_slots/${slot}`),
+      {
+        pocketId: 'family-secure',
+        slot,
+        state: 'reserved',
+        invitationId: id,
+        updatedAt: serverTimestamp(),
+      },
+    );
+    return batch.commit();
+  };
+
+  await assertSucceeds(reserve('beneficiary-invite-2', 'two@example.com', 2));
+  await assertFails(reserve('beneficiary-invite-3', 'three@example.com', 3));
+
+  const inviteeDb = verifiedContext('invitee-two', 'two@example.com').firestore();
+  const decline = writeBatch(inviteeDb);
+  decline.update(
+    doc(
+      inviteeDb,
+      'family_pockets/family-secure/invites/beneficiary-invite-2',
+    ),
+    {
+      status: 'declined',
+      respondedBy: 'invitee-two',
+      respondedAt: serverTimestamp(),
+    },
+  );
+  decline.delete(
+    doc(inviteeDb, 'family_pockets/family-secure/beneficiary_slots/2'),
+  );
+  await assertSucceeds(decline.commit());
+
+  await assertSucceeds(reserve('beneficiary-invite-4', 'four@example.com', 2));
+  const fourthDb = verifiedContext('invitee-four', 'four@example.com').firestore();
+  await assertSucceeds(
+    setDoc(
+      doc(fourthDb, 'users/invitee-four'),
+      profileFor('invitee-four', 'four@example.com'),
+    ),
+  );
+  const acceptance = writeBatch(fourthDb);
+  acceptance.update(
+    doc(
+      fourthDb,
+      'family_pockets/family-secure/invites/beneficiary-invite-4',
+    ),
+    {
+      status: 'accepted',
+      respondedBy: 'invitee-four',
+      respondedAt: serverTimestamp(),
+    },
+  );
+  acceptance.set(
+    doc(fourthDb, 'family_pockets/family-secure/members/invitee-four'),
+    {
+      pocketId: 'family-secure',
+      userId: 'invitee-four',
+      invitationId: 'beneficiary-invite-4',
+      name: 'HealthPocket User',
+      role: 'member',
+      canContribute: false,
+      isBeneficiary: true,
+      beneficiarySlot: 2,
+      status: 'accepted',
+      joinedAt: serverTimestamp(),
+    },
+  );
+  acceptance.update(
+    doc(fourthDb, 'family_pockets/family-secure/beneficiary_slots/2'),
+    {
+      state: 'accepted',
+      memberUserId: 'invitee-four',
+      updatedAt: serverTimestamp(),
+    },
+  );
+  await assertSucceeds(acceptance.commit());
+
+  const removal = writeBatch(adminDb);
+  removal.update(
+    doc(adminDb, 'family_pockets/family-secure/members/invitee-four'),
+    { status: 'removed', removedAt: serverTimestamp() },
+  );
+  removal.delete(
+    doc(adminDb, 'family_pockets/family-secure/beneficiary_slots/2'),
+  );
+  await assertSucceeds(removal.commit());
 });
 
 test('Family DEV contributions are member-scoped, idempotent and immutable', async () => {
@@ -521,7 +741,7 @@ test('Family DEV contributions are member-scoped, idempotent and immutable', asy
 
   await assertSucceeds(
     updateDoc(doc(adminDb, 'family_pockets/family-secure/members/member'), {
-      invitationStatus: 'removed',
+      status: 'removed',
       removedAt: serverTimestamp(),
     }),
   );
@@ -636,7 +856,7 @@ test('a non-member cannot write into a Family Pocket activity feed', async () =>
   await environment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'family_pockets/family-1'), {
       name: 'Nwosu Family',
-      beneficiary: 'The family',
+      beneficiaryLimit: 2,
       createdBy: 'admin',
       currency: 'NGN',
       status: 'active',

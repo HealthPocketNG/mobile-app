@@ -280,8 +280,10 @@ class FamilyPocketDocument {
       pocket: FamilyPocket(
         id: id,
         name: firestoreString(data, 'name'),
-        beneficiary: firestoreString(data, 'beneficiary'),
         members: const [],
+        beneficiaryLimit: data['beneficiaryLimit'] is int
+            ? data['beneficiaryLimit'] as int
+            : 2,
       ),
       createdBy: firestoreString(data, 'createdBy'),
       currency: firestoreString(data, 'currency'),
@@ -296,7 +298,7 @@ class FamilyPocketDocument {
     Object? updatedAtOverride,
   }) => {
     'name': pocket.name,
-    'beneficiary': pocket.beneficiary,
+    'beneficiaryLimit': pocket.beneficiaryLimit,
     'createdBy': createdBy,
     'currency': currency,
     'status': status.name,
@@ -314,19 +316,29 @@ class FamilyMembershipDocument {
     String id,
     Map<String, dynamic> data,
   ) {
+    final encodedRole = firestoreString(data, 'role');
+    final role = encodedRole == 'admin' ? FamilyRole.admin : FamilyRole.member;
+    final encodedStatus = data['status'] ?? data['invitationStatus'];
+    final status = FamilyMembershipStatus.values.firstWhere(
+      (value) => value.name == encodedStatus,
+      orElse: () =>
+          throw FormatException('Unknown membership status "$encodedStatus".'),
+    );
     return FamilyMembershipDocument(
       FamilyMembership(
         id: id,
         pocketId: firestoreString(data, 'pocketId'),
         userId: firestoreNullableString(data, 'userId'),
+        invitationId: firestoreNullableString(data, 'invitationId'),
         name: firestoreString(data, 'name'),
-        email: '',
-        role: firestoreEnum(data, 'role', FamilyRole.values),
-        invitationStatus: firestoreEnum(
-          data,
-          'invitationStatus',
-          FamilyInvitationStatus.values,
-        ),
+        role: role,
+        canContribute:
+            data['canContribute'] as bool? ??
+            (encodedRole == 'admin' || encodedRole == 'contributor'),
+        isBeneficiary:
+            data['isBeneficiary'] as bool? ?? encodedRole == 'beneficiary',
+        status: status,
+        beneficiarySlot: data['beneficiarySlot'] as int?,
         joinedAt: firestoreNullableDateTime(data, 'joinedAt'),
         removedAt: firestoreNullableDateTime(data, 'removedAt'),
       ),
@@ -336,9 +348,15 @@ class FamilyMembershipDocument {
   Map<String, Object?> toMap({Object? joinedAtOverride}) => {
     'pocketId': membership.pocketId,
     'userId': membership.userId,
+    if (membership.invitationId != null)
+      'invitationId': membership.invitationId,
     'name': membership.name,
     'role': membership.role.name,
-    'invitationStatus': membership.invitationStatus.name,
+    'canContribute': membership.canContribute,
+    'isBeneficiary': membership.isBeneficiary,
+    'status': membership.status.name,
+    if (membership.beneficiarySlot != null)
+      'beneficiarySlot': membership.beneficiarySlot,
     'joinedAt':
         joinedAtOverride ??
         (membership.joinedAt == null
@@ -357,26 +375,61 @@ class FamilyInvitationDocument {
   factory FamilyInvitationDocument.fromMap(
     String id,
     Map<String, dynamic> data,
-  ) => FamilyInvitationDocument(
-    FamilyInvitation(
-      id: id,
-      pocketId: firestoreString(data, 'pocketId'),
-      name: firestoreString(data, 'name'),
-      email: firestoreString(data, 'email'),
-      role: firestoreEnum(data, 'role', FamilyRole.values),
-      createdBy: firestoreString(data, 'createdBy'),
-      createdAt: firestoreNullableDateTime(data, 'createdAt'),
-    ),
-  );
+  ) {
+    final createdAt = firestoreNullableDateTime(data, 'createdAt');
+    final legacyRole = data['role'];
+    return FamilyInvitationDocument(
+      FamilyInvitation(
+        id: id,
+        pocketId: firestoreString(data, 'pocketId'),
+        pocketName: data['pocketName'] as String? ?? '',
+        inviteeName:
+            data['inviteeName'] as String? ??
+            data['name'] as String? ??
+            'Family member',
+        email: firestoreString(data, 'email'),
+        inviterName: data['inviterName'] as String? ?? 'Family admin',
+        canContribute:
+            data['canContribute'] as bool? ?? legacyRole == 'contributor',
+        isBeneficiary:
+            data['isBeneficiary'] as bool? ?? legacyRole == 'beneficiary',
+        beneficiarySlot: data['beneficiarySlot'] as int?,
+        status: data['status'] == null
+            ? FamilyInvitationStatus.pending
+            : firestoreEnum(data, 'status', FamilyInvitationStatus.values),
+        createdBy: firestoreString(data, 'createdBy'),
+        createdAt: createdAt,
+        expiresAt:
+            firestoreNullableDateTime(data, 'expiresAt') ??
+            (createdAt ?? DateTime.now()).add(const Duration(days: 7)),
+        respondedBy: firestoreNullableString(data, 'respondedBy'),
+        respondedAt: firestoreNullableDateTime(data, 'respondedAt'),
+      ),
+    );
+  }
 
-  Map<String, Object?> toMap({Object? createdAtOverride}) => {
+  Map<String, Object?> toMap({
+    Object? createdAtOverride,
+    Object? respondedAtOverride,
+  }) => {
     'pocketId': invitation.pocketId,
-    'name': invitation.name,
+    'pocketName': invitation.pocketName,
+    'inviteeName': invitation.inviteeName,
     'email': invitation.email,
-    'role': invitation.role.name,
-    'status': 'pending',
+    'inviterName': invitation.inviterName,
+    'role': FamilyRole.member.name,
+    'canContribute': invitation.canContribute,
+    'isBeneficiary': invitation.isBeneficiary,
+    if (invitation.beneficiarySlot != null)
+      'beneficiarySlot': invitation.beneficiarySlot,
+    'status': invitation.status.name,
     'createdBy': invitation.createdBy,
     'createdAt': createdAtOverride ?? firestoreTimestamp(invitation.createdAt!),
+    'expiresAt': firestoreTimestamp(invitation.expiresAt),
+    if (invitation.respondedBy != null) 'respondedBy': invitation.respondedBy,
+    if (invitation.respondedAt != null || respondedAtOverride != null)
+      'respondedAt':
+          respondedAtOverride ?? firestoreTimestamp(invitation.respondedAt!),
   };
 }
 
