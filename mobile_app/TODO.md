@@ -26,12 +26,39 @@ local verification, deployment, and mobile acceptance are tracked separately.
 - [x] Deploy the matching indexes and rules to DEV and verify index readiness
   (2026-09-14: all nine listed indexes READY; 42 Flutter tests passed and
   Flutter analysis reported no issues).
-- [ ] Mobile-test with two verified DEV accounts: invite, accept/decline,
+- [x] Mobile-test with two verified DEV accounts: invite, accept/decline,
   cancellation, beneficiary capacity, removal, refresh, and app restart.
+  User reported successful mobile testing with no urgent flaws.
+
+## Invitation attention and email guidance
+
+- [x] Add a Family tab badge for loaded, actionable pending invitations, with
+  an accessible count and local expiry handling. Opening the tab does not clear it.
+- [x] Add Spam/Junk guidance to email verification; preserve the existing resend action.
+- [x] Mobile-test the badge and verification guidance (user confirmed success).
+- [ ] Configure branded authentication email and verify sender authentication
+  and delivery across email providers before public launch.
+- [ ] Add live invitation delivery/refresh so remote changes appear without a
+  manual refresh or session restore. The badge currently reflects loaded data.
 
 Production changes and real email delivery are not part of this rollout.
 
 ## Before the MVP pilot
+
+- [x] Connect account-detail edits to the profile repository and retain failed
+  drafts for retry; keep sign-in email out of ordinary profile editing.
+- [ ] Mobile-test account edits across restart and offline retry.
+- [x] Add persisted personal-information and emergency-contact editors with
+  validation, duplicate-save protection, and retained drafts on failure.
+- [ ] Beta mobile acceptance: edit personal details/emergency contact, restart,
+  verify saved values, and exercise offline retry (batched with later testing).
+- [ ] Replace placeholder support actions and connect published privacy/terms.
+- [x] Replace the fake support-request action with email composition to
+  gethealthpocket@gmail.com, copy-address fallback, and safe feedback guidance.
+- [x] Update outdated FAQ copy for the no-money beta.
+- [ ] Mobile-test email handoff and copy fallback in the combined beta pass.
+- [ ] Implement account deletion with a retention-aware backend workflow.
+- [ ] Evaluate optional profile-photo uploads after core profile functionality.
 
 - [x] Check existing DEV Family Pocket documents and legacy invitations for the
   capability model and reconcile beneficiary slots before deploying these rules.

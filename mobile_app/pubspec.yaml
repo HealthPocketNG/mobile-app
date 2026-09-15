@@ -41,6 +41,7 @@ dependencies:
   # v11 requires Android compileSdk 37, ahead of this Flutter template's AGP.
   flutter_secure_storage: ^10.3.1
   cryptography: ^2.9.0
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

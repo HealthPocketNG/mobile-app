@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/features/auth/presentation/auth_form_screen.dart';
 import 'package:healthpocket/features/auth/presentation/app_pin_screen.dart';
@@ -47,81 +48,87 @@ class AppRouter {
 
     return MaterialPageRoute<void>(
       settings: settings,
-      builder: (context) => switch (destination) {
-        AppRoute.splash => SplashScreen(appState: appState),
-        AppRoute.welcome => const WelcomeScreen(),
-        AppRoute.signIn => AuthFormScreen(
-          mode: AuthMode.signIn,
-          appState: appState,
-        ),
-        AppRoute.signUp => AuthFormScreen(
-          mode: AuthMode.signUp,
-          appState: appState,
-        ),
-        AppRoute.forgotPassword => ForgotPasswordScreen(
-          authRepository: appState.authRepository,
-        ),
-        AppRoute.verifyEmail => EmailVerificationScreen(appState: appState),
-        AppRoute.createPin => AppPinScreen(
-          appState: appState,
-          mode: AppPinMode.create,
-        ),
-        AppRoute.unlockPin => AppPinScreen(
-          appState: appState,
-          mode: AppPinMode.unlock,
-        ),
-        AppRoute.pinRecovery => PinRecoveryScreen(appState: appState),
-        AppRoute.onboarding => PersonalInformationScreen(
-          profileStore: appState.profileStore,
-        ),
-        AppRoute.personalInformation => PersonalInformationScreen(
-          profileStore: appState.profileStore,
-        ),
-        AppRoute.savingsPlanSetup => SavingsPlanSetupScreen(
-          savingsStore: appState.savingsStore,
-          onCompleted: appState.completeOnboarding,
-        ),
-        AppRoute.dashboard => DashboardScreen(
-          savingsStore: appState.savingsStore,
-          profileStore: appState.profileStore,
-          developmentContributionsEnabled:
-              appState.developmentContributionsEnabled,
-          onRetryContributions: appState.retryContributionLoad,
-          onRefresh: appState.refreshDashboard,
-        ),
-        AppRoute.savings => SavingsScreen(
-          store: appState.savingsStore,
-          onSavePlan: appState.updateSavingsPlan,
-          onTogglePlan: appState.toggleSavingsPlan,
-          developmentContributionsEnabled:
-              appState.developmentContributionsEnabled,
-          onCreateContributionKey: appState.createDevelopmentContributionKey,
-          onRecordDevelopmentContribution:
-              appState.recordDevelopmentContribution,
-          onRetryContributions: appState.retryContributionLoad,
-        ),
-        AppRoute.familyPocket => FamilyPocketScreen(
-          store: appState.familyPocketStore,
-          onCreatePocket: appState.createFamilyPocket,
-          onInviteMember: appState.inviteFamilyMember,
-          onRespondToInvitation: appState.respondToFamilyInvitation,
-          onCancelInvitation: appState.cancelFamilyInvitation,
-          onRemoveMember: appState.removeFamilyMember,
-          onRecordDevelopmentContribution: (amountNaira) =>
-              appState.recordDevelopmentFamilyContribution(
-                amountNaira: amountNaira,
-                idempotencyKey: appState.createDevelopmentContributionKey(),
-              ),
-          onRefresh: appState.refreshFamilyPockets,
-          developmentContributionsEnabled:
-              appState.developmentContributionsEnabled,
-        ),
-        AppRoute.profile => ProfileScreen(
-          store: appState.profileStore,
-          authRepository: appState.authRepository,
-          onSaveNotificationPreferences: appState.updateNotificationPreferences,
-        ),
-      },
+      builder: (context) => FamilyInvitationScope(
+        store: appState.familyPocketStore,
+        child: switch (destination) {
+          AppRoute.splash => SplashScreen(appState: appState),
+          AppRoute.welcome => const WelcomeScreen(),
+          AppRoute.signIn => AuthFormScreen(
+            mode: AuthMode.signIn,
+            appState: appState,
+          ),
+          AppRoute.signUp => AuthFormScreen(
+            mode: AuthMode.signUp,
+            appState: appState,
+          ),
+          AppRoute.forgotPassword => ForgotPasswordScreen(
+            authRepository: appState.authRepository,
+          ),
+          AppRoute.verifyEmail => EmailVerificationScreen(appState: appState),
+          AppRoute.createPin => AppPinScreen(
+            appState: appState,
+            mode: AppPinMode.create,
+          ),
+          AppRoute.unlockPin => AppPinScreen(
+            appState: appState,
+            mode: AppPinMode.unlock,
+          ),
+          AppRoute.pinRecovery => PinRecoveryScreen(appState: appState),
+          AppRoute.onboarding => PersonalInformationScreen(
+            profileStore: appState.profileStore,
+          ),
+          AppRoute.personalInformation => PersonalInformationScreen(
+            profileStore: appState.profileStore,
+          ),
+          AppRoute.savingsPlanSetup => SavingsPlanSetupScreen(
+            savingsStore: appState.savingsStore,
+            onCompleted: appState.completeOnboarding,
+          ),
+          AppRoute.dashboard => DashboardScreen(
+            savingsStore: appState.savingsStore,
+            profileStore: appState.profileStore,
+            developmentContributionsEnabled:
+                appState.developmentContributionsEnabled,
+            onRetryContributions: appState.retryContributionLoad,
+            onRefresh: appState.refreshDashboard,
+          ),
+          AppRoute.savings => SavingsScreen(
+            store: appState.savingsStore,
+            onSavePlan: appState.updateSavingsPlan,
+            onTogglePlan: appState.toggleSavingsPlan,
+            developmentContributionsEnabled:
+                appState.developmentContributionsEnabled,
+            onCreateContributionKey: appState.createDevelopmentContributionKey,
+            onRecordDevelopmentContribution:
+                appState.recordDevelopmentContribution,
+            onRetryContributions: appState.retryContributionLoad,
+          ),
+          AppRoute.familyPocket => FamilyPocketScreen(
+            store: appState.familyPocketStore,
+            onCreatePocket: appState.createFamilyPocket,
+            onInviteMember: appState.inviteFamilyMember,
+            onRespondToInvitation: appState.respondToFamilyInvitation,
+            onCancelInvitation: appState.cancelFamilyInvitation,
+            onRemoveMember: appState.removeFamilyMember,
+            onRecordDevelopmentContribution: (amountNaira) =>
+                appState.recordDevelopmentFamilyContribution(
+                  amountNaira: amountNaira,
+                  idempotencyKey: appState.createDevelopmentContributionKey(),
+                ),
+            onRefresh: appState.refreshFamilyPockets,
+            developmentContributionsEnabled:
+                appState.developmentContributionsEnabled,
+          ),
+          AppRoute.profile => ProfileScreen(
+            onSaveAccount: appState.updateAccountDetails,
+            onSavePersonalDetails: appState.updatePersonalDetails,
+            store: appState.profileStore,
+            authRepository: appState.authRepository,
+            onSaveNotificationPreferences:
+                appState.updateNotificationPreferences,
+          ),
+        },
+      ),
     );
   }
 }

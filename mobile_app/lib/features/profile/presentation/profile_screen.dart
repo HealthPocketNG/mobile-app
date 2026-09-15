@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:healthpocket/features/profile/presentation/support_screen.dart';
+import 'package:healthpocket/features/profile/presentation/edit_personal_details_screen.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
@@ -15,10 +17,15 @@ class ProfileScreen extends StatefulWidget {
     super.key,
     this.authRepository,
     this.onSaveNotificationPreferences,
+    this.onSaveAccount,
+    this.onSavePersonalDetails,
   });
 
   final ProfileStore store;
   final AuthRepository? authRepository;
+  final Future<void> Function(UserProfile profile)? onSaveAccount;
+  final Future<void> Function(UserProfile profile, bool emergencyContact)?
+  onSavePersonalDetails;
   final Future<void> Function(NotificationPreferences notifications)?
   onSaveNotificationPreferences;
 
@@ -32,20 +39,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ProfileStore get store => widget.store;
   AuthRepository? get authRepository => widget.authRepository;
 
+  Future<void> _editDetails(bool emergencyContact) async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditPersonalDetailsScreen(
+          profile: store.profile,
+          emergencyContact: emergencyContact,
+          onSave: (draft) async {
+            final save = widget.onSavePersonalDetails;
+            if (save != null) {
+              await save(draft, emergencyContact);
+            } else {
+              store.hydrate(profile: draft, notifications: store.notifications);
+            }
+          },
+        ),
+      ),
+    );
+    if (mounted && saved == true) {
+      _showMessage(context, 'Profile details saved');
+    }
+  }
+
   Future<void> _editAccount(BuildContext context) async {
     final draft = await showModalBottomSheet<_AccountDraft>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) => _EditAccountSheet(profile: store.profile),
+      builder: (context) => _EditAccountSheet(
+        profile: store.profile,
+        onSave: (draft) async {
+          final save = widget.onSaveAccount;
+          if (save != null) {
+            await save(
+              store.profile.copyWith(
+                fullName: draft.fullName,
+                phoneNumber: draft.phoneNumber,
+                stateOfResidence: draft.stateOfResidence,
+              ),
+            );
+          } else {
+            store.updateAccount(
+              fullName: draft.fullName,
+              email: store.profile.email,
+              phoneNumber: draft.phoneNumber,
+              stateOfResidence: draft.stateOfResidence,
+            );
+          }
+        },
+      ),
     );
     if (draft == null) return;
-    store.updateAccount(
-      fullName: draft.fullName,
-      email: draft.email,
-      phoneNumber: draft.phoneNumber,
-      stateOfResidence: draft.stateOfResidence,
-    );
     if (context.mounted) _showMessage(context, 'Account information updated');
   }
 
@@ -131,11 +176,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _SettingsTile(
                     icon: Icons.home_outlined,
                     title: 'Personal information',
+                    onTap: () => _editDetails(false),
                     subtitle: _personalInformationLabel(profile),
                   ),
                   _SettingsTile(
                     icon: Icons.contact_emergency_outlined,
                     title: 'Emergency contact',
+                    onTap: () => _editDetails(true),
                     subtitle: profile.nextOfKinName.isEmpty
                         ? 'Not provided'
                         : '${profile.nextOfKinName} • ${profile.nextOfKinPhone}',
@@ -241,15 +288,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _SettingsTile(
                     icon: Icons.help_outline_rounded,
                     title: 'Frequently asked questions',
-                    subtitle: 'Learn how the Month 1 demo works',
+                    subtitle: 'Understand the no-money beta',
                     onTap: () => _showHelp(context),
                   ),
                   _SettingsTile(
                     icon: Icons.support_agent_rounded,
                     title: 'Contact support',
-                    subtitle: 'Send a demo support request',
-                    onTap: () =>
-                        _showMessage(context, 'Demo support request created'),
+                    subtitle: 'Email us or share beta feedback',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SupportScreen(),
+                      ),
+                    ),
                   ),
                   _SettingsTile(
                     icon: Icons.shield_outlined,
@@ -496,15 +547,19 @@ class _PreferenceSwitch extends StatelessWidget {
 }
 
 class _EditAccountSheet extends StatefulWidget {
-  const _EditAccountSheet({required this.profile});
+  const _EditAccountSheet({required this.profile, required this.onSave});
 
   final UserProfile profile;
+
+  final Future<void> Function(_AccountDraft draft) onSave;
 
   @override
   State<_EditAccountSheet> createState() => _EditAccountSheetState();
 }
 
 class _EditAccountSheetState extends State<_EditAccountSheet> {
+  bool _saving = false;
+  String? _error;
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
@@ -576,20 +631,38 @@ class _EditAccountSheetState extends State<_EditAccountSheet> {
               validator: _required,
             ),
             const SizedBox(height: AppSpacing.lg),
+            const Text('Your sign-in email cannot be changed here.'),
+            if (_error != null)
+              Text(_error!, style: const TextStyle(color: AppColors.error)),
             AppPrimaryButton(
-              label: 'Save changes',
-              onPressed: () {
-                if (!_formKey.currentState!.validate()) return;
-                Navigator.pop(
-                  context,
-                  _AccountDraft(
-                    fullName: _nameController.text.trim(),
-                    email: _emailController.text.trim(),
-                    phoneNumber: _phoneController.text.trim(),
-                    stateOfResidence: _stateController.text.trim(),
-                  ),
-                );
-              },
+              label: _saving ? 'Saving…' : 'Save changes',
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      if (!_formKey.currentState!.validate()) return;
+                      final draft = _AccountDraft(
+                        fullName: _nameController.text.trim(),
+                        email: _emailController.text.trim(),
+                        phoneNumber: _phoneController.text.trim(),
+                        stateOfResidence: _stateController.text.trim(),
+                      );
+                      setState(() {
+                        _saving = true;
+                        _error = null;
+                      });
+                      try {
+                        await widget.onSave(draft);
+                        if (context.mounted) Navigator.pop(context, draft);
+                      } catch (_) {
+                        if (mounted) {
+                          setState(
+                            () => _error = 'We could not save your changes. Check your connection and try again.',
+                          );
+                        }
+                      } finally {
+                        if (mounted) setState(() => _saving = false);
+                      }
+                    },
             ),
           ],
         ),
@@ -647,7 +720,7 @@ void _showHelp(BuildContext context) {
           SizedBox(height: AppSpacing.lg),
           _HelpAnswer(
             question: 'Is this real money?',
-            answer: 'No. Month 1 contributions and balances are demonstration data only.',
+            answer: 'No. Beta contributions and balances are simulated records. No money is deposited, held, or transferred.',
           ),
           _HelpAnswer(
             question: 'Can family members contribute?',
@@ -655,7 +728,7 @@ void _showHelp(BuildContext context) {
           ),
           _HelpAnswer(
             question: 'Are investments available?',
-            answer: 'No. Investment and payment partners are outside the Month 1 scope.',
+            answer: 'No. Investments and real payments are not available in this beta.',
           ),
         ],
       ),

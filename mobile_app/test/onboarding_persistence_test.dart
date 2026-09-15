@@ -73,6 +73,50 @@ void main() {
       expect(savings.plan?.status, SavingsPlanStatus.paused);
 
       await appState.setPin('482913');
+      final edited = appState.profileStore.profile.copyWith(
+        fullName: 'Amara Updated',
+        stateOfResidence: 'Lagos',
+        email: 'not-the-login@example.com',
+        phoneNumber: '08012345678',
+      );
+      profiles.failSave = true;
+      await expectLater(
+        appState.updateAccountDetails(edited),
+        throwsStateError,
+      );
+      expect(appState.profileStore.profile.fullName, 'Amara Okafor');
+      profiles.failSave = false;
+      await appState.updateAccountDetails(edited);
+      expect(profiles.data?.profile.fullName, 'Amara Updated');
+      expect(profiles.data?.profile.email, 'amara@example.com');
+      expect(profiles.data?.profile.nextOfKinName, 'Chidi Okafor');
+      final personalDraft = appState.profileStore.profile.copyWith(
+        residentialAddress: '42 New Road',
+        gender: 'female',
+        email: 'ignored@example.com',
+      );
+      profiles.failSave = true;
+      await expectLater(
+        appState.updatePersonalDetails(personalDraft, false),
+        throwsStateError,
+      );
+      expect(
+        appState.profileStore.profile.residentialAddress,
+        '21 Market Road',
+      );
+      profiles.failSave = false;
+      await appState.updatePersonalDetails(personalDraft, false);
+      await appState.updatePersonalDetails(
+        personalDraft.copyWith(
+          nextOfKinName: 'Ada Okafor',
+          nextOfKinPhone: '+2348012345678',
+          residentialAddress: 'Must not overwrite address',
+        ),
+        true,
+      );
+      expect(profiles.data?.profile.email, 'amara@example.com');
+      expect(profiles.data?.profile.emailVerified, isTrue);
+      expect(profiles.data?.profile.residentialAddress, '42 New Road');
       appState.dispose();
 
       final restoredState = AppState(
@@ -88,7 +132,17 @@ void main() {
         await restoredState.resolveStartup(),
         AuthFlowDestination.unlockPin,
       );
-      expect(restoredState.profileStore.profile.fullName, 'Amara Okafor');
+      expect(restoredState.profileStore.profile.fullName, 'Amara Updated');
+      expect(restoredState.profileStore.profile.stateOfResidence, 'Lagos');
+      expect(
+        restoredState.profileStore.profile.residentialAddress,
+        '42 New Road',
+      );
+      expect(restoredState.profileStore.profile.nextOfKinName, 'Ada Okafor');
+      expect(
+        restoredState.profileStore.profile.nextOfKinPhone,
+        '+2348012345678',
+      );
       expect(
         restoredState.savingsStore.plan?.frequency,
         SavingsFrequency.daily,

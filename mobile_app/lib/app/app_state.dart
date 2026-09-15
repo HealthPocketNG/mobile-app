@@ -295,6 +295,86 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  Future<void> updateAccountDetails(UserProfile draft) async {
+    final userId = authRepository.currentUserId;
+    if (userId == null) throw const AuthFailure('Your session has expired.');
+    if (draft.fullName.trim().isEmpty ||
+        draft.stateOfResidence.trim().isEmpty) {
+      throw const AuthFailure('Name and state of residence are required.');
+    }
+    final previous = profileStore.profile;
+    final updated = previous.copyWith(
+      fullName: draft.fullName.trim(),
+      phoneNumber: draft.phoneNumber.trim(),
+      stateOfResidence: draft.stateOfResidence.trim(),
+      phoneVerified:
+          previous.phoneNumber == draft.phoneNumber.trim() &&
+          previous.phoneVerified,
+    );
+    await profileRepository?.saveProfile(
+      userId: userId,
+      profile: updated,
+      notifications: profileStore.notifications,
+    );
+    if (authRepository.currentUserId != userId) {
+      throw const AuthFailure('Your account changed while saving.');
+    }
+    profileStore.hydrate(
+      profile: updated,
+      notifications: profileStore.notifications,
+    );
+  }
+
+  Future<void> updatePersonalDetails(
+    UserProfile draft,
+    bool emergencyContact,
+  ) async {
+    final userId = authRepository.currentUserId;
+    if (userId == null) throw const AuthFailure('Your session has expired.');
+    if (emergencyContact) {
+      if (draft.nextOfKinName.trim().isEmpty ||
+          !RegExp(r'^\+?[0-9 ()-]{7,25}$')
+              .hasMatch(draft.nextOfKinPhone.trim())) {
+        throw const AuthFailure('Enter a contact name and valid phone number.');
+      }
+    } else {
+      final now = DateTime.now();
+      final birth = draft.dateOfBirth;
+      if (birth == null ||
+          birth.isAfter(DateTime(now.year - 18, now.month, now.day)) ||
+          birth.isBefore(DateTime(now.year - 100)) ||
+          draft.gender == null ||
+          draft.residentialAddress.trim().isEmpty ||
+          draft.stateOfResidence.trim().isEmpty) {
+        throw const AuthFailure('Complete your personal information.');
+      }
+    }
+    final current = profileStore.profile;
+    final updated = emergencyContact
+        ? current.copyWith(
+            nextOfKinName: draft.nextOfKinName.trim(),
+            nextOfKinPhone: draft.nextOfKinPhone.trim(),
+          )
+        : current.copyWith(
+            dateOfBirth: draft.dateOfBirth,
+            gender: draft.gender,
+            residentialAddress: draft.residentialAddress.trim(),
+            stateOfResidence: draft.stateOfResidence.trim(),
+          );
+    await profileRepository?.saveProfile(
+      userId: userId,
+      profile: updated,
+      notifications: profileStore.notifications,
+    );
+    if (authRepository.currentUserId != userId) {
+      throw const AuthFailure('Your account changed while saving.');
+    }
+    profileStore.hydrate(
+      profile: updated,
+      notifications: profileStore.notifications,
+    );
+  }
+
   Future<void> updateNotificationPreferences(
     NotificationPreferences notifications,
   ) async {

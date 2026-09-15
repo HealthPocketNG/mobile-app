@@ -101,7 +101,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'We sent a verification link to $email. Open it, then return here to continue.',
+              'We sent a verification link to $email. Open it, then return here to continue.\n\nCan’t find it? Check your Spam or Junk folder. If it’s there, mark it as not spam. You can also resend the email below.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge
                   ?.copyWith(color: AppColors.inkMuted, height: 1.45),
