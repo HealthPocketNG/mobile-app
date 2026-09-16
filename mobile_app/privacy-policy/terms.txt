@@ -1,0 +1,149 @@
+HEALTHPOCKET — WORKING WEBSITE COPY
+Draft prepared 15 September 2026. NOT READY TO PUBLISH.
+This is plain-language product copy, not a substitute for privacy/legal review.
+Publish the Privacy Notice and Beta Terms as separate pages after resolving the
+checklist below. Do not remove the draft label while items remain unresolved.
+
+OWNER CHECKLIST — COMPLETE BEFORE PUBLIC BETA
+- Insert the operator's full name, business/contact address, and effective date.
+- Confirm the purposes and appropriate grounds for each category of processing.
+- Confirm the actual beta hosting environment, service providers, international
+  data handling, safeguards, access controls, and enabled logging/analytics.
+- Set specific retention periods for accounts, invitations, simulated records,
+  support emails, technical logs, and backups; implement the deletion process.
+- Review how to handle emergency-contact information and invitations to people
+  who have not registered. Explain these practices to affected people.
+- Verify account/data requests can be handled before promising response times.
+- Confirm and approve the proposed commitments below (including no advertising
+  sale/use of data). Check the final app against this notice before publication.
+- Review this draft against applicable requirements with qualified assistance.
+- Provide the final website URLs to connect the app; no website links exist yet.
+
+PART A — PRIVACY NOTICE (DRAFT)
+
+Who we are
+HealthPocket is operated by [OPERATOR NAME AND ADDRESS]. For questions about
+your information, contact gethealthpocket@gmail.com.
+
+What this beta does
+This beta lets adults test account setup, savings plans, Family Pockets, and
+provider discovery. Contributions and balances are simulated: they are not
+money held for you. Demo provider listings are fictional, not confirmed partners.
+Real account information is still personal information even in a no-money beta.
+
+Information used in the app
+- Account identifiers, email, sign-in provider, and verification status.
+- Profile details you enter: name, optional phone number, birth date, gender,
+  address, state, and emergency-contact name and phone number.
+- Savings settings, simulated contributions, and notification preferences.
+- Family Pocket membership, invitations, roles, and invitation responses.
+- Information you choose to send for support or feedback.
+- Camera access only when you open the demo QR scanner. This implementation
+  reads a demo provider identifier; it does not upload camera images to our
+  backend. You can deny camera access and paste a demo code instead.
+- [CONFIRM AND DESCRIBE SERVICE LOGS, DEVICE/NETWORK DATA, AND ANY ANALYTICS.]
+
+Why we use it
+To sign you in, restore your account, show your settings and histories, manage
+Family Pocket invitations and permissions, answer support requests, and keep
+the service working safely. Notification preferences alone do not mean every
+notification channel is already available. Directory filtering currently runs
+on your device; this feature does not request GPS location.
+
+What this beta is not collecting or doing
+The beta does not need identity-document uploads, BVN/NIN verification, medical
+records, or bank credentials. Do not send those in feedback. Simulated savings
+do not trigger payments, investment purchases, insurance, or care approval.
+Proposed commitment, subject to owner confirmation: we do not sell your
+personal information or use it for targeted advertising.
+
+Sign-in and your app PIN
+Firebase Authentication handles email/password or Google sign-in. The six-digit
+HealthPocket PIN unlocks the app locally; it is not your Firebase password.
+The app stores a salted PIN verifier using device secure storage, not a
+plaintext PIN or a PIN in ordinary Firestore documents. Keep your PIN private.
+
+Who can see information
+Your private pocket is not public. Family Pocket members can see shared
+membership and contribution information; invitation access is restricted by
+role and the invited verified email. A shared pocket is not a private diary.
+Google/Firebase provides authentication and database services. Support email
+uses Gmail and your chosen email provider. People receiving your invitations
+or shared-pocket information may see the information needed for that journey.
+[CONFIRM STAFF ACCESS, OTHER PROCESSORS, PURPOSES, AND PROCESSING LOCATIONS.]
+Do not assume every service runs in the same region as the Firestore database.
+
+Other people's information
+Ask your emergency contact before entering their details. Only invite people
+you have a genuine reason to invite. The beta does not support child accounts
+or guardian-managed dependant profiles yet.
+
+Feedback and WhatsApp
+Opening the email support action creates a draft in your email app; HealthPocket
+does not send it automatically. Screenshots should hide other people's details.
+If you join the separate beta WhatsApp group, messages and account information
+may be visible to other participants according to WhatsApp settings. Do not
+post private account details there. [CONFIRM GROUP NOTICE/MODERATION PRACTICES.]
+
+Keeping and deleting information
+[INSERT APPROVED RETENTION PERIODS AND WORKING DELETION/BACKUP PROCESS.]
+Signing out or uninstalling does not itself delete server-side account data.
+Contact gethealthpocket@gmail.com to ask about access, correction, or deletion.
+Before publication, establish how requests are verified and handled, including
+shared history, necessary retained records, and backup expiry. Do not promise
+instant deletion while the workflow is unfinished.
+
+Your choices and questions
+You can edit available profile fields and preferences. You can request access,
+correction or deletion, and raise objections or other privacy requests where
+applicable. You can also contact the Nigeria Data Protection Commission:
+https://ndpc.gov.ng/
+[CONFIRM THE COMPLETE RIGHTS/COMPLAINT PROCESS AND RESPONSE PROCEDURE.]
+
+Changes
+We will update this notice when the service changes and explain material
+changes before introducing new uses of your information.
+
+PART B — NO-MONEY BETA TERMS (DRAFT)
+
+Purpose and eligibility
+This is an early test of HealthPocket for adults aged 18 or older. Features can
+be incomplete and may contain errors. Use your own account and accurate contact
+details. Keep your sign-in credentials and PIN private.
+
+No money or care entitlement
+Do not transfer money based on a beta balance or contribution record. These
+records have no cash value and do not represent a deposit, investment, insurance
+policy, or promise to pay a clinic. Demo listings do not establish partnerships.
+The directory does not book appointments or authorize treatment. The DEV QR
+journey is local role-play: requests disappear when its screen is closed,
+operator actions are simulated, and no real care or settlement is authorized.
+
+Use the app responsibly
+Do not access someone else's account, exploit the service, submit abusive
+content, or invite people without a genuine reason. Share only information
+you are entitled to share. The service is not medical advice or an emergency
+response channel; do not delay seeking care because of anything in the beta.
+
+Feedback and availability
+You can send feedback to gethealthpocket@gmail.com or the private beta group.
+Do not send secrets, bank credentials, or medical records. We may change beta
+features as we learn. If test records need resetting, explain the impact first
+and follow the published retention/privacy process rather than silently
+discarding personal information.
+
+Leaving the beta
+You can stop using the app. Contact support about account/data deletion; the
+published Privacy Notice must explain the working process before release.
+
+Questions and future versions
+Contact gethealthpocket@gmail.com. Real financial or partner-care services, if
+introduced later, need separate arrangements and updated information before
+users can use them. Nothing here removes rights that apply to users.
+
+REVIEW REFERENCES (EDITOR NOTES, NOT WEBSITE COPY)
+Nigeria Data Protection Commission: https://ndpc.gov.ng/
+Nigeria Data Protection Act resource:
+https://ndpc.gov.ng/download/nigeria-data-protection-act-2023
+These references inform the review checklist; they do not establish that this
+draft or the app complies with all requirements.

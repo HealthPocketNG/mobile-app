@@ -80,9 +80,26 @@ Production changes and real email delivery are not part of this rollout.
 - [ ] Complete the persistence-closure audit for profile edits and the general
   activity/audit feed.
 - [ ] Build the partner clinic/pharmacy directory and state-based discovery.
+- [x] Add offline demo Find care tab, repository interface, combined search/state/
+  type filters, provider details, empty/error/retry states, and demo disclaimers.
+  Verified with 50 passing Flutter tests and clean analysis on 2026-09-15.
+- [ ] Connect reviewed confirmed-provider records and directory administration;
+  do not publish fictional listings as actual partnerships.
+- [x] Draft plain-language privacy and beta terms in privacy-policy/terms.txt.
+- [ ] Resolve draft placeholders, confirm retention/deletion and data practices,
+  obtain review, publish website pages, and connect final app links.
+- [ ] Include Find care navigation, filters, details, and small-screen usability
+  in combined beta mobile testing.
 - [ ] Build partner QR scanning and the manual care-authorization lifecycle:
   requested, authorized, care approved, service completed, pending settlement,
   and settled.
+- [x] Implement DEV-only local QR/manual-code request simulation, amount review,
+  cancellation, status history, and separate operator role-play screen.
+- [ ] Implement authenticated partner/admin permissions, shared persistent care
+  requests, authoritative transitions, audit history, replay/idempotency controls,
+  denial/expiry/reversal flows and multi-device tests before external beta use.
+- [ ] Device-test scanner permissions, denial fallback, camera lifecycle, and
+  Android release packaging; iOS camera permission text is not iOS validation.
 - [ ] Build the minimum partner/admin operations surface needed to confirm care
   authorizations, record manual settlement, and reconcile pilot transactions.
 - [ ] Select the regulated savings/funds-holding partner and replace all DEV-only

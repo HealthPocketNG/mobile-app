@@ -114,3 +114,33 @@ flutterfire configure --project=healthpocket-dev-a82f3 --platforms=android --and
 
 Do not enable production providers or refresh production configuration until
 the production-auth review is approved.
+# Find care beta directory
+
+## DEV care-request simulator
+
+In the DEV app, open Find care > Try demo care request. Scan a QR encoding
+`healthpocket-demo:provider:demo-clinic`, or paste that exact text. Sample payloads
+are also available in the screen. The QR contains only a fictional provider ID;
+unknown IDs and arbitrary URLs are rejected and never opened. Enter a simulated
+amount and confirm the review. Open the DEV operator simulator to step through
+Requested > Authorized > Care approved > Service completed > Pending settlement
+> Settled. Requested items can be cancelled. Every stage remains simulated.
+
+This is local role-play, NOT a trusted partner portal: requests disappear when
+leaving the screen, do not sync between devices, and never debit/reserve balances.
+It is gated by the existing development-simulation flag. Shared persistence,
+authenticated operator permissions, authoritative audit/transition handling,
+and device camera tests remain required before the external beta care workflow.
+Rebuild the app after adding the scanner plugin; hot reload is insufficient.
+
+
+The Find care tab currently uses bundled, explicitly fictional demo providers.
+It works offline and supports name search, state/type filters, and details.
+No real addresses, phone numbers, bookings, payments, or care authorizations
+are supplied by these listings. `CareDirectoryRepository` is the extension
+point for reviewed partner data; no Firestore resources were changed for this
+slice. Real provider onboarding and administration remain in `TODO.md`.
+
+Website copy is drafted in `privacy-policy/terms.txt`. It is not publication-ready:
+resolve the owner checklist, review actual data practices, and supply the final
+Privacy and Terms URLs before connecting the app's website links.

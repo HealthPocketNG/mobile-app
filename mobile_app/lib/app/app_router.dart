@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:healthpocket/features/care/presentation/find_care_screen.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/features/auth/presentation/auth_form_screen.dart';
@@ -31,6 +32,7 @@ enum AppRoute {
   dashboard('/dashboard'),
   savings('/savings'),
   familyPocket('/family-pocket'),
+  findCare('/find-care'),
   profile('/profile');
 
   const AppRoute(this.path);
@@ -126,6 +128,9 @@ class AppRouter {
             authRepository: appState.authRepository,
             onSaveNotificationPreferences:
                 appState.updateNotificationPreferences,
+          ),
+          AppRoute.findCare => FindCareScreen(
+            demoRequestsEnabled: appState.developmentContributionsEnabled,
           ),
         },
       ),

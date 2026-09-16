@@ -24,6 +24,7 @@ class AppBottomNavigation extends StatelessWidget {
           0 => AppRoute.dashboard,
           1 => AppRoute.savings,
           2 => AppRoute.familyPocket,
+          4 => AppRoute.findCare,
           _ => AppRoute.profile,
         };
         Navigator.pushReplacementNamed(context, route.path);
@@ -48,6 +49,11 @@ class AppBottomNavigation extends StatelessWidget {
           icon: Icon(Icons.person_outline_rounded),
           selectedIcon: Icon(Icons.person_rounded),
           label: 'Profile',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.local_hospital_outlined),
+          selectedIcon: Icon(Icons.local_hospital),
+          label: 'Find care',
         ),
       ],
     );
