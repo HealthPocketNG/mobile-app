@@ -11,12 +11,18 @@ class CareProvider {
     this.openingHours,
     this.phone,
     this.isDemo = true,
+    this.active = true,
+    this.city = 'Demo city',
+    this.mockDistanceKm = 0,
   });
   final String id, name, state;
   final CareProviderType type;
   final List<String> services;
   final String? address, openingHours, phone;
   final bool isDemo;
+  final bool active;
+  final String city;
+  final double mockDistanceKm;
 }
 
 abstract interface class CareDirectoryRepository {

@@ -1,91 +1,78 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:healthpocket/features/care/domain/demo_care_request.dart';
 import 'package:healthpocket/features/care/data/demo_care_directory_repository.dart';
+import 'package:healthpocket/features/care/domain/demo_care_request.dart';
 import 'package:healthpocket/features/care/presentation/demo_care_journey_screen.dart';
-import 'package:healthpocket/features/care/presentation/find_care_screen.dart';
 
 void main() {
-  test('QR is strictly a demo identifier, not a URL or authorization', () {
-    expect(
-      parseDemoProviderQr('healthpocket-demo:provider:demo-clinic'),
-      'demo-clinic',
-    );
+  test('amount accepts positive naira and rejects unsafe values', () {
+    expect(parseCareAmount('18.50'), 1850);
+    expect(parseCareAmount('1000000'), 100000000);
+    for (final value in ['', '0', '-1', '1e3', 'NaN', '1.001', '1000000.01']) {
+      expect(parseCareAmount(value), isNull);
+    }
+  });
+
+  test('QR resolves only stable HealthPocket provider IDs', () {
+    expect(parseDemoProviderQr('hp://provider/demo_clinic_001'),
+        'demo_clinic_001');
     for (final raw in [
       'https://example.com',
-      'healthpocket-demo:provider:demo-clinic?amount=1',
+      'hp://provider/demo_clinic_001?amount=1',
+      'hp://provider/Demo Clinic',
       '',
-      'healthpocket-demo:provider:demo-clinic\n',
     ]) {
       expect(parseDemoProviderQr(raw), isNull);
     }
   });
-  test('amount parsing uses integer kobo and enforces limits', () {
-    expect(parseCareAmount('18.50'), 1850);
-    expect(parseCareAmount('0.01'), 1);
-    expect(parseCareAmount('1000000'), 100000000);
-    for (final value in ['0', '-1', '1e3', 'NaN', '1.001', '1000000.01']) {
-      expect(parseCareAmount(value), isNull);
-    }
-  });
-  test('lifecycle rejects stale transitions and terminal changes', () {
-    final request = DemoCareRequest(
-      id: 'test',
-      providerName: 'Demo',
-      amountKobo: 100,
-    );
-    request.advance(CareRequestStatus.requested);
-    expect(
-      () => request.advance(CareRequestStatus.requested),
-      throwsStateError,
-    );
-    expect(request.cancel, throwsStateError);
-    while (request.status != CareRequestStatus.settled) {
-      request.advance(request.status);
-    }
-    expect(request.events.length, 6);
-    expect(() => request.advance(CareRequestStatus.settled), throwsStateError);
-    final cancelled = DemoCareRequest(
-      id: 'cancel',
-      providerName: 'Demo',
-      amountKobo: 100,
-    );
-    cancelled.cancel();
-    expect(
-      () => cancelled.advance(CareRequestStatus.cancelled),
-      throwsStateError,
-    );
-  });
-  testWidgets('manual QR review creates a request and operator advances it', (
-    tester,
-  ) async {
+
+  test('matching, mismatch, unknown, inactive and repeat resolution are safe',
+      () async {
     final providers = await const DemoCareDirectoryRepository().getProviders();
-    await tester.pumpWidget(
-      MaterialApp(home: DemoCareJourneyScreen(providers: providers)),
-    );
-    await tester.enterText(
-      find.byType(TextField).first,
-      'healthpocket-demo:provider:demo-clinic',
-    );
-    await tester.tap(find.text('Check code'));
-    await tester.pump();
-    await tester.enterText(find.byType(TextField).last, '18500');
-    await tester.ensureVisible(find.text('Review request'));
-    await tester.tap(find.text('Review request'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Create simulation'));
-    await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Open DEV operator simulator'));
-      await tester.pumpAndSettle();
-    await tester.tap(find.text('Open DEV operator simulator'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Simulate: Authorized'));
-    await tester.pump();
-    expect(find.text('SIMULATED Authorized'), findsOneWidget);
+    DemoAuthorizationSession session(String id) => DemoAuthorizationSession(
+          providers: providers,
+          selectedProviderId: id,
+          amountKobo: 1850000,
+        );
+    final matching = session('demo_clinic_001');
+    final result = matching.resolve('hp://provider/demo_clinic_001');
+    expect(result.status, DemoAuthorizationStatus.created);
+    expect(result.reference, startsWith('DEMO-'));
+    expect(identical(result, matching.resolve('hp://provider/demo_clinic_001')),
+        isTrue);
+
+    expect(session('demo_clinic_001').resolve('hp://provider/demo_pharmacy_001').message,
+        contains('mismatch'));
+    expect(session('demo_clinic_001').resolve('invalid').status,
+        DemoAuthorizationStatus.rejected);
+    expect(session('demo_clinic_001').resolve('hp://provider/wrong_partner_999').message,
+        contains('not found'));
+    expect(session('demo_clinic_002').resolve('hp://provider/demo_clinic_002').message,
+        contains('inactive'));
   });
-  testWidgets('simulator entry is hidden by default', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: FindCareScreen()));
+
+  testWidgets('selected provider and amount are confirmed before demo result',
+      (tester) async {
+    final providers = await const DemoCareDirectoryRepository().getProviders();
+    await tester.pumpWidget(MaterialApp(
+      home: DemoCareJourneyScreen(
+        providers: providers,
+        selectedProviderId: 'demo_clinic_001',
+      ),
+    ));
+    await tester.enterText(find.byType(TextField), '18500');
+    await tester.tap(find.text('Confirm amount and continue to scan'));
+    await tester.pump();
+    expect(find.text('Amount: ₦18500.00'), findsOneWidget);
+    expect(find.text('Demo Community Clinic'), findsOneWidget);
+    await tester.enterText(
+      find.byType(TextField),
+      'hp://provider/demo_clinic_001',
+    );
+    await tester.ensureVisible(find.text('Resolve demo QR'));
+    await tester.tap(find.text('Resolve demo QR'));
     await tester.pumpAndSettle();
-    expect(find.text('Try demo care request'), findsNothing);
+    expect(find.text('Demo authorization created'), findsOneWidget);
+    expect(find.textContaining('No payment was processed'), findsOneWidget);
   });
 }

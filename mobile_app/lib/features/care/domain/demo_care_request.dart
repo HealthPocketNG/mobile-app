@@ -1,66 +1,82 @@
-enum CareRequestStatus {
-  requested,
-  authorized,
-  careApproved,
-  serviceCompleted,
-  pendingSettlement,
-  settled,
-  cancelled,
-}
+import 'dart:math';
 
-extension CareStatusLabel on CareRequestStatus {
-  String get label => switch (this) {
-    CareRequestStatus.requested => 'Requested',
-    CareRequestStatus.authorized => 'Authorized',
-    CareRequestStatus.careApproved => 'Care approved',
-    CareRequestStatus.serviceCompleted => 'Service completed',
-    CareRequestStatus.pendingSettlement => 'Pending settlement',
-    CareRequestStatus.settled => 'Settled',
-    CareRequestStatus.cancelled => 'Cancelled',
-  };
-}
+import 'package:healthpocket/features/care/domain/care_provider.dart';
 
-String? parseDemoProviderQr(String raw) {
-  // A QR is a provider identifier only, never an executable URL or authorization.
-  if (!RegExp(r'^healthpocket-demo:provider:demo-[a-z]+$').hasMatch(raw)) {
-    return null;
-  }
-  return raw.substring('healthpocket-demo:provider:'.length);
-}
+enum DemoAuthorizationStatus { created, rejected, cancelled, expired }
 
 int? parseCareAmount(String raw) {
   if (!RegExp(r'^\d{1,7}(\.\d{1,2})?$').hasMatch(raw.trim())) return null;
   final parts = raw.trim().split('.');
-  final kobo =
-      int.parse(parts[0]) * 100 +
+  final kobo = int.parse(parts[0]) * 100 +
       (parts.length == 2 ? int.parse(parts[1].padRight(2, '0')) : 0);
   return kobo > 0 && kobo <= 100000000 ? kobo : null;
 }
 
-class DemoCareRequest {
-  DemoCareRequest({
-    required this.id,
-    required this.providerName,
+String? parseDemoProviderQr(String raw) {
+  final match = RegExp(r'^hp://provider/([a-z0-9_]+)$').firstMatch(raw);
+  return match != null && match.end == raw.length ? match.group(1) : null;
+}
+
+class DemoAuthorizationResult {
+  const DemoAuthorizationResult(this.status, this.message, {this.reference});
+  final DemoAuthorizationStatus status;
+  final String message;
+  final String? reference;
+}
+
+/// Temporary design state only. It never touches savings or contribution data.
+class DemoAuthorizationSession {
+  DemoAuthorizationSession({
+    required List<CareProvider> providers,
+    required this.selectedProviderId,
     required this.amountKobo,
-  });
-  final String id, providerName;
-  final int amountKobo;
-  CareRequestStatus get status => _events.last.$1;
-  final List<(CareRequestStatus, DateTime)> _events = [
-    (CareRequestStatus.requested, DateTime.now()),
-  ];
-  List<(CareRequestStatus, DateTime)> get events => List.unmodifiable(_events);
-  void advance(CareRequestStatus expected) {
-    if (status != expected || status.index >= CareRequestStatus.settled.index) {
-      throw StateError('Invalid or stale transition');
+  }) : providers = List.unmodifiable(providers) {
+    if (amountKobo <= 0 || amountKobo > 100000000) {
+      throw ArgumentError('Invalid amount');
     }
-    _events.add((CareRequestStatus.values[status.index + 1], DateTime.now()));
+    selectedProvider;
   }
 
-  void cancel() {
-    if (status != CareRequestStatus.requested) {
-      throw StateError('Only pending requests can be cancelled');
+  final List<CareProvider> providers;
+  final String selectedProviderId;
+  final int amountKobo;
+  DemoAuthorizationResult? _result;
+  DemoAuthorizationResult? get result => _result;
+  CareProvider get selectedProvider => providers.firstWhere(
+        (provider) => provider.id == selectedProviderId && provider.isDemo,
+      );
+
+  DemoAuthorizationResult resolve(String raw) {
+    if (_result != null) return _result!;
+    final scannedId = parseDemoProviderQr(raw);
+    final scanned = providers
+        .where((provider) => provider.id == scannedId && provider.isDemo)
+        .firstOrNull;
+    String? rejection;
+    if (scannedId == null) {
+      rejection = 'This is not a valid HealthPocket demo QR code.';
+    } else if (scanned == null) {
+      rejection = 'This provider was not found in the demo directory.';
+    } else if (!scanned.active || !selectedProvider.active) {
+      rejection = 'This demo provider is inactive. Choose an active centre.';
+    } else if (scannedId != selectedProviderId) {
+      rejection =
+          'QR code mismatch. This code belongs to another HealthPocket partner.';
     }
-    _events.add((CareRequestStatus.cancelled, DateTime.now()));
+    return _result = rejection != null
+        ? DemoAuthorizationResult(DemoAuthorizationStatus.rejected, rejection)
+        : DemoAuthorizationResult(
+            DemoAuthorizationStatus.created,
+            'Demo authorization created',
+            reference: 'DEMO-${List.generate(8, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join()}',
+          );
   }
+
+  DemoAuthorizationResult cancel() => _result ??=
+      const DemoAuthorizationResult(
+        DemoAuthorizationStatus.cancelled,
+        'Demo scan cancelled. No authorization was created.',
+      );
+
+  void clear() => _result = null;
 }

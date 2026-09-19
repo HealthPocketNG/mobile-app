@@ -116,8 +116,8 @@ Do not transfer money based on a beta balance or contribution record. These
 records have no cash value and do not represent a deposit, investment, insurance
 policy, or promise to pay a clinic. Demo listings do not establish partnerships.
 The directory does not book appointments or authorize treatment. The DEV QR
-journey is local role-play: requests disappear when its screen is closed,
-operator actions are simulated, and no real care or settlement is authorized.
+journey creates one temporary on-screen demo result; it is cleared when the flow
+is left, is not a financial record, and authorizes no real care or settlement.
 
 Use the app responsibly
 Do not access someone else's account, exploit the service, submit abusive

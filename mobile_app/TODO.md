@@ -93,11 +93,14 @@ Production changes and real email delivery are not part of this rollout.
 - [ ] Build partner QR scanning and the manual care-authorization lifecycle:
   requested, authorized, care approved, service completed, pending settlement,
   and settled.
-- [x] Implement DEV-only local QR/manual-code request simulation, amount review,
-  cancellation, status history, and separate operator role-play screen.
-- [ ] Implement authenticated partner/admin permissions, shared persistent care
-  requests, authoritative transitions, audit history, replay/idempotency controls,
-  denial/expiry/reversal flows and multi-device tests before external beta use.
+- [x] Implement the bounded DEV design flow: provider-first selection, amount
+  confirmation, camera/mock scanning, strict stable-ID matching, clear rejection,
+  one in-memory demo authorization result, and duplicate-confirmation prevention.
+- [x] Remove settlement-style states and operator controls from the design beta.
+- [x] Verify the bounded Find Care/QR slice with 9 focused tests and the full
+  56-test Flutter suite (2026-09-19).
+- [ ] Design the future provider-neutral backend separately after partnerships;
+  the current beta must not persist authorization/payment/settlement records.
 - [ ] Device-test scanner permissions, denial fallback, camera lifecycle, and
   Android release packaging; iOS camera permission text is not iOS validation.
 - [ ] Build the minimum partner/admin operations surface needed to confirm care

@@ -4,6 +4,8 @@ import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/features/care/data/demo_care_directory_repository.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 
+enum DemoLocationStatus { notRequested, granted, denied, unavailable }
+
 class FindCareScreen extends StatefulWidget {
   const FindCareScreen({
     super.key,
@@ -23,6 +25,7 @@ class _FindCareScreenState extends State<FindCareScreen> {
   CareProviderType? _type;
   bool _loading = true;
   bool _failed = false;
+  DemoLocationStatus _locationStatus = DemoLocationStatus.notRequested;
   @override
   void initState() {
     super.initState();
@@ -69,6 +72,9 @@ class _FindCareScreenState extends State<FindCareScreen> {
       state: _state,
       type: _type,
     );
+    if (_locationStatus == DemoLocationStatus.granted) {
+      results.sort((a, b) => a.mockDistanceKm.compareTo(b.mockDistanceKm));
+    }
     final states = _providers.map((p) => p.state).toSet().toList()..sort();
     return Scaffold(
       appBar: AppBar(title: const Text('Find care')),
@@ -83,18 +89,11 @@ class _FindCareScreenState extends State<FindCareScreen> {
               'Demo directory — available offline. These fictional listings are for testing only, not confirmed partners. Do not travel to or request care from these listings.',
             ),
             const SizedBox(height: 16),
-            if (widget.demoRequestsEnabled && !_loading && !_failed)
-              OutlinedButton.icon(
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Try demo care request'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        DemoCareJourneyScreen(providers: _providers),
-                  ),
-                ),
-              ),
+            _LocationStatusCard(
+              status: _locationStatus,
+              onChanged: (status) =>
+                  setState(() => _locationStatus = status),
+            ),
             TextField(
               controller: _search,
               decoration: const InputDecoration(
@@ -145,8 +144,10 @@ class _FindCareScreenState extends State<FindCareScreen> {
             ] else ...[
               Text('${results.length} providers'),
               if (results.isEmpty) ...[
-                const Text(
-                  'No providers match your search. Try another state or provider type.',
+                Text(
+                  _providers.isEmpty
+                      ? 'No demo partner centres are available right now.'
+                      : 'No providers match your search. Try another state or provider type.',
                 ),
                 TextButton(
                   onPressed: () => setState(() {
@@ -161,14 +162,21 @@ class _FindCareScreenState extends State<FindCareScreen> {
                 (provider) => Card(
                   child: ListTile(
                     title: Text(provider.name),
-                    subtitle: Text(
-                      '${provider.state} • ${_typeLabel(provider.type)}${provider.isDemo ? ' • Demo' : ''}',
-                    ),
+                    subtitle: Text('${provider.city}, ${provider.state} • '
+                        '${_typeLabel(provider.type)} • '
+                        '${provider.services.first} • '
+                        '${provider.active ? 'Active beta partner' : 'Inactive'}'
+                        '${_locationStatus == DemoLocationStatus.granted ? ' • ${provider.mockDistanceKm <= 25 ? 'Nearby' : 'Farther away'} • ${provider.mockDistanceKm.toStringAsFixed(1)} km' : ''}'
+                        '${provider.isDemo ? ' • Demo beta' : ''}'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute<void>(
-                        builder: (_) => _ProviderDetails(provider: provider),
+                        builder: (_) => _ProviderDetails(
+                          provider: provider,
+                          providers: _providers,
+                          demoRequestsEnabled: widget.demoRequestsEnabled,
+                        ),
                       ),
                     ),
                   ),
@@ -189,8 +197,14 @@ String _typeLabel(CareProviderType type) => switch (type) {
 };
 
 class _ProviderDetails extends StatelessWidget {
-  const _ProviderDetails({required this.provider});
+  const _ProviderDetails({
+    required this.provider,
+    required this.providers,
+    required this.demoRequestsEnabled,
+  });
   final CareProvider provider;
+  final List<CareProvider> providers;
+  final bool demoRequestsEnabled;
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Provider details')),
@@ -201,10 +215,11 @@ class _ProviderDetails extends StatelessWidget {
         const SizedBox(height: 16),
         if (provider.isDemo)
           const Text(
-            'Fictional demo provider. No booking, payment, or care authorization is available. This is not evidence of a partnership.',
+            'Fictional demo provider. No booking, payment, or real care authorization is available. This is not evidence of a partnership.',
           ),
         const SizedBox(height: 16),
-        Text('${_typeLabel(provider.type)} • ${provider.state}'),
+        Text('${_typeLabel(provider.type)} • ${provider.city}, ${provider.state}'),
+        Text('Operating status: ${provider.active ? 'Active beta partner' : 'Inactive'}'),
         const SizedBox(height: 16),
         Text('Address: ${provider.address ?? 'Not provided — demo listing'}'),
         Text('Opening hours: ${provider.openingHours ?? 'Not provided'}'),
@@ -217,7 +232,69 @@ class _ProviderDetails extends StatelessWidget {
             child: Text(service),
           ),
         ),
+        const SizedBox(height: 24),
+        if (demoRequestsEnabled && provider.active)
+          FilledButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => DemoCareJourneyScreen(
+                  providers: providers,
+                  selectedProviderId: provider.id,
+                ),
+              ),
+            ),
+            child: Text('Pay ${provider.name} — demo authorization'),
+          ),
+        if (!provider.active)
+          const Text('This demo provider is inactive, so authorization is unavailable.'),
       ],
     ),
   );
+}
+
+class _LocationStatusCard extends StatelessWidget {
+  const _LocationStatusCard({required this.status, required this.onChanged});
+  final DemoLocationStatus status;
+  final ValueChanged<DemoLocationStatus> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(switch (status) {
+                DemoLocationStatus.notRequested =>
+                  'Location has not been requested. Choose a demo state below.',
+                DemoLocationStatus.granted =>
+                  'Demo location enabled. Distances use mock coordinates; precise location is not collected or saved.',
+                DemoLocationStatus.denied =>
+                  'Location permission denied. Search and state filters still work.',
+                DemoLocationStatus.unavailable =>
+                  'Location is unavailable. Search and state filters still work.',
+              }),
+              if (status == DemoLocationStatus.notRequested)
+                FilledButton(
+                  onPressed: () => onChanged(DemoLocationStatus.granted),
+                  child: const Text('Use mock location'),
+                ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: () => onChanged(DemoLocationStatus.denied),
+                    child: const Text('Simulate denied'),
+                  ),
+                  TextButton(
+                    onPressed: () => onChanged(DemoLocationStatus.unavailable),
+                    child: const Text('Simulate unavailable'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
 }

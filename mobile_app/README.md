@@ -118,19 +118,15 @@ the production-auth review is approved.
 
 ## DEV care-request simulator
 
-In the DEV app, open Find care > Try demo care request. Scan a QR encoding
-`healthpocket-demo:provider:demo-clinic`, or paste that exact text. Sample payloads
-are also available in the screen. The QR contains only a fictional provider ID;
-unknown IDs and arbitrary URLs are rejected and never opened. Enter a simulated
-amount and confirm the review. Open the DEV operator simulator to step through
-Requested > Authorized > Care approved > Service completed > Pending settlement
-> Settled. Requested items can be cancelled. Every stage remains simulated.
+In the DEV app, open Find care, select an active demo centre, then tap its
+demo-authorization action. Confirm an amount and scan a mock QR such as
+`hp://provider/demo_clinic_001`. The QR contains only a stable fictional provider
+ID. Unknown, inactive, malformed, and mismatched providers are rejected.
 
-This is local role-play, NOT a trusted partner portal: requests disappear when
-leaving the screen, do not sync between devices, and never debit/reserve balances.
-It is gated by the existing development-simulation flag. Shared persistence,
-authenticated operator permissions, authoritative audit/transition handling,
-and device camera tests remain required before the external beta care workflow.
+This is temporary in-memory design state, not a partner portal. It does not sync,
+persist, debit/reserve balances, write contributions, or expose settlement
+controls. It is gated by the existing development-simulation flag. Device camera
+tests remain required before the external beta build.
 Rebuild the app after adding the scanner plugin; hot reload is insufficient.
 
 
