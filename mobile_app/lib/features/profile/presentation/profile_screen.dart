@@ -332,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          bottomNavigationBar: const AppBottomNavigation(currentIndex: 3),
+          bottomNavigationBar: const AppBottomNavigation(currentIndex: 4),
         );
       },
     );

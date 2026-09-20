@@ -69,7 +69,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Health savings balance'), findsOneWidget);
+    expect(find.text('Total Savings'), findsOneWidget);
     expect(find.text('₦0'), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);
 
@@ -77,7 +77,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Family Pocket'), findsOneWidget);
-    expect(find.text('Recent activity'), findsOneWidget);
+    expect(find.text('Recent Activity'), findsOneWidget);
   });
 
   testWidgets('pulling down refreshes dashboard data', (tester) async {

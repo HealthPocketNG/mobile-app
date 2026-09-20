@@ -78,7 +78,7 @@ class _FindCareScreenState extends State<FindCareScreen> {
     final states = _providers.map((p) => p.state).toSet().toList()..sort();
     return Scaffold(
       appBar: AppBar(title: const Text('Find care')),
-      bottomNavigationBar: const AppBottomNavigation(currentIndex: 4),
+      bottomNavigationBar: const AppBottomNavigation(currentIndex: 3),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(

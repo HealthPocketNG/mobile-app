@@ -5,6 +5,7 @@ import 'package:healthpocket/features/family/application/family_pocket_store.dar
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({required this.currentIndex, super.key});
@@ -13,49 +14,77 @@ class AppBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: currentIndex,
+    return NavigationBarTheme(
+      data: NavigationBarThemeData(
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primary
+                : AppColors.inkMuted,
+          ),
+        ),
+      ),
+      child: NavigationBar(
+        selectedIndex: currentIndex,
       height: 72,
       backgroundColor: AppColors.surface,
-      indicatorColor: AppColors.primarySoft,
+      indicatorColor: Colors.transparent,
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (states) => TextStyle(
+          color: states.contains(WidgetState.selected)
+              ? AppColors.primary
+              : AppColors.inkMuted,
+          fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected)
+              ? FontWeight.w700
+              : FontWeight.w500,
+        ),
+      ),
       onDestinationSelected: (index) {
         if (index == currentIndex) return;
         final route = switch (index) {
           0 => AppRoute.dashboard,
           1 => AppRoute.savings,
-          2 => AppRoute.familyPocket,
-          4 => AppRoute.findCare,
-          _ => AppRoute.profile,
+          3 => AppRoute.findCare,
+          4 => AppRoute.profile,
+          _ => null,
         };
+        if (route == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Pay will be available soon.')),
+          );
+          return;
+        }
         Navigator.pushReplacementNamed(context, route.path);
       },
-      destinations: const [
+        destinations: const [
         NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
+          icon: Icon(LucideIcons.house),
+          selectedIcon: Icon(LucideIcons.house),
           label: 'Home',
         ),
         NavigationDestination(
-          icon: Icon(Icons.savings_outlined),
-          selectedIcon: Icon(Icons.savings_rounded),
+          icon: Icon(LucideIcons.piggyBank),
+          selectedIcon: Icon(LucideIcons.piggyBank),
           label: 'Savings',
         ),
         NavigationDestination(
-          icon: _FamilyInviteIcon(icon: Icons.groups_2_outlined),
-          selectedIcon: _FamilyInviteIcon(icon: Icons.groups_2_rounded),
-          label: 'Family',
+          icon: Icon(LucideIcons.scanQrCode),
+          selectedIcon: Icon(LucideIcons.scanQrCode),
+          label: 'Pay',
         ),
         NavigationDestination(
-          icon: Icon(Icons.person_outline_rounded),
-          selectedIcon: Icon(Icons.person_rounded),
-          label: 'Profile',
+          icon: Icon(LucideIcons.mapPin),
+          selectedIcon: Icon(LucideIcons.mapPin),
+          label: 'Care',
         ),
         NavigationDestination(
-          icon: Icon(Icons.local_hospital_outlined),
-          selectedIcon: Icon(Icons.local_hospital),
-          label: 'Find care',
+          icon: Icon(LucideIcons.menu),
+          selectedIcon: Icon(LucideIcons.menu),
+          label: 'More',
         ),
-      ],
+        ],
+      ),
     );
   }
 }

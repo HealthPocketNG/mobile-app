@@ -426,7 +426,7 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                     ],
                   ),
                 ),
-          bottomNavigationBar: const AppBottomNavigation(currentIndex: 2),
+          bottomNavigationBar: const AppBottomNavigation(currentIndex: 4),
         );
       },
     );

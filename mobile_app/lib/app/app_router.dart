@@ -10,6 +10,7 @@ import 'package:healthpocket/features/auth/presentation/pin_recovery_screen.dart
 import 'package:healthpocket/features/auth/presentation/splash_screen.dart';
 import 'package:healthpocket/features/auth/presentation/welcome_screen.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:healthpocket/features/activity/presentation/activity_screen.dart';
 import 'package:healthpocket/features/family/presentation/family_pocket_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/savings_plan_setup_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/personal_information_screen.dart';
@@ -30,6 +31,7 @@ enum AppRoute {
   personalInformation('/onboarding/personal-information'),
   savingsPlanSetup('/onboarding/savings-plan'),
   dashboard('/dashboard'),
+  activity('/activity'),
   savings('/savings'),
   familyPocket('/family-pocket'),
   findCare('/find-care'),
@@ -93,6 +95,9 @@ class AppRouter {
                 appState.developmentContributionsEnabled,
             onRetryContributions: appState.retryContributionLoad,
             onRefresh: appState.refreshDashboard,
+          ),
+          AppRoute.activity => ActivityScreen(
+            savingsStore: appState.savingsStore,
           ),
           AppRoute.savings => SavingsScreen(
             store: appState.savingsStore,
