@@ -79,8 +79,8 @@ class AppBottomNavigation extends StatelessWidget {
           label: 'Care',
         ),
         NavigationDestination(
-          icon: Icon(LucideIcons.menu),
-          selectedIcon: Icon(LucideIcons.menu),
+          icon: _FamilyInviteIcon(icon: LucideIcons.menu),
+          selectedIcon: _FamilyInviteIcon(icon: LucideIcons.menu),
           label: 'More',
         ),
         ],

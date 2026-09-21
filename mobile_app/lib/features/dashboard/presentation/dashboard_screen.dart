@@ -8,6 +8,7 @@ import 'package:healthpocket/features/dashboard/presentation/coverage_details_sc
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
@@ -87,15 +88,17 @@ class _DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12 ? 'Good morning,' : hour < 17 ? 'Good afternoon,' : 'Good evening,';
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(greeting, style: const TextStyle(color: AppColors.inkMuted, fontSize: 16)),
+        Text(
+          'Greetings ${_firstName(profileStore.profile.fullName)},',
+          style: const TextStyle(color: AppColors.inkMuted, fontSize: 16),
+        ),
         const SizedBox(height: 2),
         Text(
-          _firstName(profileStore.profile.fullName),
+          'There’s a healthier\ntomorrow ahead.',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontSize: 20,
             fontWeight: FontWeight.w800,
             height: 1.12,
           ),
@@ -103,7 +106,11 @@ class _DashboardHeader extends StatelessWidget {
       ])),
       IconButton(
         onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You have no new notifications.'))),
-        icon: const Icon(LucideIcons.bell, size: 27),
+        icon: const Badge(
+          smallSize: 8,
+          backgroundColor: AppColors.secondary,
+          child: Icon(LucideIcons.bell, size: 27),
+        ),
         tooltip: 'Notifications',
       ),
       const SizedBox(width: 8),
@@ -144,10 +151,29 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
             boxShadow: const [BoxShadow(color: Color(0x2B007A76), blurRadius: 18, offset: Offset(0, 8))],
           ),
           child: Stack(children: [
-            const Positioned(
-              right: -92,
-              top: -62,
-              child: Opacity(opacity: .14, child: _HealthPocketShield()),
+            Positioned(
+              right: -26,
+              top: -66,
+              child: Container(
+                width: 126,
+                height: 126,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white.withValues(alpha: .10), width: 20),
+                ),
+              ),
+            ),
+            Positioned(
+              right: -2,
+              top: -32,
+              child: Container(
+                width: 74,
+                height: 74,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: .07),
+                ),
+              ),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(mainAxisSize: MainAxisSize.min, children: [
@@ -188,24 +214,17 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
   }
 }
 
-class _HealthPocketShield extends StatelessWidget {
-  const _HealthPocketShield();
-
-  @override
-  Widget build(BuildContext context) => Image.asset(
-    'assets/dashboard/dashboard-shield.png',
-    width: 188,
-    height: 188,
-    fit: BoxFit.contain,
-  );
-}
-
 class _CoveragePanel extends StatelessWidget {
   const _CoveragePanel({required this.balanceKobo});
   final int balanceKobo;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final eligibleGuides = eligibleDashboardCoverageForBalance(balanceKobo);
+    final message = balanceKobo <= 0
+        ? 'Start saving to see the care your balance can cover.'
+        : 'You’re close! Continue saving to see the care your balance can cover.';
+    return Container(
     padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
     decoration: BoxDecoration(color: const Color(0xFFE7FAF8), borderRadius: BorderRadius.circular(16)),
     child: Column(children: [
@@ -220,20 +239,27 @@ class _CoveragePanel extends StatelessWidget {
         ),
       ]),
       const SizedBox(height: 8),
-      SizedBox(
-        height: 112,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: dashboardCoverageGuides.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 10),
-          itemBuilder: (context, index) => _CoverageTile(
-            guide: dashboardCoverageGuides[index],
-            balanceKobo: balanceKobo,
+      if (eligibleGuides.isEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
+          child: Text(message, style: const TextStyle(color: AppColors.inkMuted, fontSize: 13)),
+        )
+      else
+        SizedBox(
+          height: 112,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: eligibleGuides.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) => _CoverageTile(
+              guide: eligibleGuides[index],
+              balanceKobo: balanceKobo,
+            ),
           ),
         ),
-      ),
     ]),
   );
+  }
 }
 
 class _CoverageTile extends StatelessWidget {
@@ -245,7 +271,7 @@ class _CoverageTile extends StatelessWidget {
     width: 154, height: 112, padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Image.asset(guide.asset, width: 46, height: 46, fit: BoxFit.contain),
+      SvgPicture.asset(guide.asset, width: 46, height: 46, fit: BoxFit.contain),
       const SizedBox(height: 3),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(guide.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, height: 1.05)),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/features/dashboard/domain/coverage_guide.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class CoverageDetailsScreen extends StatelessWidget {
   const CoverageDetailsScreen({required this.balanceKobo, super.key});
@@ -18,10 +19,22 @@ class CoverageDetailsScreen extends StatelessWidget {
           style: TextStyle(color: AppColors.inkMuted),
         ),
         const SizedBox(height: 24),
-        GridView.builder(
+        if (eligibleDashboardCoverageForBalance(balanceKobo).isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 48),
+            child: Text(
+              balanceKobo <= 0
+                  ? 'Start saving to see the care your balance can cover.'
+                  : 'You’re close! Continue saving to see the care your balance can cover.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.inkMuted),
+            ),
+          )
+        else
+          GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: dashboardCoverageGuides.length,
+          itemCount: eligibleDashboardCoverageForBalance(balanceKobo).length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             mainAxisSpacing: 12,
@@ -29,7 +42,7 @@ class CoverageDetailsScreen extends StatelessWidget {
             childAspectRatio: .86,
           ),
           itemBuilder: (context, index) => _CoverageDetailCard(
-            guide: dashboardCoverageGuides[index],
+            guide: eligibleDashboardCoverageForBalance(balanceKobo)[index],
             balanceKobo: balanceKobo,
           ),
         ),
@@ -54,7 +67,7 @@ class _CoverageDetailCard extends StatelessWidget {
         border: Border.all(color: AppColors.outline),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Image.asset(guide.asset, height: 74, width: double.infinity, fit: BoxFit.contain),
+        SvgPicture.asset(guide.asset, height: 74, width: double.infinity, fit: BoxFit.contain),
         const Spacer(),
         Text(guide.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 2),

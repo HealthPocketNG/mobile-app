@@ -15,6 +15,7 @@ import 'package:healthpocket/features/profile/presentation/profile_screen.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 import 'package:healthpocket/features/savings/presentation/savings_screen.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
   testWidgets('shows the HealthPocket launch screen', (tester) async {
@@ -168,15 +169,10 @@ void main() {
     await tester.tap(find.text('Edit savings plan'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Edit savings plan'), findsOneWidget);
-    expect(
-      tester
-          .widget<DropdownButtonFormField<SavingsFrequency>>(
-            find.byType(DropdownButtonFormField<SavingsFrequency>),
-          )
-          .initialValue,
-      SavingsFrequency.weekly,
-    );
+    expect(find.text('Set Your Savings Plan'), findsOneWidget);
+    expect(find.text('Weekly'), findsOneWidget);
+    expect(find.text('₦5,000'), findsWidgets);
+    expect(find.byIcon(LucideIcons.circleDot), findsOneWidget);
   });
 
   testWidgets('production UI exposes no simulated contribution action', (
