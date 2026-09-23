@@ -272,6 +272,9 @@ void main() {
       MaterialApp(home: FamilyPocketScreen(store: store)),
     );
 
+    await tester.tap(find.text('Adebayo Family Care'));
+    await tester.pumpAndSettle();
+
     final removeButton = find.byKey(const ValueKey('remove-member-grace'));
     await tester.scrollUntilVisible(
       removeButton,

@@ -136,6 +136,7 @@ class AppRouter {
           ),
           AppRoute.findCare => FindCareScreen(
             demoRequestsEnabled: appState.developmentContributionsEnabled,
+            savingsStore: appState.savingsStore,
           ),
         },
       ),

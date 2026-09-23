@@ -25,7 +25,7 @@ void main() {
   test('directory combines name, state and type filters', () async {
     final providers = await const DemoCareDirectoryRepository().getProviders();
     expect(
-      providers.every((p) => p.isDemo && p.phone == null && p.address == null),
+      providers.every((p) => p.isDemo && p.phone == null),
       isTrue,
     );
     expect(
@@ -73,20 +73,24 @@ void main() {
       const MaterialApp(home: FindCareScreen(demoRequestsEnabled: true)),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('Location has not been requested'), findsOneWidget);
+    expect(find.text('Use mock location'), findsOneWidget);
     await tester.tap(find.text('Use mock location'));
     await tester.pump();
     expect(find.textContaining('Demo location enabled'), findsOneWidget);
     expect(find.textContaining('2.4 km'), findsOneWidget);
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Simulate denied'));
     await tester.pump();
     expect(find.textContaining('permission denied'), findsOneWidget);
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Simulate unavailable'));
     await tester.pump();
     expect(find.textContaining('Location is unavailable'), findsOneWidget);
     await tester.tap(find.text('Demo Community Clinic'));
     await tester.pumpAndSettle();
-    expect(find.text('Pay Demo Community Clinic — demo authorization'),
+    expect(find.text('Pay Demo Community Clinic  →'),
         findsOneWidget);
   });
   testWidgets('failed load can be retried', (tester) async {

@@ -49,6 +49,23 @@ class FamilyPocketStore extends ChangeNotifier {
       )
       .fold(0, (total, contribution) => total + contribution.amountKobo);
 
+  int balanceForPocketKobo(String pocketId) => _contributions
+      .where(
+        (contribution) =>
+            contribution.familyPocketId == pocketId &&
+            contribution.status == ContributionStatus.recorded &&
+            contribution.origin == ContributionOrigin.devSimulation &&
+            !contribution.moneyMovement &&
+            contribution.currency == 'NGN' &&
+            contribution.amountKobo > 0,
+      )
+      .fold(0, (total, contribution) => total + contribution.amountKobo);
+
+  int get totalBalanceKobo => _pockets.fold(
+    0,
+    (total, pocket) => total + balanceForPocketKobo(pocket.id),
+  );
+
   FamilyPocketLoadStatus get loadStatus => _loadStatus;
   Object? get loadError => _loadError;
 

@@ -7,6 +7,7 @@ import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 typedef CreateFamilyPocket = Future<void> Function({required String name});
 typedef InviteFamilyMember = Future<void> Function({
@@ -50,6 +51,8 @@ class FamilyPocketScreen extends StatefulWidget {
 
 class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
   bool _submitting = false;
+  bool _showInvites = false;
+  bool _showPocketDetails = false;
 
   FamilyPocketStore get store => widget.store;
 
@@ -122,6 +125,9 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
         );
       }
     }, successMessage: 'Invitation recorded');
+    if (mounted) {
+      setState(() => _showPocketDetails = true);
+    }
   }
 
   Future<void> _recordContribution(BuildContext context) async {
@@ -269,6 +275,88 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                       AppSpacing.xl,
                     ),
                     children: [
+                      if (!_showPocketDetails) ...[
+                      Row(children: [
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('Family Pocket', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                          const Text('Save together. Go further.', style: TextStyle(color: AppColors.inkMuted)),
+                        ])),
+                        TextButton(
+                          onPressed: store.canManageMembers && !_submitting ? () => _inviteMember(context) : null,
+                          child: const Text('Invite'),
+                        ),
+                        Material(color: AppColors.primarySoft, shape: const CircleBorder(), child: IconButton(onPressed: () => _createPocket(context), icon: const Icon(LucideIcons.plus, color: AppColors.primary))),
+                      ]),
+                      const SizedBox(height: AppSpacing.md),
+                      if (!widget.developmentContributionsEnabled)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Text(
+                            'Shared funding is not enabled',
+                            style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
+                          ),
+                        ),
+                      _FamilySummaryCard(totalBalanceKobo: store.totalBalanceKobo, pocketCount: store.pockets.length),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(children: [
+                        _PocketTab(label: 'My Pockets', selected: !_showInvites, onTap: () => setState(() => _showInvites = false)),
+                        const SizedBox(width: AppSpacing.lg),
+                        _PocketTab(label: 'Invites', selected: _showInvites, onTap: () => setState(() => _showInvites = true)),
+                      ]),
+                      const SizedBox(height: AppSpacing.md),
+                      if (_showInvites) ...[
+                        if (store.receivedInvitations.isEmpty)
+                          const _NoPendingInvites()
+                        else
+                          ...store.receivedInvitations.map((invitation) => _ReceivedInvitationCard(invitation: invitation, submitting: _submitting, onAccept: () => _respondToInvitation(context, invitation, accept: true), onDecline: () => _respondToInvitation(context, invitation, accept: false))),
+                        const SizedBox(height: AppSpacing.lg),
+                      ] else ...[
+                        SizedBox(
+                          height: 154,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: store.pockets.length,
+                            separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+                            itemBuilder: (context, index) {
+                              final item = store.pockets[index];
+                              return SizedBox(
+                                width: 252,
+                                child: _PocketOverviewCard(
+                                  pocket: item,
+                                  balanceKobo: store.balanceForPocketKobo(item.id),
+                                  selected: item.id == pocket.id,
+                                  onTap: () {
+                                    store.selectPocket(item.id);
+                                    setState(() => _showPocketDetails = true);
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        _StartPocketCard(onTap: () => _createPocket(context)),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                      ],
+                      if (_showPocketDetails) ...[
+                        Row(
+                          children: [
+                            IconButton(
+                              tooltip: 'Back to pockets',
+                              onPressed: () => setState(() => _showPocketDetails = false),
+                              icon: const Icon(LucideIcons.arrowLeft),
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Expanded(
+                              child: Text(
+                                pocket.name,
+                                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
                       if (store.receivedInvitations.isNotEmpty) ...[
                         const _SectionHeader(title: 'Pending invitations'),
                         const SizedBox(height: AppSpacing.sm),
@@ -423,6 +511,7 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                         ...store.selectedContributions.map(
                           (item) => _FamilyContributionTile(contribution: item),
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -431,6 +520,79 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
       },
     );
   }
+}
+
+class _FamilySummaryCard extends StatelessWidget {
+  const _FamilySummaryCard({required this.totalBalanceKobo, required this.pocketCount});
+  final int totalBalanceKobo;
+  final int pocketCount;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF09A99F), AppColors.primaryDark]), borderRadius: BorderRadius.circular(20)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Total Family Savings', style: TextStyle(color: Colors.white70)),
+      const SizedBox(height: 5),
+      Text(_formatKobo(totalBalanceKobo), style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 3),
+      Text('Across $pocketCount ${pocketCount == 1 ? 'pocket' : 'pockets'}', style: const TextStyle(color: Colors.white70)),
+    ]),
+  );
+}
+
+class _PocketTab extends StatelessWidget {
+  const _PocketTab({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => InkWell(onTap: onTap, child: Padding(padding: const EdgeInsets.only(bottom: 8), child: Column(mainAxisSize: MainAxisSize.min, children: [
+    Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: selected ? AppColors.primary : AppColors.inkMuted)),
+    const SizedBox(height: 6),
+    Container(height: 2, width: 72, color: selected ? AppColors.primary : Colors.transparent),
+  ])));
+}
+
+class _PocketOverviewCard extends StatelessWidget {
+  const _PocketOverviewCard({required this.pocket, required this.balanceKobo, required this.selected, required this.onTap});
+  final FamilyPocket pocket;
+  final int balanceKobo;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    child: Material(color: AppColors.surface, borderRadius: BorderRadius.circular(16), child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(16), child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [
+      const CircleAvatar(radius: 24, backgroundColor: AppColors.primarySoft, child: Icon(LucideIcons.usersRound, color: AppColors.primary)),
+      const SizedBox(width: 12),
+      Expanded(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(pocket.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+        Text('${pocket.members.length} ${pocket.members.length == 1 ? 'member' : 'members'}', style: const TextStyle(color: AppColors.inkMuted, fontSize: 12)),
+      ])),
+      Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Text(_formatKobo(balanceKobo), style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Icon(LucideIcons.chevronRight, color: selected ? AppColors.primary : AppColors.inkMuted, size: 18),
+      ]),
+    ])))),
+  );
+}
+
+class _StartPocketCard extends StatelessWidget {
+  const _StartPocketCard({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Material(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16), child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(16), child: const Padding(padding: EdgeInsets.all(16), child: Row(children: [
+    CircleAvatar(backgroundColor: Colors.white, child: Icon(LucideIcons.plus, color: AppColors.primary)),
+    SizedBox(width: 12),
+    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Start a new Pocket', style: TextStyle(fontWeight: FontWeight.w800)), Text('Create a pocket for your family, friends or loved ones.', style: TextStyle(color: AppColors.inkMuted, fontSize: 12))])),
+  ]))));
+}
+
+class _NoPendingInvites extends StatelessWidget {
+  const _NoPendingInvites();
+  @override
+  Widget build(BuildContext context) => const Padding(padding: EdgeInsets.symmetric(vertical: 28), child: Center(child: Text('No pending invites', style: TextStyle(color: AppColors.inkMuted))));
 }
 
 class _EmptyPocketView extends StatelessWidget {

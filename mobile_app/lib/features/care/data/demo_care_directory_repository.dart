@@ -11,7 +11,10 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       name: 'Demo Community Clinic',
       state: 'Lagos',
       type: CareProviderType.clinic,
-      services: ['Example consultations', 'Example check-ups'],
+      address: 'Abraka Road, Delta State',
+      closingTime: '8:00 PM',
+      description: 'A fictional neighbourhood clinic for beta experience testing.',
+      services: ['Consultation', 'Health & Wellness'],
     ),
     CareProvider(
       id: 'demo_pharmacy_001',
@@ -20,7 +23,10 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       name: 'Demo Neighbourhood Pharmacy',
       state: 'Lagos',
       type: CareProviderType.pharmacy,
-      services: ['Example prescription support'],
+      address: 'Oghaire Street, Abraka, Delta State',
+      closingTime: '8:00 PM',
+      description: 'A fictional local pharmacy listing for beta experience testing.',
+      services: ['Prescription Drugs', 'OTC Medicines', 'Health & Wellness'],
     ),
     CareProvider(
       id: 'demo_hospital_001',
@@ -29,6 +35,7 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       name: 'Demo Health Hospital',
       state: 'Rivers',
       type: CareProviderType.hospital,
+      isPartner: false,
       services: ['Example outpatient care'],
     ),
     CareProvider(

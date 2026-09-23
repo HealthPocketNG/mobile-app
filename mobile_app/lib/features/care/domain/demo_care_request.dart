@@ -14,7 +14,18 @@ int? parseCareAmount(String raw) {
 
 String? parseDemoProviderQr(String raw) {
   final match = RegExp(r'^hp://provider/([a-z0-9_]+)$').firstMatch(raw);
-  return match != null && match.end == raw.length ? match.group(1) : null;
+  if (match != null && match.end == raw.length) return match.group(1);
+  final uri = Uri.tryParse(raw);
+  if (uri == null ||
+      uri.scheme != 'healthpocket' ||
+      uri.host != 'pay' ||
+      uri.queryParameters.length != 1) {
+    return null;
+  }
+  final providerId = uri.queryParameters['providerId'];
+  return providerId != null && RegExp(r'^[a-z0-9_]+$').hasMatch(providerId)
+      ? providerId
+      : null;
 }
 
 class DemoAuthorizationResult {
@@ -59,6 +70,8 @@ class DemoAuthorizationSession {
       rejection = 'This provider was not found in the demo directory.';
     } else if (!scanned.active || !selectedProvider.active) {
       rejection = 'This demo provider is inactive. Choose an active centre.';
+    } else if (!scanned.isPartner || !selectedProvider.isPartner) {
+      rejection = 'This QR is not linked to a valid HealthPocket partner.';
     } else if (scannedId != selectedProviderId) {
       rejection =
           'QR code mismatch. This code belongs to another HealthPocket partner.';
