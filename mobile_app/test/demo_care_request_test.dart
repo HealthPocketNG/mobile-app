@@ -14,8 +14,10 @@ void main() {
   });
 
   test('QR resolves only stable HealthPocket provider IDs', () {
-    expect(parseDemoProviderQr('hp://provider/demo_clinic_001'),
-        'demo_clinic_001');
+    expect(
+      parseDemoProviderQr('hp://provider/demo_clinic_001'),
+      'demo_clinic_001',
+    );
     for (final raw in [
       'https://example.com',
       'hp://provider/demo_clinic_001?amount=1',
@@ -26,40 +28,62 @@ void main() {
     }
   });
 
-  test('matching, mismatch, unknown, inactive and repeat resolution are safe',
-      () async {
-    final providers = await const DemoCareDirectoryRepository().getProviders();
-    DemoAuthorizationSession session(String id) => DemoAuthorizationSession(
-          providers: providers,
-          selectedProviderId: id,
-          amountKobo: 1850000,
-        );
-    final matching = session('demo_clinic_001');
-    final result = matching.resolve('hp://provider/demo_clinic_001');
-    expect(result.status, DemoAuthorizationStatus.created);
-    expect(result.reference, startsWith('DEMO-'));
-    expect(identical(result, matching.resolve('hp://provider/demo_clinic_001')),
-        isTrue);
-
-    expect(session('demo_clinic_001').resolve('hp://provider/demo_pharmacy_001').message,
-        contains('mismatch'));
-    expect(session('demo_clinic_001').resolve('invalid').status,
-        DemoAuthorizationStatus.rejected);
-    expect(session('demo_clinic_001').resolve('hp://provider/wrong_partner_999').message,
-        contains('not found'));
-    expect(session('demo_clinic_002').resolve('hp://provider/demo_clinic_002').message,
-        contains('inactive'));
-  });
-
-  testWidgets('selected provider and amount are confirmed before demo result',
-      (tester) async {
-    final providers = await const DemoCareDirectoryRepository().getProviders();
-    await tester.pumpWidget(MaterialApp(
-      home: DemoCareJourneyScreen(
+  test(
+    'matching, mismatch, unknown, inactive and repeat resolution are safe',
+    () async {
+      final providers = await const DemoCareDirectoryRepository()
+          .getProviders();
+      DemoAuthorizationSession session(String id) => DemoAuthorizationSession(
         providers: providers,
-        selectedProviderId: 'demo_clinic_001',
+        selectedProviderId: id,
+        amountKobo: 1850000,
+      );
+      final matching = session('demo_clinic_001');
+      final result = matching.resolve('hp://provider/demo_clinic_001');
+      expect(result.status, DemoAuthorizationStatus.created);
+      expect(result.reference, startsWith('DEMO-'));
+      expect(
+        identical(result, matching.resolve('hp://provider/demo_clinic_001')),
+        isTrue,
+      );
+
+      expect(
+        session('demo_clinic_001')
+            .resolve('hp://provider/demo_pharmacy_001')
+            .message,
+        contains('mismatch'),
+      );
+      expect(
+        session('demo_clinic_001').resolve('invalid').status,
+        DemoAuthorizationStatus.rejected,
+      );
+      expect(
+        session('demo_clinic_001')
+            .resolve('hp://provider/wrong_partner_999')
+            .message,
+        contains('not found'),
+      );
+      expect(
+        session('demo_clinic_002')
+            .resolve('hp://provider/demo_clinic_002')
+            .message,
+        contains('inactive'),
+      );
+    },
+  );
+
+  testWidgets('selected provider and amount are confirmed before demo result', (
+    tester,
+  ) async {
+    final providers = await const DemoCareDirectoryRepository().getProviders();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DemoCareJourneyScreen(
+          providers: providers,
+          selectedProviderId: 'demo_clinic_001',
+        ),
       ),
-    ));
+    );
     await tester.enterText(find.byType(TextField), '18500');
     await tester.tap(find.text('Confirm amount and continue to scan'));
     await tester.pump();
@@ -71,6 +95,9 @@ void main() {
     );
     await tester.ensureVisible(find.text('Resolve demo QR'));
     await tester.tap(find.text('Resolve demo QR'));
+    await tester.pumpAndSettle();
+    expect(find.text('Confirm Payment'), findsWidgets);
+    await tester.tap(find.text('Confirm Payment  →'));
     await tester.pumpAndSettle();
     expect(find.text('Demo authorization created'), findsOneWidget);
     expect(find.textContaining('No payment was processed'), findsOneWidget);

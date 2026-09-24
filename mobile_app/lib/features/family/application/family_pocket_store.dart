@@ -23,6 +23,8 @@ class FamilyPocketStore extends ChangeNotifier {
   List<FamilyPocket> get pockets => List.unmodifiable(_pockets);
   List<FamilyInvitation> get receivedInvitations =>
       List.unmodifiable(_receivedInvitations);
+  List<ContributionRecord> get contributions =>
+      List.unmodifiable(_contributions);
   FamilyPocket? get selectedPocket {
     final pocketId = _selectedPocketId;
     if (pocketId == null) return null;

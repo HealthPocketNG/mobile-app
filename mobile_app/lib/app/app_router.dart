@@ -98,6 +98,7 @@ class AppRouter {
           ),
           AppRoute.activity => ActivityScreen(
             savingsStore: appState.savingsStore,
+            familyStore: appState.familyPocketStore,
           ),
           AppRoute.savings => SavingsScreen(
             store: appState.savingsStore,

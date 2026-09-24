@@ -26,63 +26,59 @@ class AppBottomNavigation extends StatelessWidget {
       ),
       child: NavigationBar(
         selectedIndex: currentIndex,
-      height: 72,
-      backgroundColor: AppColors.surface,
-      indicatorColor: Colors.transparent,
-      labelTextStyle: WidgetStateProperty.resolveWith(
-        (states) => TextStyle(
-          color: states.contains(WidgetState.selected)
-              ? AppColors.primary
-              : AppColors.inkMuted,
-          fontSize: 12,
-          fontWeight: states.contains(WidgetState.selected)
-              ? FontWeight.w700
-              : FontWeight.w500,
+        height: 72,
+        backgroundColor: AppColors.surface,
+        indicatorColor: Colors.transparent,
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primary
+                : AppColors.inkMuted,
+            fontSize: 12,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w700
+                : FontWeight.w500,
+          ),
         ),
-      ),
-      onDestinationSelected: (index) {
-        if (index == currentIndex) return;
-        final route = switch (index) {
-          0 => AppRoute.dashboard,
-          1 => AppRoute.savings,
-          3 => AppRoute.findCare,
-          4 => AppRoute.profile,
-          _ => null,
-        };
-        if (route == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Pay will be available soon.')),
-          );
-          return;
-        }
-        Navigator.pushReplacementNamed(context, route.path);
-      },
+        onDestinationSelected: (index) {
+          if (index == currentIndex) return;
+          final route = switch (index) {
+            0 => AppRoute.dashboard,
+            1 => AppRoute.savings,
+            2 => AppRoute.findCare,
+            3 => AppRoute.findCare,
+            4 => AppRoute.profile,
+            _ => null,
+          };
+          if (route == null) return;
+          Navigator.pushReplacementNamed(context, route.path);
+        },
         destinations: const [
-        NavigationDestination(
-          icon: Icon(LucideIcons.house),
-          selectedIcon: Icon(LucideIcons.house),
-          label: 'Home',
-        ),
-        NavigationDestination(
-          icon: Icon(LucideIcons.piggyBank),
-          selectedIcon: Icon(LucideIcons.piggyBank),
-          label: 'Savings',
-        ),
-        NavigationDestination(
-          icon: Icon(LucideIcons.scanQrCode),
-          selectedIcon: Icon(LucideIcons.scanQrCode),
-          label: 'Pay',
-        ),
-        NavigationDestination(
-          icon: Icon(LucideIcons.mapPin),
-          selectedIcon: Icon(LucideIcons.mapPin),
-          label: 'Care',
-        ),
-        NavigationDestination(
-          icon: _FamilyInviteIcon(icon: LucideIcons.menu),
-          selectedIcon: _FamilyInviteIcon(icon: LucideIcons.menu),
-          label: 'More',
-        ),
+          NavigationDestination(
+            icon: Icon(LucideIcons.house),
+            selectedIcon: Icon(LucideIcons.house),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(LucideIcons.piggyBank),
+            selectedIcon: Icon(LucideIcons.piggyBank),
+            label: 'Savings',
+          ),
+          NavigationDestination(
+            icon: Icon(LucideIcons.scanQrCode),
+            selectedIcon: Icon(LucideIcons.scanQrCode),
+            label: 'Pay',
+          ),
+          NavigationDestination(
+            icon: Icon(LucideIcons.mapPin),
+            selectedIcon: Icon(LucideIcons.mapPin),
+            label: 'Care',
+          ),
+          NavigationDestination(
+            icon: _FamilyInviteIcon(icon: LucideIcons.menu),
+            selectedIcon: _FamilyInviteIcon(icon: LucideIcons.menu),
+            label: 'More',
+          ),
         ],
       ),
     );

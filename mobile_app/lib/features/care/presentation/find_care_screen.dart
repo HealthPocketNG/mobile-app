@@ -74,7 +74,7 @@ class _FindCareScreenState extends State<FindCareScreen> {
             else if (_failed) _Feedback(icon: LucideIcons.wifiOff, message: 'Could not load the directory. Please try again.', action: 'Retry', onTap: _load)
             else if (results.isEmpty) _Feedback(icon: LucideIcons.mapPinOff, message: _providers.isEmpty ? 'No demo partner centres are available right now.' : 'No providers match your search. Try another filter.', action: 'Clear filters', onTap: _clearFilters)
             else ...[
-              Text(results.length.toString() + ' providers', style: const TextStyle(color: AppColors.inkMuted, fontSize: 12)),
+              Text('${results.length} providers', style: const TextStyle(color: AppColors.inkMuted, fontSize: 12)),
               const SizedBox(height: AppSpacing.sm),
               const _Heading('Nearby HealthPocket Partners'),
               const SizedBox(height: AppSpacing.sm),
@@ -164,7 +164,7 @@ class _ProviderTile extends StatelessWidget {
       _Logo(provider: provider), const SizedBox(width: 12),
       Expanded(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(provider.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-        Text(_typeName(provider.type) + (showDistance ? ' · ' + provider.mockDistanceKm.toStringAsFixed(1) + ' km' : ''), style: const TextStyle(color: AppColors.inkMuted, fontSize: 12)),
+        Text('${_typeName(provider.type)}${showDistance ? ' · ${provider.mockDistanceKm.toStringAsFixed(1)} km' : ''}', style: const TextStyle(color: AppColors.inkMuted, fontSize: 12)),
         const SizedBox(height: 5),
         Row(children: [_OpenPill(open: provider.isOpen && provider.active), if (provider.isPartner) ...[const SizedBox(width: 6), const _Badge()]]),
       ])),
@@ -201,12 +201,12 @@ class _ProviderDetails extends StatelessWidget {
         _Logo(provider: provider, large: true), const SizedBox(width: AppSpacing.md),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(provider.name, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-          Text(_typeName(provider.type) + ' · ' + provider.city, style: const TextStyle(color: AppColors.inkMuted)),
+          Text('${_typeName(provider.type)} · ${provider.city}', style: const TextStyle(color: AppColors.inkMuted)),
           if (provider.isPartner) const Padding(padding: EdgeInsets.only(top: 6), child: _Badge()),
         ])),
       ]),
       const SizedBox(height: AppSpacing.md),
-      Text((provider.isOpen && provider.active ? 'Open' : 'Closed') + (provider.closingTime == null ? '' : ' · Closes ' + provider.closingTime!), style: TextStyle(color: provider.isOpen && provider.active ? AppColors.success : AppColors.secondary, fontWeight: FontWeight.w700)),
+      Text('${provider.isOpen && provider.active ? 'Open' : 'Closed'}${provider.closingTime == null ? '' : ' · Closes ${provider.closingTime}'}', style: TextStyle(color: provider.isOpen && provider.active ? AppColors.success : AppColors.secondary, fontWeight: FontWeight.w700)),
       const SizedBox(height: AppSpacing.md),
       const Row(children: [Expanded(child: _Action(icon: LucideIcons.phone, label: 'Call')), SizedBox(width: 8), Expanded(child: _Action(icon: LucideIcons.navigation, label: 'Directions')), SizedBox(width: 8), Expanded(child: _Action(icon: LucideIcons.heart, label: 'Save'))]),
       const SizedBox(height: AppSpacing.lg),
@@ -216,9 +216,9 @@ class _ProviderDetails extends StatelessWidget {
       const SizedBox(height: AppSpacing.lg), const _Heading('Services'), const SizedBox(height: AppSpacing.sm),
       Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.sm, children: provider.services.map((item) => Chip(label: Text(item), backgroundColor: AppColors.surfaceMuted, side: BorderSide.none, labelStyle: const TextStyle(fontSize: 12))).toList()),
       const SizedBox(height: AppSpacing.lg),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(LucideIcons.mapPin, color: AppColors.primary, size: 20), const SizedBox(width: AppSpacing.sm), Expanded(child: Text(provider.address ?? provider.city + ', ' + provider.state, style: const TextStyle(color: AppColors.inkMuted)))]),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(LucideIcons.mapPin, color: AppColors.primary, size: 20), const SizedBox(width: AppSpacing.sm), Expanded(child: Text(provider.address ?? '${provider.city}, ${provider.state}', style: const TextStyle(color: AppColors.inkMuted)))]),
     ])),
-    Padding(padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md), child: AppPrimaryButton(label: 'Pay ' + provider.name + '  →', onPressed: enabled && provider.active && provider.isPartner ? () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => DemoCareJourneyScreen(providers: providers, selectedProviderId: provider.id, savingsStore: savingsStore))) : null)),
+    Padding(padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md), child: AppPrimaryButton(label: 'Pay ${provider.name}  →', onPressed: enabled && provider.active && provider.isPartner ? () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => DemoCareJourneyScreen(providers: providers, selectedProviderId: provider.id, savingsStore: savingsStore))) : null)),
   ])));
 }
 class _RoundButton extends StatelessWidget { const _RoundButton({required this.icon, this.onTap}); final IconData icon; final VoidCallback? onTap; @override Widget build(BuildContext context) => Material(color: Colors.white, shape: const CircleBorder(), child: IconButton(onPressed: onTap, icon: Icon(icon, size: 20, color: AppColors.ink))); }

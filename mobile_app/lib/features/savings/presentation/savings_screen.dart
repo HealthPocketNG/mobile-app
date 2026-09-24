@@ -8,6 +8,8 @@ import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/features/activity/domain/unified_activity_ledger.dart';
+import 'package:healthpocket/features/activity/presentation/activity_screen.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
@@ -144,10 +146,8 @@ class SavingsScreen extends StatelessWidget {
       if (!context.mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => _MoneyAddedSuccessScreen(
-            amountNaira: amountNaira,
-            store: store,
-          ),
+          builder: (_) =>
+              _MoneyAddedSuccessScreen(amountNaira: amountNaira, store: store),
         ),
       );
     } catch (error, stackTrace) {
@@ -191,7 +191,11 @@ class SavingsScreen extends StatelessWidget {
                 tooltip: 'Savings history',
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => _SavingsHistoryScreen(store: store),
+                    builder: (_) => ActivityScreen(
+                      savingsStore: store,
+                      initialFilter: ActivityCategory.savings,
+                      showBackButton: true,
+                    ),
                   ),
                 ),
               ),
@@ -233,7 +237,11 @@ class SavingsScreen extends StatelessWidget {
               TextButton.icon(
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => _SavingsHistoryScreen(store: store),
+                    builder: (_) => ActivityScreen(
+                      savingsStore: store,
+                      initialFilter: ActivityCategory.savings,
+                      showBackButton: true,
+                    ),
                   ),
                 ),
                 icon: const Icon(LucideIcons.arrowRight, size: 18),
@@ -260,16 +268,33 @@ class _SavingsSummary extends StatelessWidget {
       height: 132,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF08A69B), AppColors.primaryDark]),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF08A69B), AppColors.primaryDark],
+        ),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Total Savings', style: TextStyle(color: Colors.white, fontSize: 14)),
-        const SizedBox(height: 4),
-        Text(_formatKobo(balanceKobo), style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
-        const Spacer(),
-        const Text('Keep going 💪', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Total Savings',
+            style: TextStyle(color: Colors.white, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _formatKobo(balanceKobo),
+            style: Theme.of(context).textTheme.headlineMedium
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          const Spacer(),
+          const Text(
+            'Keep going 💪',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -511,28 +536,39 @@ class _PlanFormSheetState extends State<_PlanFormSheet> {
               style: TextStyle(color: AppColors.inkMuted),
             ),
             const SizedBox(height: AppSpacing.lg),
-            ...SavingsFrequency.values.map((frequency) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _PlanFrequencyTile(
-                frequency: frequency,
-                amount: int.tryParse(_amountController.text) ?? 500,
-                selected: _frequency == frequency,
-                onTap: () => setState(() => _frequency = frequency),
+            ...SavingsFrequency.values.map(
+              (frequency) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _PlanFrequencyTile(
+                  frequency: frequency,
+                  amount: int.tryParse(_amountController.text) ?? 500,
+                  selected: _frequency == frequency,
+                  onTap: () => setState(() => _frequency = frequency),
+                ),
               ),
-            )),
+            ),
             const SizedBox(height: AppSpacing.sm),
-            const Text('Custom Amount', style: TextStyle(fontWeight: FontWeight.w800)),
+            const Text(
+              'Custom Amount',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: AppSpacing.sm),
             TextFormField(
               controller: _amountController,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(prefixText: '₦ ', hintText: '500'),
+              decoration: const InputDecoration(
+                prefixText: '₦ ',
+                hintText: '500',
+              ),
               validator: _amountValidator,
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 4),
-            const Text('You can increase this amount anytime.', style: TextStyle(color: AppColors.inkMuted, fontSize: 12)),
+            const Text(
+              'You can increase this amount anytime.',
+              style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
+            ),
             const SizedBox(height: AppSpacing.sm),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -555,7 +591,12 @@ class _PlanFormSheetState extends State<_PlanFormSheet> {
 }
 
 class _PlanFrequencyTile extends StatelessWidget {
-  const _PlanFrequencyTile({required this.frequency, required this.amount, required this.selected, required this.onTap});
+  const _PlanFrequencyTile({
+    required this.frequency,
+    required this.amount,
+    required this.selected,
+    required this.onTap,
+  });
   final SavingsFrequency frequency;
   final int amount;
   final bool selected;
@@ -570,15 +611,40 @@ class _PlanFrequencyTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: selected ? AppColors.primary : AppColors.outline)),
-        child: Row(children: [
-          Icon(frequency == SavingsFrequency.daily ? LucideIcons.sun : frequency == SavingsFrequency.weekly ? LucideIcons.calendarDays : LucideIcons.calendarRange, color: selected ? AppColors.primary : AppColors.inkMuted),
-          const SizedBox(width: 14),
-          Expanded(child: Text(frequency.label, style: const TextStyle(fontWeight: FontWeight.w700))),
-          Text(_formatNaira(amount), style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(width: 8),
-          Icon(selected ? LucideIcons.circleDot : LucideIcons.circle, color: selected ? AppColors.primary : AppColors.inkMuted),
-        ]),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.outline,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              frequency == SavingsFrequency.daily
+                  ? LucideIcons.sun
+                  : frequency == SavingsFrequency.weekly
+                  ? LucideIcons.calendarDays
+                  : LucideIcons.calendarRange,
+              color: selected ? AppColors.primary : AppColors.inkMuted,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                frequency.label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Text(
+              _formatNaira(amount),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              selected ? LucideIcons.circleDot : LucideIcons.circle,
+              color: selected ? AppColors.primary : AppColors.inkMuted,
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -629,21 +695,47 @@ class _ContributionSheetState extends State<_ContributionSheet> {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               childAspectRatio: 1.8,
-              children: [500, 1000, 2000, 5000, 10000].map((amount) => _AmountPreset(
-                amount: amount,
-                selected: _selectedAmount == amount,
-                onTap: () => setState(() { _selectedAmount = amount; _amountController.text = amount.toString(); }),
-              )).toList()..add(_AmountPreset(label: 'Other', selected: _selectedAmount == null, onTap: () => setState(() => _selectedAmount = null))),
+              children:
+                  [500, 1000, 2000, 5000, 10000]
+                      .map(
+                        (amount) => _AmountPreset(
+                          amount: amount,
+                          selected: _selectedAmount == amount,
+                          onTap: () => setState(() {
+                            _selectedAmount = amount;
+                            _amountController.text = amount.toString();
+                          }),
+                        ),
+                      )
+                      .toList()
+                    ..add(
+                      _AmountPreset(
+                        label: 'Other',
+                        selected: _selectedAmount == null,
+                        onTap: () => setState(() => _selectedAmount = null),
+                      ),
+                    ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w800)),
+            const Text(
+              'Payment Method',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: AppSpacing.sm),
             const ListTile(
               contentPadding: EdgeInsets.symmetric(horizontal: 12),
               tileColor: AppColors.surfaceMuted,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-              leading: CircleAvatar(backgroundColor: AppColors.primarySoft, child: Icon(LucideIcons.landmark, color: AppColors.primary)),
-              title: Text('Pay with Bank', style: TextStyle(fontWeight: FontWeight.w700)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(14)),
+              ),
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primarySoft,
+                child: Icon(LucideIcons.landmark, color: AppColors.primary),
+              ),
+              title: Text(
+                'Pay with Bank',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
               subtitle: Text('Secure payment via your bank app'),
               trailing: Icon(LucideIcons.chevronRight),
             ),
@@ -676,7 +768,12 @@ class _ContributionSheetState extends State<_ContributionSheet> {
 }
 
 class _AmountPreset extends StatelessWidget {
-  const _AmountPreset({this.amount, this.label, required this.selected, required this.onTap});
+  const _AmountPreset({
+    this.amount,
+    this.label,
+    required this.selected,
+    required this.onTap,
+  });
   final int? amount;
   final String? label;
   final bool selected;
@@ -690,45 +787,137 @@ class _AmountPreset extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         alignment: Alignment.center,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: selected ? AppColors.primary : Colors.transparent)),
-        child: Text(label ?? _formatNaira(amount!), style: TextStyle(fontWeight: FontWeight.w800, color: selected ? AppColors.primaryDark : AppColors.primary)),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? AppColors.primary : Colors.transparent,
+          ),
+        ),
+        child: Text(
+          label ?? _formatNaira(amount!),
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: selected ? AppColors.primaryDark : AppColors.primary,
+          ),
+        ),
       ),
     ),
   );
 }
 
 class _MoneyAddedSuccessScreen extends StatelessWidget {
-  const _MoneyAddedSuccessScreen({required this.amountNaira, required this.store});
+  const _MoneyAddedSuccessScreen({
+    required this.amountNaira,
+    required this.store,
+  });
   final int amountNaira;
   final SavingsStore store;
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(child: SingleChildScrollView(child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(children: [
-        Align(alignment: Alignment.topLeft, child: IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(LucideIcons.x))),
-        const SizedBox(height: 18),
-        const CircleAvatar(radius: 48, backgroundColor: AppColors.primary, child: Icon(LucideIcons.check, color: Colors.white, size: 50)),
-        const SizedBox(height: 24),
-        Text('Money Added!', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        Text(_formatNaira(amountNaira), style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        Text('${_formatNaira(amountNaira)} has been added to your HealthPocket savings.', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.inkMuted)),
-        const SizedBox(height: 4),
-        const Text('Development record — no money moved.', style: TextStyle(color: AppColors.inkMuted, fontSize: 12)),
-        const SizedBox(height: 24),
-        Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('New Balance', style: TextStyle(color: AppColors.inkMuted)),
-          Text(_formatKobo(store.developmentBalanceKobo), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.primaryDark)),
-        ])),
-        const SizedBox(height: 14),
-        const ListTile(leading: CircleAvatar(backgroundColor: Color(0xFFFFEEF1), child: Text('🔥')), title: Text('You’re doing great!', style: TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('Every contribution brings you closer to a healthier tomorrow.')),
-        const SizedBox(height: 24),
-        SizedBox(width: double.infinity, child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Back to Savings'))),
-        TextButton(onPressed: () => Navigator.pushReplacementNamed(context, AppRoute.activity.path), child: const Text('View Activity')),
-      ]),
-    ))),
+    body: SafeArea(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(LucideIcons.x),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const CircleAvatar(
+                radius: 48,
+                backgroundColor: AppColors.primary,
+                child: Icon(LucideIcons.check, color: Colors.white, size: 50),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Money Added!',
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _formatNaira(amountNaira),
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${_formatNaira(amountNaira)} has been added to your HealthPocket savings.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.inkMuted),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Development record — no money moved.',
+                style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'New Balance',
+                      style: TextStyle(color: AppColors.inkMuted),
+                    ),
+                    Text(
+                      _formatKobo(store.developmentBalanceKobo),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              const ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Color(0xFFFFEEF1),
+                  child: Text('🔥'),
+                ),
+                title: Text(
+                  'You’re doing great!',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(
+                  'Every contribution brings you closer to a healthier tomorrow.',
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Back to Savings'),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pushReplacementNamed(
+                  context,
+                  AppRoute.activity.path,
+                ),
+                child: const Text('View Activity'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -756,40 +945,75 @@ class _SavingsHistoryScreenState extends State<_SavingsHistoryScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
             children: [
-              Row(children: [
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(LucideIcons.chevronLeft)),
-                const SizedBox(width: 4),
-                Expanded(child: Text('Savings History', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800))),
-                IconButton(
-                  tooltip: 'Download statement',
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Statements will be available soon.'))),
-                  icon: const Icon(LucideIcons.download, color: AppColors.primaryDark),
-                ),
-              ]),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(LucideIcons.chevronLeft),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Savings History',
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Download statement',
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Statements will be available soon.'),
+                      ),
+                    ),
+                    icon: const Icon(
+                      LucideIcons.download,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                ],
+              ),
               const Padding(
                 padding: EdgeInsets.only(left: 52),
-                child: Text('A record of your contributions.', style: TextStyle(color: AppColors.inkMuted, fontSize: 13)),
+                child: Text(
+                  'A record of your contributions.',
+                  style: TextStyle(color: AppColors.inkMuted, fontSize: 13),
+                ),
               ),
               const SizedBox(height: 20),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: Row(children: _HistoryFilter.values.map((filter) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _HistoryFilterChip(
-                    label: _historyFilterLabel(filter),
-                    selected: _filter == filter,
-                    onTap: () => setState(() => _filter = filter),
-                  ),
-                )).toList()),
+                child: Row(
+                  children: _HistoryFilter.values
+                      .map(
+                        (filter) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _HistoryFilterChip(
+                            label: _historyFilterLabel(filter),
+                            selected: _filter == filter,
+                            onTap: () => setState(() => _filter = filter),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
               ),
               const SizedBox(height: 22),
               if (records.isEmpty)
                 const _EmptyHistory()
               else
                 for (final group in groups.entries) ...[
-                  Text(group.key, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                  Text(
+                    group.key,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  ...group.value.map((record) => _SavingsHistoryTile(record: record)),
+                  ...group.value.map(
+                    (record) => _SavingsHistoryTile(record: record),
+                  ),
                   const SizedBox(height: 18),
                 ],
             ],
@@ -799,14 +1023,19 @@ class _SavingsHistoryScreenState extends State<_SavingsHistoryScreen> {
     ),
   );
 
-  List<ContributionRecord> _filteredRecords(List<ContributionRecord> records) => switch (_filter) {
-    _HistoryFilter.all || _HistoryFilter.addedMoney => records,
-    _HistoryFilter.planSavings || _HistoryFilter.failed => const [],
-  };
+  List<ContributionRecord> _filteredRecords(List<ContributionRecord> records) =>
+      switch (_filter) {
+        _HistoryFilter.all || _HistoryFilter.addedMoney => records,
+        _HistoryFilter.planSavings || _HistoryFilter.failed => const [],
+      };
 }
 
 class _HistoryFilterChip extends StatelessWidget {
-  const _HistoryFilterChip({required this.label, required this.selected, required this.onTap});
+  const _HistoryFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -819,7 +1048,14 @@ class _HistoryFilterChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-        child: Text(label, style: TextStyle(color: selected ? Colors.white : AppColors.ink, fontSize: 12, fontWeight: FontWeight.w600)),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppColors.ink,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     ),
   );
@@ -832,16 +1068,45 @@ class _SavingsHistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 12),
-    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.outline))),
-    child: Row(children: [
-      const CircleAvatar(radius: 20, backgroundColor: AppColors.primarySoft, child: Icon(LucideIcons.piggyBank, color: AppColors.primary, size: 20)),
-      const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Added Money', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-        Text(_historyDate(context, record.createdAt), style: const TextStyle(fontSize: 12, color: AppColors.inkMuted)),
-      ])),
-      Text('+${_formatKobo(record.amountKobo)}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800)),
-    ]),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.outline)),
+    ),
+    child: Row(
+      children: [
+        const CircleAvatar(
+          radius: 20,
+          backgroundColor: AppColors.primarySoft,
+          child: Icon(
+            LucideIcons.piggyBank,
+            color: AppColors.primary,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Added Money',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                _historyDate(context, record.createdAt),
+                style: const TextStyle(fontSize: 12, color: AppColors.inkMuted),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          '+${_formatKobo(record.amountKobo)}',
+          style: const TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -852,17 +1117,34 @@ String _historyFilterLabel(_HistoryFilter filter) => switch (filter) {
   _HistoryFilter.failed => 'Failed',
 };
 
-Map<String, List<ContributionRecord>> _groupByMonth(List<ContributionRecord> records) {
+Map<String, List<ContributionRecord>> _groupByMonth(
+  List<ContributionRecord> records,
+) {
   final groups = <String, List<ContributionRecord>>{};
   for (final record in records) {
     final date = record.createdAt;
-    final label = date == null ? 'Recent' : '${_monthName(date.month)} ${date.year}';
+    final label = date == null
+        ? 'Recent'
+        : '${_monthName(date.month)} ${date.year}';
     groups.putIfAbsent(label, () => []).add(record);
   }
   return groups;
 }
 
-String _monthName(int month) => const ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month - 1];
+String _monthName(int month) => const [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+][month - 1];
 
 String _historyDate(BuildContext context, DateTime? date) {
   if (date == null) return 'Development record • No money moved';
@@ -924,4 +1206,3 @@ String _formatKobo(int amountKobo) {
 
 String _shortDate(DateTime date) =>
     '${date.day} ${const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.month - 1]} ${date.year}';
-

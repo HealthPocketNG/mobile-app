@@ -10,6 +10,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 const demoCareNotice = 'Beta demonstration only — no money will move.';
 
+enum _PaymentStep { amount, scan, confirm, processing, result }
+
 class DemoCareJourneyScreen extends StatefulWidget {
   const DemoCareJourneyScreen({
     required this.providers,
@@ -31,10 +33,12 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
   DemoAuthorizationSession? _session;
   String? _error;
   bool _openingScanner = false;
+  _PaymentStep _step = _PaymentStep.amount;
+  bool _submitting = false;
 
   CareProvider get provider => widget.providers.firstWhere(
-        (item) => item.id == widget.selectedProviderId && item.isDemo,
-      );
+    (item) => item.id == widget.selectedProviderId && item.isDemo,
+  );
 
   @override
   void dispose() {
@@ -44,7 +48,28 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
     super.dispose();
   }
 
-  void _resolve(String payload) => setState(() => _session!.resolve(payload));
+  void _resolve(String payload) {
+    final result = _session!.resolve(payload);
+    setState(
+      () => _step = result.status == DemoAuthorizationStatus.created
+          ? _PaymentStep.confirm
+          : _PaymentStep.result,
+    );
+  }
+
+  Future<void> _confirmPayment() async {
+    if (_submitting || _session == null) return;
+    setState(() {
+      _submitting = true;
+      _step = _PaymentStep.processing;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      _step = _PaymentStep.result;
+    });
+  }
 
   int? get _availableBalanceKobo => widget.savingsStore?.developmentBalanceKobo;
 
@@ -54,46 +79,62 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
   Widget build(BuildContext context) {
     final session = _session;
     final result = session?.result;
+    final step = _step;
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          result != null
-              ? 'Demo result'
-              : session == null
-                  ? 'Enter amount'
-                  : 'Scan to pay — demo',
-        ),
+        title: Text(switch (step) {
+          _PaymentStep.amount => 'Enter Amount',
+          _PaymentStep.scan => 'Scan QR Code',
+          _PaymentStep.confirm => 'Confirm Payment',
+          _PaymentStep.processing => 'Processing Payment',
+          _PaymentStep.result => 'Payment Result',
+        }),
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          const Text(demoCareNotice, style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text(
+            demoCareNotice,
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: AppSpacing.md),
           Text(provider.name, style: Theme.of(context).textTheme.titleLarge),
           Text('Demo provider ID: ${provider.id}'),
           if (session != null)
             Text('Amount: ₦${(session.amountKobo / 100).toStringAsFixed(2)}'),
           const SizedBox(height: 20),
-          if (result != null) ...[
+          if (step == _PaymentStep.result && result != null) ...[
             Semantics(liveRegion: true, child: Text(result.message)),
             Text('Status: ${_statusLabel(result.status)}'),
             if (result.reference != null)
               SelectableText('Reference: ${result.reference}'),
             const SizedBox(height: 12),
-            const Text(
-              'This is a beta design flow. No payment was processed and no provider has been settled. This is not evidence of funds or permission to receive treatment.',
-            ),
+            _ResultMessage(result: result),
             AppPrimaryButton(
-              label: 'Back to centre',
+              label: result.status == DemoAuthorizationStatus.created
+                  ? 'View Receipt'
+                  : 'Back to centre',
               onPressed: () => Navigator.pop(context),
             ),
-          ] else if (session == null) ...[
-            const Text('Enter Amount', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+            if (result.status == DemoAuthorizationStatus.rejected)
+              TextButton(
+                onPressed: () => setState(() {
+                  _session?.clear();
+                  _step = _PaymentStep.scan;
+                }),
+                child: const Text('Scan Again'),
+              ),
+          ] else if (step == _PaymentStep.amount) ...[
+            const Text(
+              'Enter Amount',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+            ),
             const SizedBox(height: AppSpacing.sm),
             TextField(
               controller: _amount,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Amount (NGN)',
                 helperText: '₦0.01–₦1,000,000; up to two decimal places',
@@ -103,33 +144,41 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
-              children: [500, 1000, 2000, 5000, 10000]
-                  .map(
-                    (amount) => _AmountPreset(
-                      label: _formatKobo(amount * 100),
-                      onTap: () => setState(() => _amount.text = amount.toString()),
-                    ),
-                  )
-                  .toList()
-                ..add(const _AmountPreset(label: 'Other')),
+              children:
+                  [500, 1000, 2000, 5000, 10000]
+                      .map(
+                        (amount) => _AmountPreset(
+                          label: _formatKobo(amount * 100),
+                          onTap: () =>
+                              setState(() => _amount.text = amount.toString()),
+                        ),
+                      )
+                      .toList()
+                    ..add(const _AmountPreset(label: 'Other')),
             ),
             const SizedBox(height: AppSpacing.md),
             _BalanceCard(balanceKobo: _availableBalanceKobo),
             if (_error != null)
-              Text(_error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             AppPrimaryButton(
               label: 'Confirm amount and continue to scan',
               onPressed: () {
                 final kobo = parseCareAmount(_amount.text);
                 if (kobo == null) {
-                  setState(() => _error =
-                      'Enter a valid positive amount within the limit.');
+                  setState(
+                    () => _error =
+                        'Enter a valid positive amount within the limit.',
+                  );
                   return;
                 }
                 final available = _availableBalanceKobo;
                 if (available != null && kobo > available) {
-                  setState(() => _error = 'Your HealthPocket balance is not enough for this payment.');
+                  setState(
+                    () => _error = 'Your HealthPocket balance is not enough for this payment.',
+                  );
                   return;
                 }
                 setState(() {
@@ -139,10 +188,11 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
                     selectedProviderId: provider.id,
                     amountKobo: kobo,
                   );
+                  _step = _PaymentStep.scan;
                 });
               },
             ),
-          ] else ...[
+          ] else if (step == _PaymentStep.scan) ...[
             const Text(
               'Confirm the centre and amount above, then scan its demo QR. You can also use the mock scanner options below.',
             ),
@@ -179,8 +229,7 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
                     child: Text('Scan ${item.name}'),
                   ),
                 TextButton(
-                  onPressed: () =>
-                      _resolve('hp://provider/wrong_partner_999'),
+                  onPressed: () => _resolve('hp://provider/wrong_partner_999'),
                   child: const Text('Scan unknown provider'),
                 ),
                 TextButton(
@@ -190,9 +239,22 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
               ],
             ),
             TextButton(
-              onPressed: () => setState(() => session.cancel()),
+              onPressed: () => setState(() {
+                session!.cancel();
+                _step = _PaymentStep.result;
+              }),
               child: const Text('Cancel scan'),
             ),
+          ] else if (step == _PaymentStep.confirm) ...[
+            _ConfirmationCard(session: session!),
+            const SizedBox(height: AppSpacing.lg),
+            AppPrimaryButton(
+              label: 'Confirm Payment  →',
+              isLoading: _submitting,
+              onPressed: _submitting ? null : _confirmPayment,
+            ),
+          ] else ...[
+            const _ProcessingPaymentView(),
           ],
         ],
       ),
@@ -201,11 +263,178 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
 }
 
 String _statusLabel(DemoAuthorizationStatus status) => switch (status) {
-      DemoAuthorizationStatus.created => 'DemoAuthorizationCreated',
-      DemoAuthorizationStatus.rejected => 'DemoRejected',
-      DemoAuthorizationStatus.cancelled => 'DemoCancelled',
-      DemoAuthorizationStatus.expired => 'DemoExpired',
-    };
+  DemoAuthorizationStatus.created => 'DemoAuthorizationCreated',
+  DemoAuthorizationStatus.rejected => 'DemoRejected',
+  DemoAuthorizationStatus.cancelled => 'DemoCancelled',
+  DemoAuthorizationStatus.expired => 'DemoExpired',
+};
+
+class _ConfirmationCard extends StatelessWidget {
+  const _ConfirmationCard({required this.session});
+  final DemoAuthorizationSession session;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      border: Border.all(color: AppColors.outline),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Confirm Payment',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        const Text(
+          'PAY TO',
+          style: TextStyle(
+            color: AppColors.inkMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          session.selectedProvider.name,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
+        Text(
+          '${session.selectedProvider.city}, ${session.selectedProvider.state}',
+          style: const TextStyle(color: AppColors.inkMuted),
+        ),
+        const Divider(height: AppSpacing.xl),
+        const Text(
+          'AMOUNT',
+          style: TextStyle(
+            color: AppColors.inkMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '₦${(session.amountKobo / 100).toStringAsFixed(0)}',
+          style: const TextStyle(
+            color: AppColors.primaryDark,
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const Divider(height: AppSpacing.xl),
+        const Text(
+          'FROM',
+          style: TextStyle(
+            color: AppColors.inkMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        const Text(
+          'HealthPocket Balance',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProcessingPaymentView extends StatelessWidget {
+  const _ProcessingPaymentView();
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: AppSpacing.xxl),
+    child: Column(
+      children: [
+        const SizedBox(
+          height: 52,
+          width: 52,
+          child: CircularProgressIndicator(strokeWidth: 5),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'Processing Payment',
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        const Text(
+          'Please wait while we complete your payment...',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.inkMuted),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Row(
+            children: [
+              Icon(LucideIcons.shieldCheck, color: AppColors.primary),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Your payment is secure',
+                  style: TextStyle(
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ResultMessage extends StatelessWidget {
+  const _ResultMessage({required this.result});
+  final DemoAuthorizationResult result;
+  @override
+  Widget build(BuildContext context) {
+    final success = result.status == DemoAuthorizationStatus.created;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: success ? AppColors.primarySoft : AppColors.secondarySoft,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 30,
+            backgroundColor: success ? AppColors.primary : AppColors.secondary,
+            child: Icon(
+              success ? LucideIcons.check : LucideIcons.x,
+              color: Colors.white,
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            success ? 'Payment Successful!' : "Payment couldn't be completed.",
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'Beta demonstration only — No payment was processed, no money moved and no provider was settled.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _AmountPreset extends StatelessWidget {
   const _AmountPreset({required this.label, this.onTap});
@@ -257,7 +486,10 @@ class _BalanceCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Your Balance', style: TextStyle(color: AppColors.inkMuted, fontSize: 12)),
+              const Text(
+                'Your Balance',
+                style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
+              ),
               Text(
                 balanceKobo == null
                     ? 'Balance unavailable'
@@ -271,7 +503,13 @@ class _BalanceCard extends StatelessWidget {
             ],
           ),
         ),
-        const Text('Top Up ›', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+        const Text(
+          'Top Up ›',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
     ),
   );
@@ -285,73 +523,87 @@ class _ScanDemoQr extends StatefulWidget {
 
 class _ScanDemoQrState extends State<_ScanDemoQr> {
   bool _handled = false;
+  final _controller = MobileScannerController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('Scan to Pay'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel scan'),
-            ),
-          ],
+    appBar: AppBar(
+      title: const Text('Scan to Pay'),
+      actions: [
+        IconButton(
+          tooltip: 'Toggle flash',
+          onPressed: _controller.toggleTorch,
+          icon: const Icon(LucideIcons.zap),
         ),
-        body: Stack(
-          children: [
-            MobileScanner(
-              onDetect: (capture) {
-                final raw = capture.barcodes.firstOrNull?.rawValue;
-                if (_handled || raw == null) return;
-                _handled = true;
-                Navigator.pop(context, raw);
-              },
-                errorBuilder: (context, error) => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text(
-                      'Camera unavailable or permission denied. Enter the partner code instead.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ),
-            const Positioned(
-              top: 28,
-              left: 28,
-              right: 28,
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel scan'),
+        ),
+      ],
+    ),
+    body: Stack(
+      children: [
+        MobileScanner(
+          controller: _controller,
+          onDetect: (capture) {
+            final raw = capture.barcodes.firstOrNull?.rawValue;
+            if (_handled || raw == null) return;
+            _handled = true;
+            Navigator.pop(context, raw);
+          },
+          errorBuilder: (context, error) => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
               child: Text(
-                'Point your camera at the HealthPocket QR code at the counter.',
+                'Camera unavailable or permission denied. Enter the partner code instead.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
               ),
             ),
-            Center(
-              child: Container(
-                width: 230,
-                height: 230,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white, width: 3),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 24,
-              right: 24,
-              bottom: 28,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppColors.ink,
-                ),
-                onPressed: () => _enterCode(context),
-                icon: const Icon(LucideIcons.keyboard),
-                label: const Text('Enter code instead'),
-              ),
-            ),
-          ],
+          ),
         ),
-      );
+        const Positioned(
+          top: 28,
+          left: 28,
+          right: 28,
+          child: Text(
+            'Point your camera at the HealthPocket QR code at the counter.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+        ),
+        Center(
+          child: Container(
+            width: 230,
+            height: 230,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white, width: 3),
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 24,
+          right: 24,
+          bottom: 28,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.ink,
+            ),
+            onPressed: () => _enterCode(context),
+            icon: const Icon(LucideIcons.keyboard),
+            label: const Text('Enter code instead'),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Future<void> _enterCode(BuildContext context) async {
     final controller = TextEditingController();
@@ -360,18 +612,37 @@ class _ScanDemoQrState extends State<_ScanDemoQr> {
       isScrollControlled: true,
       builder: (context) => SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.viewInsetsOf(context).bottom),
-          child: Wrap(children: [
-            const Text('Enter partner code', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-            const SizedBox(height: 16),
-            TextField(controller: controller, autofocus: true, decoration: const InputDecoration(hintText: 'healthpocket://pay?providerId=...')),
-            const SizedBox(height: 16),
-            AppPrimaryButton(label: 'Continue', onPressed: () => Navigator.pop(context, controller.text)),
-          ]),
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            24 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: Wrap(
+            children: [
+              const Text(
+                'Enter partner code',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'healthpocket://pay?providerId=...',
+                ),
+              ),
+              const SizedBox(height: 16),
+              AppPrimaryButton(
+                label: 'Continue',
+                onPressed: () => Navigator.pop(context, controller.text),
+              ),
+            ],
+          ),
         ),
       ),
     );
     controller.dispose();
-    if (payload != null && mounted) Navigator.pop(context, payload);
+    if (payload != null && context.mounted) Navigator.pop(context, payload);
   }
 }
