@@ -152,7 +152,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (context, child) {
         final profile = store.profile;
         return Scaffold(
-          appBar: AppBar(title: const Text('Profile')),
+          appBar: AppBar(title: const Text('More')),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
@@ -161,7 +161,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
               AppSpacing.xl,
             ),
             children: [
+              Text(
+                'Manage your account and settings.',
+                style: const TextStyle(color: AppColors.inkMuted),
+              ),
+              const SizedBox(height: AppSpacing.md),
               _ProfileHeader(profile: profile),
+              const SizedBox(height: AppSpacing.xl),
+              const _SectionTitle('Quick access'),
+              const SizedBox(height: AppSpacing.sm),
+              _SettingsCard(
+                children: [
+                  _SettingsTile(
+                    icon: Icons.savings_outlined,
+                    title: 'Savings',
+                    subtitle: 'Manage your health fund',
+                    onTap: () =>
+                        Navigator.pushNamed(context, AppRoute.savings.path),
+                  ),
+                  _SettingsTile(
+                    icon: Icons.groups_2_outlined,
+                    title: 'Family Pocket',
+                    subtitle: 'Save together for care',
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoute.familyPocket.path,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: AppSpacing.xl),
               const _SectionTitle('Account information'),
               const SizedBox(height: AppSpacing.sm),
@@ -304,8 +332,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _SettingsTile(
                     icon: Icons.shield_outlined,
-                    title: 'Privacy and terms',
-                    subtitle: 'Review how HealthPocket protects your data',
+                    title: 'About HealthPocket',
+                    subtitle: 'Beta app information, privacy and terms',
                     onTap: () => _showMessage(
                       context,
                       'Legal documents will be connected before release',
@@ -382,6 +410,13 @@ class _ProfileHeader extends StatelessWidget {
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
                   ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  profile.email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
                 const SizedBox(height: 3),
                 Text(

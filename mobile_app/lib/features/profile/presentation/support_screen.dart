@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const supportEmail = 'gethealthpocket@gmail.com';
@@ -104,6 +105,36 @@ class _SupportScreenState extends State<SupportScreen> {
         ),
         if (_message != null)
           Semantics(liveRegion: true, child: Text(_message!)),
+        Container(
+          margin: const EdgeInsets.only(top: 20),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Image.asset('assets/profile/friendlyWave.png', height: 62),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Still need help?',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Our team is always happy to assist you.',
+                      style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     ),
   );
