@@ -14,6 +14,7 @@ import 'package:healthpocket/features/activity/presentation/activity_screen.dart
 import 'package:healthpocket/features/family/presentation/family_pocket_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/savings_plan_setup_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/personal_information_screen.dart';
+import 'package:healthpocket/features/onboarding/presentation/onboarding_complete_screen.dart';
 import 'package:healthpocket/features/profile/presentation/profile_screen.dart';
 import 'package:healthpocket/features/savings/presentation/savings_screen.dart';
 
@@ -30,6 +31,7 @@ enum AppRoute {
   onboarding('/onboarding'),
   personalInformation('/onboarding/personal-information'),
   savingsPlanSetup('/onboarding/savings-plan'),
+  onboardingComplete('/onboarding/complete'),
   dashboard('/dashboard'),
   activity('/activity'),
   savings('/savings'),
@@ -80,14 +82,17 @@ class AppRouter {
           AppRoute.pinRecovery => PinRecoveryScreen(appState: appState),
           AppRoute.onboarding => PersonalInformationScreen(
             profileStore: appState.profileStore,
+            onCompleted: appState.completeProfileOnboarding,
           ),
           AppRoute.personalInformation => PersonalInformationScreen(
             profileStore: appState.profileStore,
+            onCompleted: appState.completeProfileOnboarding,
           ),
           AppRoute.savingsPlanSetup => SavingsPlanSetupScreen(
             savingsStore: appState.savingsStore,
             onCompleted: appState.completeOnboarding,
           ),
+          AppRoute.onboardingComplete => const OnboardingCompleteScreen(),
           AppRoute.dashboard => DashboardScreen(
             savingsStore: appState.savingsStore,
             profileStore: appState.profileStore,

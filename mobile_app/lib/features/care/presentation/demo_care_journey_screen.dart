@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/core/widgets/healthpocket_state_view.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
@@ -10,7 +11,14 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 const demoCareNotice = 'Beta demonstration only — no money will move.';
 
-enum _PaymentStep { amount, scan, confirm, processing, result }
+enum _PaymentStep {
+  amount,
+  insufficientBalance,
+  scan,
+  confirm,
+  processing,
+  result,
+}
 
 class DemoCareJourneyScreen extends StatefulWidget {
   const DemoCareJourneyScreen({
@@ -35,6 +43,7 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
   bool _openingScanner = false;
   _PaymentStep _step = _PaymentStep.amount;
   bool _submitting = false;
+  int? _insufficientAmountKobo;
 
   CareProvider get provider => widget.providers.firstWhere(
     (item) => item.id == widget.selectedProviderId && item.isDemo,
@@ -84,6 +93,7 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
       appBar: AppBar(
         title: Text(switch (step) {
           _PaymentStep.amount => 'Enter Amount',
+          _PaymentStep.insufficientBalance => 'Insufficient Balance',
           _PaymentStep.scan => 'Scan QR Code',
           _PaymentStep.confirm => 'Confirm Payment',
           _PaymentStep.processing => 'Processing Payment',
@@ -124,6 +134,15 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
                 }),
                 child: const Text('Scan Again'),
               ),
+          ] else if (step == _PaymentStep.insufficientBalance) ...[
+            InsufficientBalanceView(
+              paymentAmountKobo: _insufficientAmountKobo ?? 0,
+              availableBalanceKobo: _availableBalanceKobo ?? 0,
+              onChooseDifferentAmount: () => setState(() {
+                _insufficientAmountKobo = null;
+                _step = _PaymentStep.amount;
+              }),
+            ),
           ] else if (step == _PaymentStep.amount) ...[
             const Text(
               'Enter Amount',
@@ -176,9 +195,11 @@ class _DemoCareJourneyScreenState extends State<DemoCareJourneyScreen> {
                 }
                 final available = _availableBalanceKobo;
                 if (available != null && kobo > available) {
-                  setState(
-                    () => _error = 'Your HealthPocket balance is not enough for this payment.',
-                  );
+                  setState(() {
+                    _error = null;
+                    _insufficientAmountKobo = kobo;
+                    _step = _PaymentStep.insufficientBalance;
+                  });
                   return;
                 }
                 setState(() {

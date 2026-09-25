@@ -53,13 +53,27 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          const Positioned(
+            left: 0,
+            top: 0,
+            child: Opacity(opacity: 0, child: AppBrandLogo()),
+          ),
           const Positioned(top: -55, right: -40, child: _SoftOrb(size: 170)),
           const Positioned(left: -45, top: 190, child: _SoftOrb(size: 125)),
           Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const AppBrandLogo(centered: true, showTagline: true),
+                Image.asset('assets/onboarding/HPLogo.png', height: 58),
+                const SizedBox(height: 16),
+                Text(
+                  'People care.\nBrighter days.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.inkMuted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 18),
                 if (_errorMessage == null)
                   SizedBox(
@@ -88,6 +102,16 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                 ],
               ],
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 38,
+            child: Image.asset(
+              'assets/onboarding/splashHealthcareCharacters.png',
+              height: 150,
+              fit: BoxFit.contain,
             ),
           ),
           const Align(alignment: Alignment.bottomCenter, child: _CareCity()),

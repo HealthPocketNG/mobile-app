@@ -30,7 +30,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       final destination = await widget.appState.acceptEmailVerification();
       if (!mounted) return;
       if (destination == AuthFlowDestination.verifyEmail) {
-        setState(() => _message = 'Your email is not verified yet.');
+        setState(
+          () => _message = 'Your email isn’t verified yet. Open the verification link in your email, then try again.',
+        );
         return;
       }
       Navigator.pushNamedAndRemoveUntil(
@@ -83,14 +85,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
             const SizedBox(height: AppSpacing.xl),
-            const CircleAvatar(
-              radius: 42,
-              backgroundColor: AppColors.primarySoft,
-              child: Icon(
-                Icons.mark_email_read_outlined,
-                size: 42,
-                color: AppColors.primary,
-              ),
+            Image.asset(
+              'assets/onboarding/HP-Onboarding.png',
+              height: 180,
+              fit: BoxFit.contain,
             ),
             const SizedBox(height: AppSpacing.xl),
             Text(
@@ -101,7 +99,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'We sent a verification link to $email. Open it, then return here to continue.\n\nCan’t find it? Check your Spam or Junk folder. If it’s there, mark it as not spam. You can also resend the email below.',
+              'We’ve sent a verification link to\n$email\n\nOpen the link in your email to verify your account.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge
                   ?.copyWith(color: AppColors.inkMuted, height: 1.45),

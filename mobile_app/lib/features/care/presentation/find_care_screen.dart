@@ -3,6 +3,7 @@ import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/core/widgets/healthpocket_state_view.dart';
 import 'package:healthpocket/features/care/data/demo_care_directory_repository.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/care/presentation/demo_care_journey_screen.dart';
@@ -132,25 +133,43 @@ class _FindCareScreenState extends State<FindCareScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
               if (_loading)
-                const Padding(
-                  padding: EdgeInsets.all(AppSpacing.xl),
-                  child: Center(child: CircularProgressIndicator()),
+                const HealthPocketStateView(
+                  kind: HealthPocketStateKind.loading,
+                  title: 'Loading...',
+                  message: 'Finding quality care near you.',
                 )
               else if (_failed)
-                _Feedback(
-                  icon: LucideIcons.wifiOff,
+                HealthPocketStateView(
+                  kind: HealthPocketStateKind.error,
+                  title: 'Something went wrong',
                   message: 'Could not load the directory. Please try again.',
-                  action: 'Retry',
-                  onTap: _load,
+                  primaryActionLabel: 'Retry',
+                  onPrimaryAction: _load,
+                  compact: true,
                 )
               else if (results.isEmpty)
-                _Feedback(
-                  icon: LucideIcons.mapPinOff,
+                HealthPocketStateView(
+                  kind: HealthPocketStateKind.noResults,
+                  title: _providers.isEmpty
+                      ? 'No partners nearby'
+                      : 'No providers found',
                   message: _providers.isEmpty
                       ? 'No demo partner centres are available right now.'
                       : 'No providers match your search. Try another filter.',
-                  action: 'Clear filters',
-                  onTap: _clearFilters,
+                  primaryActionLabel: _providers.isEmpty
+                      ? 'Try a different location'
+                      : 'Clear filters',
+                  onPrimaryAction: _providers.isEmpty
+                      ? () => setState(
+                          () =>
+                              _locationStatus = DemoLocationStatus.notRequested,
+                        )
+                      : _clearFilters,
+                  secondaryActionLabel: _providers.isEmpty
+                      ? 'View all partners'
+                      : null,
+                  onSecondaryAction: _providers.isEmpty ? _clearFilters : null,
+                  compact: true,
                 )
               else ...[
                 Text(
@@ -515,36 +534,6 @@ class _Heading extends StatelessWidget {
     label,
     style: Theme.of(context).textTheme.titleMedium
         ?.copyWith(fontWeight: FontWeight.w800),
-  );
-}
-
-class _Feedback extends StatelessWidget {
-  const _Feedback({
-    required this.icon,
-    required this.message,
-    required this.action,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String message, action;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        children: [
-          Icon(icon, color: AppColors.primary, size: 38),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.inkMuted),
-          ),
-          TextButton(onPressed: onTap, child: Text(action)),
-        ],
-      ),
-    ),
   );
 }
 

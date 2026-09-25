@@ -2,13 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/core/widgets/healthpocket_state_view.dart';
 import 'package:healthpocket/features/care/data/mock_non_partner_verification_services.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/care/domain/non_partner_verification.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-enum _NonPartnerStep { method, details, review, verifying, result }
+enum _NonPartnerStep {
+  method,
+  details,
+  review,
+  insufficientBalance,
+  verifying,
+  result,
+}
 
 class NonPartnerPaymentScreen extends StatefulWidget {
   const NonPartnerPaymentScreen({
@@ -36,6 +44,7 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
   MerchantVerificationResult? _verification;
   String? _error;
   bool _busy = false;
+  int? _insufficientAmountKobo;
   @override
   void dispose() {
     _account.dispose();
@@ -79,10 +88,11 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
       return;
     }
     if (balance != null && amount * 100 > balance) {
-      setState(
-        () => _error =
-            'Your HealthPocket balance is not enough for this payment.',
-      );
+      setState(() {
+        _error = null;
+        _insufficientAmountKobo = amount * 100;
+        _step = _NonPartnerStep.insufficientBalance;
+      });
       return;
     }
     setState(() {
@@ -108,6 +118,7 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
       _NonPartnerStep.method => 'Choose Payment Method',
       _NonPartnerStep.details => 'Bank Transfer',
       _NonPartnerStep.review => 'Review Payment',
+      _NonPartnerStep.insufficientBalance => 'Insufficient Balance',
       _NonPartnerStep.verifying => 'Verifying merchant',
       _NonPartnerStep.result => 'Payment Result',
     };
@@ -120,6 +131,15 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
             _NonPartnerStep.method => _method(context),
             _NonPartnerStep.details => _details(context),
             _NonPartnerStep.review => _review(context),
+            _NonPartnerStep.insufficientBalance => InsufficientBalanceView(
+              paymentAmountKobo: _insufficientAmountKobo ?? 0,
+              availableBalanceKobo:
+                  widget.savingsStore?.developmentBalanceKobo ?? 0,
+              onChooseDifferentAmount: () => setState(() {
+                _insufficientAmountKobo = null;
+                _step = _NonPartnerStep.review;
+              }),
+            ),
             _NonPartnerStep.verifying => const _VerificationProgress(),
             _NonPartnerStep.result => _result(context),
           },

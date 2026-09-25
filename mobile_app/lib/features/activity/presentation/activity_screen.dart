@@ -4,6 +4,7 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/core/widgets/healthpocket_state_view.dart';
 import 'package:healthpocket/features/activity/domain/unified_activity_ledger.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
@@ -605,56 +606,24 @@ class _ActivityError extends StatelessWidget {
   const _ActivityError({required this.onRetry});
   final VoidCallback onRetry;
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        children: [
-          const Icon(LucideIcons.circleAlert, size: 40, color: AppColors.error),
-          const SizedBox(height: AppSpacing.md),
-          const Text(
-            'Could not load activity. Please try again.',
-            style: TextStyle(color: AppColors.inkMuted),
-          ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
-      ),
-    ),
+  Widget build(BuildContext context) => HealthPocketStateView(
+    kind: HealthPocketStateKind.error,
+    title: 'Something went wrong',
+    message: 'We couldn’t load your activity right now. Please try again.',
+    primaryActionLabel: 'Try Again',
+    onPrimaryAction: onRetry,
   );
 }
 
 class _EmptyActivityView extends StatelessWidget {
   const _EmptyActivityView();
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(
-      AppSpacing.lg,
-      AppSpacing.xl,
-      AppSpacing.lg,
-      AppSpacing.md,
-    ),
-    child: Column(
-      children: [
-        Image.asset('assets/activity/no-activity.png', height: 145),
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          'No activity yet',
-          style: Theme.of(context).textTheme.titleLarge
-              ?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        const Text(
-          'Your transactions will appear here once you start saving or making payments.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.inkMuted),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        AppPrimaryButton(
-          label: 'Start Saving  →',
-          onPressed: () => Navigator.pushNamed(context, AppRoute.savings.path),
-        ),
-      ],
-    ),
+  Widget build(BuildContext context) => HealthPocketStateView(
+    kind: HealthPocketStateKind.empty,
+    title: 'No activity yet',
+    message: 'Your transactions will appear here once you start saving or making payments.',
+    primaryActionLabel: 'Start Saving  →',
+    onPrimaryAction: () => Navigator.pushNamed(context, AppRoute.savings.path),
   );
 }
 
@@ -673,10 +642,7 @@ String _rangeLabel(ActivityDateRange range) => switch (range) {
 };
 String _formatKobo(int value) {
   final naira = value.abs() ~/ 100;
-  return '₦${naira.toString().replaceAllMapped(
-        RegExp(r'\B(?=(\d{3})+(?!\d))'),
-        (match) => ',',
-      )}';
+  return '₦${naira.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => ',')}';
 }
 
 String _dateLabel(DateTime? date) {

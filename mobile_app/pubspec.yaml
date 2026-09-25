@@ -73,6 +73,7 @@ flutter:
     - assets/activity/
     - assets/HPLogo/
     - assets/profile/
+    - assets/onboarding/
 
   fonts:
     - family: Geomini

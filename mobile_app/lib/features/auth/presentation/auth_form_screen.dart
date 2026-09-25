@@ -116,6 +116,13 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+              ),
               const Center(
                 child: AppBrandLogo(showTagline: true, centered: true),
               ),
@@ -130,7 +137,7 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 _isSignUp
-                    ? 'Join Nigerians building a healthier, more secure tomorrow.'
+                    ? 'Join thousands building a healthier tomorrow.'
                     : 'Continue your health savings journey.',
                 style: Theme.of(context).textTheme.bodyLarge
                     ?.copyWith(color: AppColors.inkMuted),
@@ -231,7 +238,7 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                 label: _isBusy
                     ? 'Please wait…'
                     : _isSignUp
-                    ? 'Create account'
+                    ? 'Create Account  →'
                     : 'Log in',
                 onPressed: _isBusy ? null : _submit,
               ),

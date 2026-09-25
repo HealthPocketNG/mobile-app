@@ -44,6 +44,7 @@ class _AppPinScreenState extends State<AppPinScreen> {
     try {
       if (_isCreating) {
         await widget.appState.setPin(_pinController.text);
+        await widget.appState.completeProfileOnboarding();
       } else {
         final result = await widget.appState.verifyPin(_pinController.text);
         if (!result.isValid) {
@@ -60,7 +61,9 @@ class _AppPinScreenState extends State<AppPinScreen> {
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(
         context,
-        AppRoute.dashboard.path,
+        _isCreating
+            ? AppRoute.onboardingComplete.path
+            : AppRoute.dashboard.path,
         (route) => false,
       );
     } on AuthFailure catch (error) {
@@ -91,7 +94,7 @@ class _AppPinScreenState extends State<AppPinScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
               Text(
-                _isCreating ? 'Create your app PIN' : 'Welcome back',
+                _isCreating ? 'Set your login PIN' : 'Welcome back',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineMedium
                     ?.copyWith(fontWeight: FontWeight.w800),
@@ -99,7 +102,7 @@ class _AppPinScreenState extends State<AppPinScreen> {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 _isCreating
-                    ? 'Use this six-digit PIN to unlock HealthPocket on this device.'
+                    ? 'Use a 6-digit PIN for quick and secure access.'
                     : 'Enter your six-digit HealthPocket PIN to continue.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge
@@ -119,6 +122,29 @@ class _AppPinScreenState extends State<AppPinScreen> {
                   confirmation: true,
                 ),
               ],
+              if (_isCreating) ...[
+                const SizedBox(height: AppSpacing.lg),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'A simple, secure sign-in',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        '• Keep your account secure\n• Quick and easy login\n• You can change this anytime',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               if (_message != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(
@@ -132,7 +158,7 @@ class _AppPinScreenState extends State<AppPinScreen> {
                 label: _isBusy
                     ? 'Please wait…'
                     : _isCreating
-                    ? 'Create PIN'
+                    ? 'Continue  →'
                     : 'Unlock',
                 onPressed: _isBusy ? null : _submit,
               ),

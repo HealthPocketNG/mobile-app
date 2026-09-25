@@ -3,13 +3,18 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
-import 'package:healthpocket/core/widgets/onboarding_step_header.dart';
+import 'package:healthpocket/core/widgets/initials_avatar.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 
 class PersonalInformationScreen extends StatefulWidget {
-  const PersonalInformationScreen({required this.profileStore, super.key});
+  const PersonalInformationScreen({
+    required this.profileStore,
+    required this.onCompleted,
+    super.key,
+  });
 
   final ProfileStore profileStore;
+  final Future<void> Function() onCompleted;
 
   @override
   State<PersonalInformationScreen> createState() =>
@@ -62,7 +67,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
     if (date != null) setState(() => _dateOfBirth = date);
   }
 
-  void _continue() {
+  Future<void> _continue() async {
     if (!_formKey.currentState!.validate() ||
         _dateOfBirth == null ||
         _gender == null ||
@@ -82,7 +87,18 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
       nextOfKinName: _nextOfKinNameController.text.trim(),
       nextOfKinPhone: _nextOfKinPhoneController.text.trim(),
     );
-    Navigator.pushNamed(context, AppRoute.savingsPlanSetup.path);
+    try {
+      await widget.onCompleted();
+      if (!mounted) return;
+      Navigator.pushNamed(context, AppRoute.createPin.path);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('We could not save your details. Try again.'),
+        ),
+      );
+    }
   }
 
   @override
@@ -104,10 +120,34 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
               AppSpacing.lg,
             ),
             children: [
-              const OnboardingStepHeader(
-                title: 'Personal details',
-                step: 1,
-                total: 2,
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.maybePop(context),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Center(
+                child: InitialsAvatar(
+                  name: widget.profileStore.profile.fullName,
+                  radius: 42,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Tell us a bit about you',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'This helps us personalize your experience.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: AppColors.inkMuted),
               ),
               const SizedBox(height: AppSpacing.xl),
               _SelectionField(
@@ -137,8 +177,8 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
               TextFormField(
                 controller: _addressController,
                 decoration: const InputDecoration(
-                  labelText: 'Residential address',
-                  hintText: 'House number and street',
+                  labelText: 'Location',
+                  hintText: 'City, state or neighbourhood',
                   prefixIcon: Icon(Icons.location_on_outlined),
                 ),
                 validator: _required,
@@ -160,35 +200,8 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
                 ],
                 onChanged: (value) => setState(() => _state = value),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Next of kin / Emergency contact',
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              TextFormField(
-                controller: _nextOfKinNameController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Full name',
-                  prefixIcon: Icon(Icons.person_outline_rounded),
-                ),
-                validator: _required,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              TextFormField(
-                controller: _nextOfKinPhoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone number',
-                  hintText: '+234 800 000 0000',
-                  prefixIcon: Icon(Icons.phone_outlined),
-                ),
-                validator: _required,
-              ),
               const SizedBox(height: AppSpacing.xl),
-              AppPrimaryButton(label: 'Continue', onPressed: _continue),
+              AppPrimaryButton(label: 'Continue  →', onPressed: _continue),
             ],
           ),
         ),

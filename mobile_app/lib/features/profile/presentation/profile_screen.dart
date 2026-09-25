@@ -5,6 +5,7 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
+import 'package:healthpocket/core/widgets/initials_avatar.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
@@ -802,13 +803,7 @@ Widget _sheetTitle(BuildContext context, String title) => Text(
 String? _required(String? value) =>
     value == null || value.trim().isEmpty ? 'Required' : null;
 
-String _initials(String name) => name
-    .trim()
-    .split(RegExp(r'\s+'))
-    .take(2)
-    .where((part) => part.isNotEmpty)
-    .map((part) => part[0].toUpperCase())
-    .join();
+String _initials(String name) => InitialsAvatar.initialsFor(name);
 
 String _personalInformationLabel(UserProfile profile) {
   final date = profile.dateOfBirth;

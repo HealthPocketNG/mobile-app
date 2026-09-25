@@ -117,7 +117,7 @@ class AppState extends ChangeNotifier {
       final pocket = await savings.getPersonalPocket(user.uid);
       final plan = await savings.getPlan(user.uid);
 
-      if (profileData == null || pocket == null || plan == null) {
+      if (profileData == null) {
         _pendingNewAccount = true;
         if (profileData == null) {
           profileStore.beginRegistration(
@@ -134,7 +134,7 @@ class AppState extends ChangeNotifier {
             notifications: profileData.notifications,
           );
         }
-        savingsStore.hydrate(plan: plan);
+        if (plan != null) savingsStore.hydrate(plan: plan);
         _startFamilyPocketRestore(
           userId: user.uid,
           name: profileStore.profile.fullName,
@@ -148,9 +148,11 @@ class AppState extends ChangeNotifier {
         profile: profileData.profile,
         notifications: profileData.notifications,
       );
-      savingsStore.hydrate(plan: plan);
-      _personalHealthPocketId = pocket.id;
-      _watchPersonalContributions(userId: user.uid, pocketId: pocket.id);
+      if (plan != null) savingsStore.hydrate(plan: plan);
+      if (pocket != null) {
+        _personalHealthPocketId = pocket.id;
+        _watchPersonalContributions(userId: user.uid, pocketId: pocket.id);
+      }
       _startFamilyPocketRestore(
         userId: user.uid,
         name: profileData.profile.fullName,
@@ -259,6 +261,54 @@ class AppState extends ChangeNotifier {
       email: profile.email,
     );
 
+    _hasCompletedOnboarding = true;
+    notifyListeners();
+  }
+
+  /// Completes the beta profile step without creating a savings plan.
+  /// Savings plans are intentionally created from the Savings feature.
+  Future<void> completeProfileOnboarding() async {
+    final user = authRepository.currentUser;
+    if (user == null || !user.emailVerified) {
+      throw const AuthFailure(
+        'Sign in with a verified account before completing setup.',
+      );
+    }
+    final now = DateTime.now();
+    final profile = profileStore.profile.copyWith(
+      email: user.email ?? profileStore.profile.email,
+      emailVerified: true,
+      phoneVerified: false,
+      demoKycComplete: false,
+    );
+    final pocket = PersonalHealthPocket(
+      id: 'personal-${user.uid}',
+      userId: user.uid,
+      currency: 'NGN',
+      status: PersonalHealthPocketStatus.active,
+      createdAt: now,
+      updatedAt: now,
+    );
+    profileStore.hydrate(
+      profile: profile,
+      notifications: profileStore.notifications,
+    );
+    _personalHealthPocketId = pocket.id;
+    final profiles = profileRepository;
+    final savings = savingsRepository;
+    if (profiles != null) {
+      await profiles.saveProfile(
+        userId: user.uid,
+        profile: profile,
+        notifications: profileStore.notifications,
+      );
+    }
+    if (savings != null) await savings.savePersonalPocket(pocket);
+    _startFamilyPocketRestore(
+      userId: user.uid,
+      name: profile.fullName,
+      email: profile.email,
+    );
     _hasCompletedOnboarding = true;
     notifyListeners();
   }
