@@ -46,5 +46,13 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Private Android beta signing material. Never commit or share these files.
+/android/beta-signing.properties
+/android/*.jks
+/android/*.keystore
+
+# Versioned beta APKs are deployment artifacts, not source files.
+/beta-site/releases/*.apk
+
 # Widget Preview related
 .widget_preview/

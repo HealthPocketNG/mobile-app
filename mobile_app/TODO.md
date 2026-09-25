@@ -45,6 +45,25 @@ Production changes and real email delivery are not part of this rollout.
 
 ## Before the MVP pilot
 
+### Private Android beta distribution
+
+- [x] Add an isolated, lightweight `beta-site/` landing page for the invited
+  Android-only no-money beta, with install guidance, testing prompts, release
+  notes, known limitations, feedback safety guidance, and search opt-out.
+- [x] Add a guarded DEV release-APK workflow and keep signing material and APK
+  artifacts out of Git.
+- [ ] Securely back up the created private beta signing key and local signing
+  properties; retain the key and passwords in the owner-controlled Proton vault.
+- [x] Build the signed `1.0.0+1` DEV APK and record its size and SHA-256 checksum
+  on the landing page.
+- [ ] Complete the physical-device smoke test, including install/update behavior,
+  authentication, restart unlock, profile persistence, Find Care/demo scanner,
+  and support handoff.
+- [ ] Deploy `beta-site/` plus the ignored signed APK to Netlify and verify the
+  link on a second Android device before sharing it in the private tester group.
+- [ ] Increase the build number for every APK shared with testers and use the
+  same signing key for all in-place beta updates.
+
 - [x] Connect account-detail edits to the profile repository and retain failed
   drafts for retry; keep sign-in email out of ordinary profile editing.
 - [ ] Mobile-test account edits across restart and offline retry.

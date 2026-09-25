@@ -85,6 +85,18 @@ flutterfire configure --project=healthpocket-ng --platforms=android --android-pa
 The MVP scope and product decisions are maintained in
 `HealthPocketMVP-PRD-for-Codex.md`.
 
+## Private Android beta distribution
+
+The invited no-money beta is distributed as a signed DEV APK from the static
+site in `beta-site/`. It remains connected to the DEV Firebase project and must
+not be presented as a production financial or care service. The site has no web
+framework or Flutter dependency; Netlify publishes only that directory through
+the root `netlify.toml` configuration.
+
+Follow `docs/beta-release.md` for the one-time private signing setup and guarded
+release build. Signing material and generated APKs are intentionally ignored by
+Git. Never substitute the production flavour for this direct-download beta.
+
 ## MVP authentication
 
 The app uses Firebase Authentication for Email/Password and Google Sign-In.

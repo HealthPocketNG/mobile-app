@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -5,6 +7,13 @@ plugins {
     // END: FlutterFire Configuration
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val betaSigningPropertiesFile = rootProject.file("beta-signing.properties")
+val betaSigningProperties = Properties().apply {
+    if (betaSigningPropertiesFile.exists()) {
+        betaSigningPropertiesFile.inputStream().use { input -> load(input) }
+    }
 }
 
 android {
@@ -19,6 +28,17 @@ android {
 
     buildFeatures {
         resValues = true
+    }
+
+    signingConfigs {
+        if (betaSigningPropertiesFile.exists()) {
+            create("betaRelease") {
+                keyAlias = betaSigningProperties.getProperty("keyAlias")
+                keyPassword = betaSigningProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(betaSigningProperties.getProperty("storeFile"))
+                storePassword = betaSigningProperties.getProperty("storePassword")
+            }
+        }
     }
 
     defaultConfig {
@@ -43,7 +63,14 @@ android {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             resValue("string", "app_name", "HealthPocket Dev")
-            signingConfig = signingConfigs.getByName("debug")
+            // Local debug builds remain convenient. The documented beta build
+            // script refuses to create a distributable APK without the private
+            // beta signing properties and keystore.
+            signingConfig = if (betaSigningPropertiesFile.exists()) {
+                signingConfigs.getByName("betaRelease")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
         create("prod") {
             dimension = "environment"

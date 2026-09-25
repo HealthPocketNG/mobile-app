@@ -1,0 +1,6 @@
+# Copy this file to android/beta-signing.properties after creating the beta
+# keystore. The real file and keystore are ignored by Git.
+storeFile=healthpocket-beta.jks
+storePassword=REPLACE_WITH_PRIVATE_VALUE
+keyAlias=healthpocket-beta
+keyPassword=REPLACE_WITH_PRIVATE_VALUE
