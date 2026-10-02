@@ -31,21 +31,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // MVP accounts use verified email. The phone claim is retained only as a
-    // post-MVP extension point for Firebase-authenticated phone identities.
+    // Google is the only MVP account-entry provider. Provider membership and
+    // email verification must both come from the trusted Firebase Auth token.
     function hasVerifiedIdentity() {
       return isAuthenticated()
-        && (
-          (('email_verified' in request.auth.token)
-            && request.auth.token.email_verified == true)
-          || (('phone_number' in request.auth.token)
-            && request.auth.token.phone_number is string
-            && request.auth.token.phone_number.size() > 0)
-        );
+        && ('firebase' in request.auth.token)
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && ('email_verified' in request.auth.token)
+        && request.auth.token.email_verified == true;
     }
 
     function hasVerifiedEmailIdentity() {
-      return isAuthenticated()
+      return hasVerifiedIdentity()
         && ('email' in request.auth.token)
         && request.auth.token.email is string
         && validEmail(request.auth.token.email)
@@ -297,20 +294,20 @@ service cloud.firestore {
 
     function isValidSavingsPlan(data) {
       return data.keys().hasOnly([
-          'userId', 'personalHealthPocketId', 'contributionAmount',
+          'userId', 'personalHealthPocketId', 'contributionAmountKobo',
           'frequency', 'startDate', 'nextContributionDate', 'status',
           'fundingSourceId', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasAll([
-          'userId', 'personalHealthPocketId', 'contributionAmount',
+          'userId', 'personalHealthPocketId', 'contributionAmountKobo',
           'frequency', 'startDate', 'nextContributionDate', 'status',
           'fundingSourceId', 'createdAt', 'updatedAt'
         ])
         && validId(data.userId)
         && validId(data.personalHealthPocketId)
-        && data.contributionAmount is int
-        && data.contributionAmount > 0
-        && data.contributionAmount <= 1000000000
+        && data.contributionAmountKobo is int
+        && data.contributionAmountKobo > 0
+        && data.contributionAmountKobo <= 100000000000
         && data.frequency in ['daily', 'weekly', 'monthly']
         && data.startDate is timestamp
         && validOptionalTimestamp(data.nextContributionDate)
@@ -538,10 +535,13 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
         && uidUnchanged(userId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
         && isValidUser(request.resource.data);
       allow update: if isOwner(userId)
         && uidNotModified()
         && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
         && isValidUser(request.resource.data);
       allow delete: if false;
     }
@@ -552,12 +552,15 @@ service cloud.firestore {
       allow create: if hasVerifiedIdentity()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
         && isValidPersonalPocket(request.resource.data);
       allow update: if hasVerifiedIdentity()
         && resource.data.userId == request.auth.uid
         && uidNotModified()
         && request.resource.data.currency == resource.data.currency
         && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
         && isValidPersonalPocket(request.resource.data);
       allow delete: if false;
     }
@@ -568,6 +571,8 @@ service cloud.firestore {
       allow create: if hasVerifiedIdentity()
         && request.resource.data.userId == request.auth.uid
         && ownsPersonalPocket(request.resource.data.personalHealthPocketId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
         && isValidSavingsPlan(request.resource.data);
       allow update: if hasVerifiedIdentity()
         && resource.data.userId == request.auth.uid
@@ -575,6 +580,7 @@ service cloud.firestore {
         && request.resource.data.personalHealthPocketId
           == resource.data.personalHealthPocketId
         && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
         && ownsPersonalPocket(request.resource.data.personalHealthPocketId)
         && isValidSavingsPlan(request.resource.data);
       allow delete: if false;
@@ -619,6 +625,7 @@ service cloud.firestore {
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.currency == resource.data.currency
         && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
         && isValidFamilyPocket(request.resource.data);
       allow delete: if false;
 
@@ -870,6 +877,7 @@ service cloud.firestore {
       allow create: if hasVerifiedIdentity()
         && (!('familyPocketId' in request.resource.data)
           || isActiveMember(request.resource.data.familyPocketId))
+        && request.resource.data.createdAt == request.time
         && isValidActivity(request.resource.data);
       allow update, delete: if false;
     }

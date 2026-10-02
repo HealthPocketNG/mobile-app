@@ -46,11 +46,15 @@ class AppState extends ChangeNotifier {
   String? _personalHealthPocketId;
 
   bool get hasCompletedOnboarding => _hasCompletedOnboarding;
+  bool get hasPendingNewAccount => _pendingNewAccount;
 
   Future<AuthFlowDestination> resolveStartup() async {
     final user = authRepository.currentUser;
     if (user == null) return AuthFlowDestination.welcome;
-    if (!user.emailVerified) return AuthFlowDestination.verifyEmail;
+    if (!user.emailVerified) {
+      await authRepository.signOut();
+      return AuthFlowDestination.welcome;
+    }
     return _destinationForVerifiedUser(user);
   }
 
@@ -60,22 +64,13 @@ class AppState extends ChangeNotifier {
       _beginRegistrationFor(result.user);
     }
     if (!result.user.emailVerified) {
-      return AuthFlowDestination.verifyEmail;
+      await authRepository.signOut();
+      throw const AuthFailure(
+        'Use a Google account with a verified email address.',
+      );
     }
     if (result.isNewUser) return AuthFlowDestination.personalInformation;
     return _destinationForVerifiedUser(result.user);
-  }
-
-  Future<AuthFlowDestination> acceptEmailVerification() async {
-    final user = await authRepository.reloadCurrentUser();
-    if (user == null || !user.emailVerified) {
-      return AuthFlowDestination.verifyEmail;
-    }
-    if (_pendingNewAccount) {
-      profileStore.verifyEmailAddress();
-      return AuthFlowDestination.personalInformation;
-    }
-    return _destinationForVerifiedUser(user);
   }
 
   Future<void> setPin(String pin) async {
@@ -224,7 +219,7 @@ class AppState extends ChangeNotifier {
     );
     final plan = SavingsPlan(
       id: 'personal-plan-${user.uid}',
-      contributionAmount: currentPlan.contributionAmount,
+      contributionAmountKobo: currentPlan.contributionAmountKobo,
       frequency: currentPlan.frequency,
       startDate: currentPlan.startDate,
       status: currentPlan.status,
@@ -314,7 +309,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> updateSavingsPlan({
-    required int contributionAmount,
+    required int contributionAmountKobo,
     required SavingsFrequency frequency,
     required DateTime startDate,
   }) async {
@@ -324,7 +319,7 @@ class AppState extends ChangeNotifier {
     }
     await _persistSavingsPlan(
       currentPlan.copyWith(
-        contributionAmount: contributionAmount,
+        contributionAmountKobo: contributionAmountKobo,
         frequency: frequency,
         startDate: startDate,
       ),
@@ -844,10 +839,4 @@ class AppState extends ChangeNotifier {
   }
 }
 
-enum AuthFlowDestination {
-  welcome,
-  verifyEmail,
-  personalInformation,
-  createPin,
-  unlockPin,
-}
+enum AuthFlowDestination { welcome, personalInformation, createPin, unlockPin }

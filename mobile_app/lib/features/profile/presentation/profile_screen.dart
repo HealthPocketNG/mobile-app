@@ -8,7 +8,6 @@ import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/initials_avatar.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
-import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 
@@ -93,19 +92,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (draft == null) return;
     if (context.mounted) _showMessage(context, 'Account information updated');
-  }
-
-  Future<void> _resetPassword(BuildContext context) async {
-    final email = authRepository?.currentUser?.email ?? store.profile.email;
-    if (email.isEmpty || authRepository == null) return;
-    try {
-      await authRepository!.sendPasswordResetEmail(email);
-      if (context.mounted) {
-        _showMessage(context, 'Password-reset instructions sent to $email');
-      }
-    } on AuthFailure catch (error) {
-      if (context.mounted) _showMessage(context, error.message);
-    }
   }
 
   Future<void> _signOut(BuildContext context) async {
@@ -228,21 +214,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ? 'Verified'
                           : 'Pending',
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionTitle('Security settings'),
-              const SizedBox(height: AppSpacing.sm),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.lock_outline_rounded,
-                    title: 'Reset password',
-                    subtitle: 'Receive a secure reset link by email',
-                    onTap: authRepository == null
-                        ? null
-                        : () => _resetPassword(context),
                   ),
                 ],
               ),

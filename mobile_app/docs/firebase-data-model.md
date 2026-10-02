@@ -80,16 +80,16 @@ current personal and family histories derive directly from contribution records.
 
 ## Data decisions
 
-- Firebase Auth is the account authority. MVP sign-in providers are verified
-  Email/Password and Google; Firestore rejects unverified email identities.
+- Firebase Auth is the account authority. Google is the only MVP sign-in
+  provider; Firestore rejects non-Google and unverified-email identities.
 - The six-digit HealthPocket app PIN is device-local only. Firestore has no PIN
   field. Only a salted PBKDF2-SHA256 hash is placed in OS-protected secure
   storage, with local attempt throttling. A new device must use Firebase sign-in
   and creates its own local PIN.
 
-- Savings-plan preferences remain positive integer naira amounts because they
-  describe a schedule, not a movement of money. Contribution records use
-  positive integer kobo (`amountKobo`) and explicitly store `currency: NGN`.
+- Savings-plan preferences and contribution records use positive integer kobo
+  (`contributionAmountKobo` and `amountKobo`) and explicitly store
+  `currency: NGN` where the record carries currency.
 - The displayed development balance is derived only from personal contribution
   records whose status is `recorded`, origin is `dev_simulation`, and
   `moneyMovement` is false. It is never stored as an independently editable

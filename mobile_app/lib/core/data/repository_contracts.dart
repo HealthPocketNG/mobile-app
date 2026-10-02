@@ -14,20 +14,7 @@ abstract interface class AuthRepository {
   String? get currentUserId;
   Stream<AuthUser?> watchUser();
   Future<bool> hasActiveSession();
-  Future<AuthResult> createAccountWithEmail({
-    required String fullName,
-    required String email,
-    required String password,
-  });
-  Future<AuthResult> signInWithEmail({
-    required String email,
-    required String password,
-  });
   Future<AuthResult?> signInWithGoogle();
-  Future<void> sendEmailVerification();
-  Future<AuthUser?> reloadCurrentUser();
-  Future<void> sendPasswordResetEmail(String email);
-  Future<void> reauthenticateWithPassword(String password);
   Future<bool> reauthenticateWithGoogle();
   Future<void> signOut();
 }

@@ -78,7 +78,10 @@ class UserProfileDocument {
     );
   }
 
-  Map<String, Object?> toMap() => {
+  Map<String, Object?> toMap({
+    Object? createdAtOverride,
+    Object? updatedAtOverride,
+  }) => {
     'userId': userId,
     'fullName': profile.fullName,
     'email': profile.email,
@@ -100,8 +103,8 @@ class UserProfileDocument {
       'healthReminders': notifications.healthReminders,
       'productUpdates': notifications.productUpdates,
     },
-    'createdAt': firestoreTimestamp(profile.memberSince),
-    'updatedAt': firestoreTimestamp(updatedAt),
+    'createdAt': createdAtOverride ?? firestoreTimestamp(profile.memberSince),
+    'updatedAt': updatedAtOverride ?? firestoreTimestamp(updatedAt),
   };
 }
 
@@ -130,12 +133,15 @@ class PersonalHealthPocketDocument {
     );
   }
 
-  Map<String, Object?> toMap() => {
+  Map<String, Object?> toMap({
+    Object? createdAtOverride,
+    Object? updatedAtOverride,
+  }) => {
     'userId': pocket.userId,
     'currency': pocket.currency,
     'status': pocket.status.name,
-    'createdAt': firestoreTimestamp(pocket.createdAt),
-    'updatedAt': firestoreTimestamp(pocket.updatedAt),
+    'createdAt': createdAtOverride ?? firestoreTimestamp(pocket.createdAt),
+    'updatedAt': updatedAtOverride ?? firestoreTimestamp(pocket.updatedAt),
   };
 }
 
@@ -159,10 +165,18 @@ class SavingsPlanDocument {
   final DateTime updatedAt;
 
   factory SavingsPlanDocument.fromMap(String id, Map<String, dynamic> data) {
+    final legacyAmountNaira = data['contributionAmount'];
+    final amountKobo = data['contributionAmountKobo'] ??
+        (legacyAmountNaira is int ? legacyAmountNaira * 100 : null);
+    if (amountKobo is! int) {
+      throw const FormatException(
+        'Expected integer "contributionAmountKobo".',
+      );
+    }
     return SavingsPlanDocument(
       plan: SavingsPlan(
         id: id,
-        contributionAmount: firestoreInt(data, 'contributionAmount'),
+        contributionAmountKobo: amountKobo,
         frequency: firestoreEnum(data, 'frequency', SavingsFrequency.values),
         startDate: firestoreDateTime(data, 'startDate'),
         status: firestoreEnum(data, 'status', SavingsPlanStatus.values),
@@ -179,10 +193,13 @@ class SavingsPlanDocument {
     );
   }
 
-  Map<String, Object?> toMap() => {
+  Map<String, Object?> toMap({
+    Object? createdAtOverride,
+    Object? updatedAtOverride,
+  }) => {
     'userId': userId,
     'personalHealthPocketId': personalHealthPocketId,
-    'contributionAmount': plan.contributionAmount,
+    'contributionAmountKobo': plan.contributionAmountKobo,
     'frequency': plan.frequency.name,
     'startDate': firestoreTimestamp(plan.startDate),
     'nextContributionDate': nextContributionDate == null
@@ -190,8 +207,8 @@ class SavingsPlanDocument {
         : firestoreTimestamp(nextContributionDate!),
     'status': plan.status.name,
     'fundingSourceId': fundingSourceId,
-    'createdAt': firestoreTimestamp(createdAt),
-    'updatedAt': firestoreTimestamp(updatedAt),
+    'createdAt': createdAtOverride ?? firestoreTimestamp(createdAt),
+    'updatedAt': updatedAtOverride ?? firestoreTimestamp(updatedAt),
   };
 }
 
@@ -453,7 +470,7 @@ class ActivityRecordDocument {
     );
   }
 
-  Map<String, Object?> toMap() => {
+  Map<String, Object?> toMap({Object? createdAtOverride}) => {
     'userId': activity.userId,
     'activityType': activity.activityType,
     'metadata': activity.metadata,
@@ -461,7 +478,7 @@ class ActivityRecordDocument {
     'relatedEntityId': activity.relatedEntityId,
     if (activity.familyPocketId != null)
       'familyPocketId': activity.familyPocketId,
-    'createdAt': firestoreTimestamp(activity.createdAt),
+    'createdAt': createdAtOverride ?? firestoreTimestamp(activity.createdAt),
   };
 }
 

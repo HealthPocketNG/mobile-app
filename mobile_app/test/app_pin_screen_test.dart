@@ -22,10 +22,7 @@ void main() {
     addTearDown(appState.dispose);
     addTearDown(auth.dispose);
 
-    await auth.signInWithEmail(
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
+    await auth.signInWithGoogle();
     await appState.setPin('482913');
 
     await tester.pumpWidget(

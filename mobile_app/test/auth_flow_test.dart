@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
+import 'package:healthpocket/features/auth/domain/auth_user.dart';
 
 void main() {
   late InMemoryAuthRepository auth;
@@ -20,32 +21,21 @@ void main() {
     auth.dispose();
   });
 
-  test('requires email verification before email onboarding', () async {
-    final result = await auth.createAccountWithEmail(
-      fullName: 'Amara Okafor',
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
+  test('new Google account starts onboarding', () async {
+    final signedIn = await auth.signInWithGoogle();
+    final result = AuthResult(user: signedIn!.user, isNewUser: true);
 
     expect(
       await appState.acceptAuthentication(result),
-      AuthFlowDestination.verifyEmail,
-    );
-    auth.markEmailVerified();
-    expect(
-      await appState.acceptEmailVerification(),
       AuthFlowDestination.personalInformation,
     );
     expect(appState.profileStore.profile.emailVerified, isTrue);
   });
 
   test('restores a Firebase session and requires the local PIN', () async {
-    final result = await auth.signInWithEmail(
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
+    final result = await auth.signInWithGoogle();
     expect(
-      await appState.acceptAuthentication(result),
+      await appState.acceptAuthentication(result!),
       AuthFlowDestination.createPin,
     );
 
@@ -56,10 +46,7 @@ void main() {
   });
 
   test('sign-out returns startup routing to welcome', () async {
-    await auth.signInWithEmail(
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
+    await auth.signInWithGoogle();
     await appState.signOut();
 
     expect(await appState.resolveStartup(), AuthFlowDestination.welcome);

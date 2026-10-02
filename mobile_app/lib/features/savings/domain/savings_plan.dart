@@ -13,27 +13,29 @@ enum SavingsFrequency {
 class SavingsPlan {
   const SavingsPlan({
     required this.id,
-    required this.contributionAmount,
+    required this.contributionAmountKobo,
     required this.frequency,
     required this.startDate,
     required this.status,
   });
 
   final String id;
-  final int contributionAmount;
+  /// Scheduled contribution amount in integer kobo.
+  final int contributionAmountKobo;
   final SavingsFrequency frequency;
   final DateTime startDate;
   final SavingsPlanStatus status;
 
   SavingsPlan copyWith({
-    int? contributionAmount,
+    int? contributionAmountKobo,
     SavingsFrequency? frequency,
     DateTime? startDate,
     SavingsPlanStatus? status,
   }) {
     return SavingsPlan(
       id: id,
-      contributionAmount: contributionAmount ?? this.contributionAmount,
+      contributionAmountKobo:
+          contributionAmountKobo ?? this.contributionAmountKobo,
       frequency: frequency ?? this.frequency,
       startDate: startDate ?? this.startDate,
       status: status ?? this.status,

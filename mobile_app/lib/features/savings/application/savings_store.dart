@@ -51,13 +51,13 @@ class SavingsStore extends ChangeNotifier {
   }
 
   void configurePlan({
-    required int contributionAmount,
+    required int contributionAmountKobo,
     required SavingsFrequency frequency,
     required DateTime startDate,
   }) {
     _plan = SavingsPlan(
       id: _plan?.id ?? _personalPlanId,
-      contributionAmount: contributionAmount,
+      contributionAmountKobo: contributionAmountKobo,
       frequency: frequency,
       startDate: startDate,
       status: _plan?.status ?? SavingsPlanStatus.active,
@@ -66,13 +66,13 @@ class SavingsStore extends ChangeNotifier {
   }
 
   void saveOnboardingPlan({
-    required int contributionAmount,
+    required int contributionAmountKobo,
     required SavingsFrequency frequency,
     required DateTime startDate,
   }) {
     _plan = SavingsPlan(
       id: _personalPlanId,
-      contributionAmount: contributionAmount,
+      contributionAmountKobo: contributionAmountKobo,
       frequency: frequency,
       startDate: startDate,
       status: SavingsPlanStatus.active,

@@ -99,10 +99,10 @@ Git. Never substitute the production flavour for this direct-download beta.
 
 ## MVP authentication
 
-The app uses Firebase Authentication for Email/Password and Google Sign-In.
-Email/password accounts must verify their email before Firestore data is
-accessible. Firebase restores the signed-in account session; subsequent local
-opens require a six-digit HealthPocket PIN.
+The app uses Google Sign-In through Firebase Authentication as its only MVP
+account-entry method. Firestore also verifies the Google provider and verified
+email claims from the Firebase ID token. Firebase restores the signed-in
+account session; subsequent local opens require a six-digit HealthPocket PIN.
 
 The PIN is only an app-unlock factor. It never replaces the Firebase credential,
 is never written to Firestore, and is stored as a salted PBKDF2-SHA256 hash in
@@ -115,8 +115,8 @@ Phone/SMS authentication, production KYC, BVN/NIN checks, biometric unlock and
 identity-document collection are deliberately not implemented in this MVP.
 Repository and profile boundaries retain room for regulated providers later.
 
-Before testing Google Sign-In against real DEV Firebase, enable Email/Password
-and Google in **Authentication → Sign-in method** for
+Before testing Google Sign-In against real DEV Firebase, enable Google in
+**Authentication → Sign-in method** for
 `healthpocket-dev-a82f3`, select the project support email, then refresh only
 the DEV Android configuration:
 

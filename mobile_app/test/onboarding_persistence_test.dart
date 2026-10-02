@@ -3,6 +3,7 @@ import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
+import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
@@ -22,18 +23,10 @@ void main() {
         savingsRepository: savings,
       );
 
-      final result = await auth.createAccountWithEmail(
-        fullName: 'Amara Okafor',
-        email: 'amara@example.com',
-        password: 'secure-password',
-      );
+      final signedIn = await auth.signInWithGoogle();
+      final result = AuthResult(user: signedIn!.user, isNewUser: true);
       expect(
         await appState.acceptAuthentication(result),
-        AuthFlowDestination.verifyEmail,
-      );
-      auth.markEmailVerified();
-      expect(
-        await appState.acceptEmailVerification(),
         AuthFlowDestination.personalInformation,
       );
 
@@ -46,7 +39,7 @@ void main() {
         nextOfKinPhone: '+2348098765432',
       );
       appState.savingsStore.saveOnboardingPlan(
-        contributionAmount: 3000,
+        contributionAmountKobo: 300000,
         frequency: SavingsFrequency.weekly,
         startDate: DateTime(2026, 10, 8),
       );
@@ -59,14 +52,14 @@ void main() {
       expect(profiles.data?.profile.phoneVerified, isFalse);
       expect(savings.pocket?.id, 'personal-demo-user');
       expect(savings.plan?.id, 'personal-plan-demo-user');
-      expect(savings.plan?.contributionAmount, 3000);
+      expect(savings.plan?.contributionAmountKobo, 300000);
 
       await appState.updateSavingsPlan(
-        contributionAmount: 4500,
+        contributionAmountKobo: 450000,
         frequency: SavingsFrequency.daily,
         startDate: DateTime(2026, 10, 12),
       );
-      expect(savings.plan?.contributionAmount, 4500);
+      expect(savings.plan?.contributionAmountKobo, 450000);
       expect(savings.plan?.frequency, SavingsFrequency.daily);
 
       await appState.toggleSavingsPlan();
@@ -165,10 +158,7 @@ void main() {
     addTearDown(appState.dispose);
     addTearDown(auth.dispose);
 
-    await auth.signInWithEmail(
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
+    await auth.signInWithGoogle();
     appState.profileStore.beginRegistration(
       fullName: 'Amara Okafor',
       email: 'amara@example.com',
@@ -176,7 +166,7 @@ void main() {
       emailVerified: true,
     );
     appState.savingsStore.saveOnboardingPlan(
-      contributionAmount: 5000,
+      contributionAmountKobo: 500000,
       frequency: SavingsFrequency.monthly,
       startDate: DateTime(2026, 10, 1),
     );
@@ -201,11 +191,8 @@ void main() {
     addTearDown(appState.dispose);
     addTearDown(auth.dispose);
 
-    final result = await auth.signInWithEmail(
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
-    await appState.acceptAuthentication(result);
+    final result = await auth.signInWithGoogle();
+    await appState.acceptAuthentication(result!);
     appState.profileStore.beginRegistration(
       fullName: 'Amara Okafor',
       email: 'amara@example.com',
@@ -213,7 +200,7 @@ void main() {
       emailVerified: true,
     );
     appState.savingsStore.saveOnboardingPlan(
-      contributionAmount: 5000,
+      contributionAmountKobo: 500000,
       frequency: SavingsFrequency.weekly,
       startDate: DateTime(2026, 10, 1),
     );

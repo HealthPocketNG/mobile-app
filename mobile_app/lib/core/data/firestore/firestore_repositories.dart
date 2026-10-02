@@ -25,55 +25,16 @@ class FirebaseAuthRepository implements AuthRepository {
   final GoogleSignIn _googleSignIn;
 
   @override
-  AuthUser? get currentUser => _mapUser(_auth.currentUser);
+  AuthUser? get currentUser => _mapGoogleUser(_auth.currentUser);
 
   @override
-  String? get currentUserId => _auth.currentUser?.uid;
+  String? get currentUserId => currentUser?.uid;
 
   @override
-  Stream<AuthUser?> watchUser() => _auth.userChanges().map(_mapUser);
+  Stream<AuthUser?> watchUser() => _auth.userChanges().map(_mapGoogleUser);
 
   @override
-  Future<bool> hasActiveSession() async => _auth.currentUser != null;
-
-  @override
-  Future<AuthResult> createAccountWithEmail({
-    required String fullName,
-    required String email,
-    required String password,
-  }) async {
-    try {
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-      await credential.user!.updateDisplayName(fullName.trim());
-      await credential.user!.sendEmailVerification();
-      await credential.user!.reload();
-      return AuthResult(user: _mapUser(_auth.currentUser)!, isNewUser: true);
-    } on FirebaseAuthException catch (error) {
-      throw _failure(error);
-    }
-  }
-
-  @override
-  Future<AuthResult> signInWithEmail({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-      return AuthResult(
-        user: _mapUser(credential.user)!,
-        isNewUser: credential.additionalUserInfo?.isNewUser ?? false,
-      );
-    } on FirebaseAuthException catch (error) {
-      throw _failure(error);
-    }
-  }
+  Future<bool> hasActiveSession() async => currentUser != null;
 
   @override
   Future<AuthResult?> signInWithGoogle() async {
@@ -90,64 +51,12 @@ class FirebaseAuthRepository implements AuthRepository {
         credential = await _auth.signInWithCredential(firebaseCredential);
       }
       return AuthResult(
-        user: _mapUser(credential.user)!,
+        user: _mapGoogleUser(credential.user)!,
         isNewUser: credential.additionalUserInfo?.isNewUser ?? false,
       );
     } on GoogleSignInException catch (error) {
       if (error.code == GoogleSignInExceptionCode.canceled) return null;
       throw const AuthFailure('Google Sign-In could not be completed.');
-    } on FirebaseAuthException catch (error) {
-      throw _failure(error);
-    }
-  }
-
-  @override
-  Future<void> sendEmailVerification() async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) throw const AuthFailure('Your session has expired.');
-      if (!user.emailVerified) await user.sendEmailVerification();
-    } on FirebaseAuthException catch (error) {
-      throw _failure(error);
-    }
-  }
-
-  @override
-  Future<AuthUser?> reloadCurrentUser() async {
-    try {
-      await _auth.currentUser?.reload();
-      final user = _auth.currentUser;
-      if (user?.emailVerified == true) {
-        // Firestore rules read email_verified from the ID token, so refresh it
-        // immediately after the user confirms their email.
-        await user!.getIdToken(true);
-      }
-      return _mapUser(user);
-    } on FirebaseAuthException catch (error) {
-      throw _failure(error);
-    }
-  }
-
-  @override
-  Future<void> sendPasswordResetEmail(String email) async {
-    try {
-      await _auth.sendPasswordResetEmail(email: email.trim());
-    } on FirebaseAuthException catch (error) {
-      throw _failure(error);
-    }
-  }
-
-  @override
-  Future<void> reauthenticateWithPassword(String password) async {
-    final user = _auth.currentUser;
-    final email = user?.email;
-    if (user == null || email == null) {
-      throw const AuthFailure('Password re-authentication is unavailable.');
-    }
-    try {
-      await user.reauthenticateWithCredential(
-        EmailAuthProvider.credential(email: email, password: password),
-      );
     } on FirebaseAuthException catch (error) {
       throw _failure(error);
     }
@@ -182,44 +91,33 @@ class FirebaseAuthRepository implements AuthRepository {
     await _auth.signOut();
   }
 
-  AuthUser? _mapUser(User? user) {
+  AuthUser? _mapGoogleUser(User? user) {
     if (user == null) return null;
-    final providers = <AppAuthProvider>{};
-    for (final provider in user.providerData) {
-      switch (provider.providerId) {
-        case 'password':
-          providers.add(AppAuthProvider.password);
-        case 'google.com':
-          providers.add(AppAuthProvider.google);
-        case 'phone':
-          providers.add(AppAuthProvider.phone);
-      }
-    }
+    final usesGoogle = user.providerData.any(
+      (provider) => provider.providerId == 'google.com',
+    );
+    if (!usesGoogle) return null;
     return AuthUser(
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
       photoUrl: user.photoURL,
       emailVerified: user.emailVerified,
-      providers: Set.unmodifiable(providers),
+      providers: const {AppAuthProvider.google},
     );
   }
 
-  AuthFailure _failure(
-    FirebaseAuthException error,
-  ) => AuthFailure(switch (error.code) {
-    'email-already-in-use' => 'An account already uses that email address.',
-    'invalid-email' => 'Enter a valid email address.',
-    'weak-password' => 'Choose a stronger password with at least 8 characters.',
-    'wrong-password' ||
-    'invalid-credential' => 'The email address or password is incorrect.',
-    'user-disabled' => 'This account has been disabled.',
-    'too-many-requests' => 'Too many attempts. Please wait and try again.',
-    'requires-recent-login' =>
-      'Please sign in again before changing this security setting.',
-    'network-request-failed' => 'Check your internet connection and try again.',
-    _ => 'Authentication could not be completed. Please try again.',
-  }, code: error.code);
+  AuthFailure _failure(FirebaseAuthException error) =>
+      AuthFailure(switch (error.code) {
+        'invalid-credential' => 'Google authentication could not be verified.',
+        'user-disabled' => 'This account has been disabled.',
+        'too-many-requests' => 'Too many attempts. Please wait and try again.',
+        'requires-recent-login' =>
+          'Please sign in again before changing this security setting.',
+        'network-request-failed' =>
+          'Check your internet connection and try again.',
+        _ => 'Authentication could not be completed. Please try again.',
+      }, code: error.code);
 }
 
 class FirestoreProfileRepository implements ProfileRepository {
@@ -243,14 +141,27 @@ class FirestoreProfileRepository implements ProfileRepository {
     required String userId,
     required UserProfile profile,
     required NotificationPreferences notifications,
-  }) {
+  }) async {
+    final reference = _profile(userId);
+    final existing = await reference.get();
     final document = UserProfileDocument.fromDomain(
       userId: userId,
       profile: profile,
       notifications: notifications,
       updatedAt: DateTime.now(),
     );
-    return _profile(userId).set(document, SetOptions(merge: true));
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .set(
+          document.toMap(
+            createdAtOverride: existing.exists
+                ? Timestamp.fromDate(existing.data()!.profile.memberSince)
+                : FieldValue.serverTimestamp(),
+            updatedAtOverride: FieldValue.serverTimestamp(),
+          ),
+          SetOptions(merge: true),
+        );
   }
 
   UserProfileDocumentData? _profileData(
@@ -332,7 +243,17 @@ class FirestoreSavingsRepository implements SavingsRepository {
           : pocket.createdAt,
       updatedAt: pocket.updatedAt,
     );
-    await reference.set(PersonalHealthPocketDocument(persistedPocket));
+    await _firestore
+        .collection(reference.parent.path)
+        .doc(reference.id)
+        .set(
+          PersonalHealthPocketDocument(persistedPocket).toMap(
+            createdAtOverride: existing?.id == pocket.id
+                ? Timestamp.fromDate(existing!.createdAt)
+                : FieldValue.serverTimestamp(),
+            updatedAtOverride: FieldValue.serverTimestamp(),
+          ),
+        );
   }
 
   @override
@@ -365,7 +286,17 @@ class FirestoreSavingsRepository implements SavingsRepository {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );
-    await plans.doc(plan.id).set(document);
+    await _firestore
+        .collection('savings_plans')
+        .doc(plan.id)
+        .set(
+          document.toMap(
+            createdAtOverride: existing == null
+                ? FieldValue.serverTimestamp()
+                : Timestamp.fromDate(existing.createdAt),
+            updatedAtOverride: FieldValue.serverTimestamp(),
+          ),
+        );
   }
 }
 

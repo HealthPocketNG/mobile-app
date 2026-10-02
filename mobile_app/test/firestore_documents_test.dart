@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/core/data/firestore/firestore_documents.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
@@ -86,7 +87,7 @@ void main() {
     final document = SavingsPlanDocument(
       plan: SavingsPlan(
         id: 'plan-1',
-        contributionAmount: 5000,
+        contributionAmountKobo: 500000,
         frequency: SavingsFrequency.weekly,
         startDate: createdAt,
         status: SavingsPlanStatus.active,
@@ -101,7 +102,27 @@ void main() {
     final decoded = SavingsPlanDocument.fromMap('plan-1', encoded);
 
     expect(encoded['frequency'], 'weekly');
+    expect(encoded['contributionAmountKobo'], 500000);
     expect(decoded.plan.frequency, SavingsFrequency.weekly);
+    expect(decoded.plan.contributionAmountKobo, 500000);
+  });
+
+  test('legacy savings-plan naira amounts are read as kobo', () {
+    final timestamp = Timestamp.fromDate(DateTime.utc(2026, 3, 1));
+    final decoded = SavingsPlanDocument.fromMap('legacy-plan', {
+      'userId': 'user-1',
+      'personalHealthPocketId': 'personal-1',
+      'contributionAmount': 5000,
+      'frequency': 'weekly',
+      'startDate': timestamp,
+      'nextContributionDate': null,
+      'status': 'active',
+      'fundingSourceId': null,
+      'createdAt': timestamp,
+      'updatedAt': timestamp,
+    });
+
+    expect(decoded.plan.contributionAmountKobo, 500000);
   });
 
   test('removed Family Pocket membership preserves its audit timestamp', () {

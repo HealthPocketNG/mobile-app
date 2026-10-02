@@ -16,7 +16,7 @@ import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 typedef SavingsPlanSaveCallback = Future<void> Function({
-  required int contributionAmount,
+  required int contributionAmountKobo,
   required SavingsFrequency frequency,
   required DateTime startDate,
 });
@@ -58,13 +58,13 @@ class SavingsScreen extends StatelessWidget {
       final savePlan = onSavePlan;
       if (savePlan == null) {
         store.configurePlan(
-          contributionAmount: draft.contributionAmount,
+          contributionAmountKobo: draft.contributionAmountKobo,
           frequency: draft.frequency,
           startDate: draft.startDate,
         );
       } else {
         await savePlan(
-          contributionAmount: draft.contributionAmount,
+          contributionAmountKobo: draft.contributionAmountKobo,
           frequency: draft.frequency,
           startDate: draft.startDate,
         );
@@ -337,7 +337,7 @@ class _PlanCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_formatNaira(plan.contributionAmount)} ${plan.frequency.label.toLowerCase()}',
+                      '${_formatKobo(plan.contributionAmountKobo)} ${plan.frequency.label.toLowerCase()}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -481,7 +481,7 @@ class _PlanFormSheetState extends State<_PlanFormSheet> {
   void initState() {
     super.initState();
     _amountController = TextEditingController(
-      text: (widget.plan?.contributionAmount ?? 500).toString(),
+      text: ((widget.plan?.contributionAmountKobo ?? 50000) ~/ 100).toString(),
     );
     _frequency = widget.plan?.frequency ?? SavingsFrequency.weekly;
     _startDate = widget.plan?.startDate ?? DateTime.now();
@@ -509,7 +509,7 @@ class _PlanFormSheetState extends State<_PlanFormSheet> {
     Navigator.pop(
       context,
       _PlanDraft(
-        contributionAmount: int.parse(_amountController.text),
+        contributionAmountKobo: int.parse(_amountController.text) * 100,
         frequency: _frequency,
         startDate: _startDate,
       ),
@@ -1172,12 +1172,12 @@ class _SheetFrame extends StatelessWidget {
 
 class _PlanDraft {
   const _PlanDraft({
-    required this.contributionAmount,
+    required this.contributionAmountKobo,
     required this.frequency,
     required this.startDate,
   });
 
-  final int contributionAmount;
+  final int contributionAmountKobo;
   final SavingsFrequency frequency;
   final DateTime startDate;
 }

@@ -14,10 +14,7 @@ void main() {
       final auth = InMemoryAuthRepository();
       final families = _MemoryFamilyPocketRepository();
       final contributions = _MemoryContributionRepository();
-      await auth.signInWithEmail(
-        email: 'amara@example.com',
-        password: 'secure-password',
-      );
+      await auth.signInWithGoogle();
       final appState = AppState(
         authRepository: auth,
         familyPocketRepository: families,

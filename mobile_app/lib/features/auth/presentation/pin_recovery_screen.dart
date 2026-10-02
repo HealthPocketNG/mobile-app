@@ -3,7 +3,6 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
-import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
 
 class PinRecoveryScreen extends StatefulWidget {
@@ -16,25 +15,8 @@ class PinRecoveryScreen extends StatefulWidget {
 }
 
 class _PinRecoveryScreenState extends State<PinRecoveryScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _passwordController = TextEditingController();
   bool _isBusy = false;
   String? _message;
-
-  @override
-  void dispose() {
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _withPassword() async {
-    if (!_formKey.currentState!.validate()) return;
-    await _reauthenticate(
-      () => widget.appState.authRepository.reauthenticateWithPassword(
-        _passwordController.text,
-      ),
-    );
-  }
 
   Future<void> _withGoogle() async {
     await _reauthenticate(() async {
@@ -67,7 +49,6 @@ class _PinRecoveryScreenState extends State<PinRecoveryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.appState.authRepository.currentUser;
     return Scaffold(
       appBar: AppBar(title: const Text('Reset app PIN')),
       body: SafeArea(
@@ -86,41 +67,14 @@ class _PinRecoveryScreenState extends State<PinRecoveryScreen> {
               style: TextStyle(color: AppColors.inkMuted),
             ),
             const SizedBox(height: AppSpacing.xl),
-            if (user?.usesPassword == true)
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Account password',
-                        prefixIcon: Icon(Icons.lock_outline_rounded),
-                      ),
-                      validator: (value) => value == null || value.isEmpty
-                          ? 'Enter your account password'
-                          : null,
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    AppPrimaryButton(
-                      label: _isBusy ? 'Checking…' : 'Confirm password',
-                      onPressed: _isBusy ? null : _withPassword,
-                    ),
-                  ],
-                ),
+            OutlinedButton.icon(
+              onPressed: _isBusy ? null : _withGoogle,
+              icon: const Icon(Icons.g_mobiledata_rounded, size: 30),
+              label: Text(_isBusy ? 'Checking…' : 'Continue with Google'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
               ),
-            if (user?.usesGoogle == true) ...[
-              const SizedBox(height: AppSpacing.md),
-              OutlinedButton.icon(
-                onPressed: _isBusy ? null : _withGoogle,
-                icon: const Icon(Icons.g_mobiledata_rounded, size: 30),
-                label: const Text('Continue with Google'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                ),
-              ),
-            ],
+            ),
             if (_message != null) ...[
               const SizedBox(height: AppSpacing.md),
               Text(

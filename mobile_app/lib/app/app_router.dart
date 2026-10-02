@@ -4,8 +4,6 @@ import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/features/auth/presentation/auth_form_screen.dart';
 import 'package:healthpocket/features/auth/presentation/app_pin_screen.dart';
-import 'package:healthpocket/features/auth/presentation/email_verification_screen.dart';
-import 'package:healthpocket/features/auth/presentation/forgot_password_screen.dart';
 import 'package:healthpocket/features/auth/presentation/pin_recovery_screen.dart';
 import 'package:healthpocket/features/auth/presentation/splash_screen.dart';
 import 'package:healthpocket/features/auth/presentation/welcome_screen.dart';
@@ -23,8 +21,6 @@ enum AppRoute {
   welcome('/welcome'),
   signIn('/sign-in'),
   signUp('/sign-up'),
-  forgotPassword('/forgot-password'),
-  verifyEmail('/verify-email'),
   createPin('/create-pin'),
   unlockPin('/unlock-pin'),
   pinRecovery('/pin-recovery'),
@@ -67,10 +63,6 @@ class AppRouter {
             mode: AuthMode.signUp,
             appState: appState,
           ),
-          AppRoute.forgotPassword => ForgotPasswordScreen(
-            authRepository: appState.authRepository,
-          ),
-          AppRoute.verifyEmail => EmailVerificationScreen(appState: appState),
           AppRoute.createPin => AppPinScreen(
             appState: appState,
             mode: AppPinMode.create,
@@ -153,7 +145,6 @@ class AppRouter {
 AppRoute appRouteForAuthFlow(AuthFlowDestination destination) =>
     switch (destination) {
       AuthFlowDestination.welcome => AppRoute.welcome,
-      AuthFlowDestination.verifyEmail => AppRoute.verifyEmail,
       AuthFlowDestination.personalInformation => AppRoute.personalInformation,
       AuthFlowDestination.createPin => AppRoute.createPin,
       AuthFlowDestination.unlockPin => AppRoute.unlockPin,

@@ -39,12 +39,6 @@ class ProfileStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void verifyEmailAddress() {
-    if (_profile.emailVerified) return;
-    _profile = _profile.copyWith(emailVerified: true);
-    notifyListeners();
-  }
-
   void verifyPhoneNumber() {
     if (_profile.phoneVerified) return;
     _profile = _profile.copyWith(phoneVerified: true);

@@ -30,6 +30,7 @@ const verifiedContext = (uid, email = `${uid}@example.com`) =>
   environment.authenticatedContext(uid, {
     email,
     email_verified: true,
+    firebase: { sign_in_provider: 'google.com' },
   });
 
 const profileFor = (uid, email = `${uid}@example.com`) => ({
@@ -52,8 +53,8 @@ const profileFor = (uid, email = `${uid}@example.com`) => ({
     healthReminders: true,
     productUpdates: false,
   },
-  createdAt: now,
-  updatedAt: now,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
 });
 
 const seedPersonalSavings = async (uid = 'owner') => {
@@ -69,7 +70,7 @@ const seedPersonalSavings = async (uid = 'owner') => {
     await setDoc(doc(db, `savings_plans/personal-plan-${uid}`), {
       userId: uid,
       personalHealthPocketId: `personal-${uid}`,
-      contributionAmount: 5000,
+      contributionAmountKobo: 500000,
       frequency: 'weekly',
       startDate: now,
       nextContributionDate: null,
@@ -257,7 +258,7 @@ test('profile schema and immutable identity cannot be polluted', async () => {
         healthReminders: false,
         productUpdates: true,
       },
-      updatedAt: Timestamp.fromDate(new Date('2026-01-02T00:00:00Z')),
+      updatedAt: serverTimestamp(),
     }),
   );
   const strangerDb = verifiedContext('stranger').firestore();
@@ -286,9 +287,16 @@ test('profile schema and immutable identity cannot be polluted', async () => {
   );
 });
 
-test('an owner can create and edit the default savings plan', async () => {
+test('client-selected audit timestamps are rejected', async () => {
   const ownerDb = verifiedContext('owner').firestore();
-  await assertSucceeds(
+  await assertFails(
+    setDoc(doc(ownerDb, 'users/owner'), {
+      ...profileFor('owner'),
+      createdAt: now,
+      updatedAt: now,
+    }),
+  );
+  await assertFails(
     setDoc(doc(ownerDb, 'personal_health_pockets/personal-owner'), {
       userId: 'owner',
       currency: 'NGN',
@@ -297,26 +305,39 @@ test('an owner can create and edit the default savings plan', async () => {
       updatedAt: now,
     }),
   );
+});
+
+test('an owner can create and edit the default savings plan', async () => {
+  const ownerDb = verifiedContext('owner').firestore();
+  await assertSucceeds(
+    setDoc(doc(ownerDb, 'personal_health_pockets/personal-owner'), {
+      userId: 'owner',
+      currency: 'NGN',
+      status: 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
   await assertSucceeds(
     setDoc(doc(ownerDb, 'savings_plans/personal-plan-owner'), {
       userId: 'owner',
       personalHealthPocketId: 'personal-owner',
-      contributionAmount: 5000,
+      contributionAmountKobo: 500000,
       frequency: 'weekly',
       startDate: now,
       nextContributionDate: null,
       status: 'active',
       fundingSourceId: null,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
   );
   await assertSucceeds(
     updateDoc(doc(ownerDb, 'savings_plans/personal-plan-owner'), {
-      contributionAmount: 7500,
+      contributionAmountKobo: 750000,
       frequency: 'monthly',
       status: 'paused',
-      updatedAt: Timestamp.fromDate(new Date('2026-01-02T00:00:00Z')),
+      updatedAt: serverTimestamp(),
     }),
   );
 });
@@ -879,19 +900,19 @@ test('a non-member cannot write into a Family Pocket activity feed', async () =>
   );
 });
 
-test('a verified phone identity remains a post-MVP authorization extension', async () => {
+test('phone identity cannot access Google-only MVP data', async () => {
   const phoneDb = environment.authenticatedContext('phone-user', {
     phone_number: '+2348012345678',
   }).firestore();
 
-  await assertSucceeds(
+  await assertFails(
     setDoc(doc(phoneDb, 'users/phone-user'), {
       ...profileFor('phone-user'),
       email: '',
       emailVerified: false,
     }),
   );
-  await assertSucceeds(
+  await assertFails(
     setDoc(doc(phoneDb, 'personal_health_pockets/phone-pocket'), {
       userId: 'phone-user',
       currency: 'NGN',

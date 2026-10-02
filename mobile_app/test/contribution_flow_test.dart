@@ -28,11 +28,8 @@ void main() {
         developmentContributionsEnabled: true,
       );
 
-      final result = await auth.signInWithEmail(
-        email: 'amara@example.com',
-        password: 'secure-password',
-      );
-      await appState.acceptAuthentication(result);
+      final result = await auth.signInWithGoogle();
+      await appState.acceptAuthentication(result!);
       await _flushEvents();
 
       const firstKey = '1111111111111111';
@@ -102,11 +99,8 @@ void main() {
     addTearDown(auth.dispose);
     addTearDown(contributions.dispose);
 
-    final result = await auth.signInWithEmail(
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
-    await appState.acceptAuthentication(result);
+    final result = await auth.signInWithGoogle();
+    await appState.acceptAuthentication(result!);
 
     for (final amount in [0, -1, 1000000001]) {
       await expectLater(
@@ -221,11 +215,8 @@ void main() {
     addTearDown(auth.dispose);
     addTearDown(contributions.dispose);
 
-    final result = await auth.signInWithEmail(
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
-    await appState.acceptAuthentication(result);
+    final result = await auth.signInWithGoogle();
+    await appState.acceptAuthentication(result!);
     await _flushEvents();
 
     profiles.data = UserProfileDocumentData(
@@ -233,7 +224,7 @@ void main() {
       notifications: profiles.data.notifications,
       kycStatus: profiles.data.kycStatus,
     );
-    savings.plan = savings.plan.copyWith(contributionAmount: 9000);
+    savings.plan = savings.plan.copyWith(contributionAmountKobo: 900000);
     await contributions.recordDevelopmentContribution(
       const ContributionRecord(
         id: 'dev_demo-user_dddddddddddddddd',
@@ -253,7 +244,7 @@ void main() {
     await appState.refreshDashboard();
 
     expect(appState.profileStore.profile.fullName, 'Amara Nwosu');
-    expect(appState.savingsStore.plan?.contributionAmount, 9000);
+    expect(appState.savingsStore.plan?.contributionAmountKobo, 900000);
     expect(appState.savingsStore.developmentBalanceKobo, 900000);
     expect(contributions.getCalls, 1);
   });
@@ -310,7 +301,7 @@ SavingsRepository _savingsRepository() => _MemorySavingsRepository(
   ),
   SavingsPlan(
     id: 'personal-plan-demo-user',
-    contributionAmount: 5000,
+    contributionAmountKobo: 500000,
     frequency: SavingsFrequency.weekly,
     startDate: DateTime(2026, 1, 1),
     status: SavingsPlanStatus.active,

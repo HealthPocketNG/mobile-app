@@ -35,7 +35,7 @@ class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
     super.initState();
     final plan = widget.savingsStore.plan;
     _amountController = TextEditingController(
-      text: (plan?.contributionAmount ?? 5000).toString(),
+      text: ((plan?.contributionAmountKobo ?? 50000) ~/ 100).toString(),
     );
     _frequency = plan?.frequency ?? SavingsFrequency.monthly;
     _startDate = plan?.startDate ?? DateTime.now();
@@ -61,7 +61,7 @@ class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     widget.savingsStore.saveOnboardingPlan(
-      contributionAmount: int.parse(_amountController.text),
+      contributionAmountKobo: int.parse(_amountController.text) * 100,
       frequency: _frequency,
       startDate: _startDate,
     );

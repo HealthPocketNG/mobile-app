@@ -353,10 +353,7 @@ void main() {
     final appState = AppState();
     addTearDown(appState.dispose);
 
-    await appState.authRepository.signInWithEmail(
-      email: 'amara@example.com',
-      password: 'secure-password',
-    );
+    await appState.authRepository.signInWithGoogle();
 
     appState.profileStore.beginRegistration(
       fullName: 'Amara Okafor',
@@ -373,12 +370,12 @@ void main() {
       nextOfKinPhone: '+234 809 876 5432',
     );
     appState.savingsStore.saveOnboardingPlan(
-      contributionAmount: 2500,
+      contributionAmountKobo: 250000,
       frequency: SavingsFrequency.monthly,
       startDate: DateTime(2026, 10, 1),
     );
     appState.savingsStore.saveOnboardingPlan(
-      contributionAmount: 3000,
+      contributionAmountKobo: 300000,
       frequency: SavingsFrequency.weekly,
       startDate: DateTime(2026, 10, 8),
     );
@@ -390,7 +387,7 @@ void main() {
     expect(profile.nextOfKinName, 'Chidi Okafor');
     expect(profile.phoneVerified, isFalse);
     expect(profile.demoKycComplete, isFalse);
-    expect(appState.savingsStore.plan!.contributionAmount, 3000);
+    expect(appState.savingsStore.plan!.contributionAmountKobo, 300000);
     expect(appState.savingsStore.plan!.frequency, SavingsFrequency.weekly);
     expect(appState.savingsStore.plan!.startDate, DateTime(2026, 10, 8));
     expect(appState.savingsStore.developmentBalanceKobo, 0);
