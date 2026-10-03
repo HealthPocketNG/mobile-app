@@ -24,10 +24,7 @@ class _EmptyDirectory implements CareDirectoryRepository {
 void main() {
   test('directory combines name, state and type filters', () async {
     final providers = await const DemoCareDirectoryRepository().getProviders();
-    expect(
-      providers.every((p) => p.isDemo && p.phone == null),
-      isTrue,
-    );
+    expect(providers.every((p) => p.isDemo && p.phone == null), isTrue);
     expect(
       filterCareProviders(
         providers,
@@ -65,10 +62,14 @@ void main() {
     await tester.tap(find.text('Demo Community Clinic'));
     await tester.pumpAndSettle();
     expect(find.textContaining('No booking, payment'), findsOneWidget);
-    expect(find.text('Pay Demo Community Clinic — demo authorization'),
-        findsNothing);
+    expect(
+      find.text('Pay Demo Community Clinic — demo authorization'),
+      findsNothing,
+    );
   });
-  testWidgets('location states and provider-first action render', (tester) async {
+  testWidgets('location states and provider-first action render', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(home: FindCareScreen(demoRequestsEnabled: true)),
     );
@@ -90,8 +91,7 @@ void main() {
     expect(find.textContaining('Location is unavailable'), findsOneWidget);
     await tester.tap(find.text('Demo Community Clinic'));
     await tester.pumpAndSettle();
-    expect(find.text('Pay Demo Community Clinic  →'),
-        findsOneWidget);
+    expect(find.text('Pay Demo Community Clinic  →'), findsOneWidget);
   });
   testWidgets('failed load can be retried', (tester) async {
     await tester.pumpWidget(
@@ -108,8 +108,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('4 providers'), findsOneWidget);
   });
-  testWidgets('empty directory explains that no partners are available',
-      (tester) async {
+  testWidgets('empty directory explains that no partners are available', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(home: FindCareScreen(repository: _EmptyDirectory())),
     );

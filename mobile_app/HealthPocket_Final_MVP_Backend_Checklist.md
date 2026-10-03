@@ -17,49 +17,49 @@
 - [x] Identify duplicate/obsolete beta code and remove or isolate it safely.
 - [x] Confirm dev/emulator and future production environments are separated.
 - [x] Centralize environment/configuration handling; no secrets in Flutter source.
-- [ ] Standardize IDs, timestamps, money representation, status enums, error models, and repository conventions.
+- [x] Standardize IDs, timestamps, money representation, status enums, error models, and repository conventions.
 - [x] Store money as integer **kobo**, never floating-point naira.
 - [x] Ensure all server-generated timestamps use trusted server timestamps.
-- [ ] Add structured logging for important backend operations without logging secrets, PINs, tokens, or sensitive payloads.
+- [x] Add structured logging for important backend operations without logging secrets, PINs, tokens, or sensitive payloads.
 
 ## 1. Authentication & Session
 
 - [x] Keep **Continue with Google** as the only MVP account entry method.
-- [ ] Create/retrieve the HealthPocket user document after successful Google authentication.
-- [ ] Prevent duplicate HealthPocket profiles for the same authenticated identity.
-- [ ] Implement first-login vs returning-user routing state.
-- [ ] Persist authenticated sessions correctly across app restarts.
-- [ ] Implement logout and clear local sensitive/session state correctly.
-- [ ] Implement account-disabled/deleted handling.
-- [ ] Implement backend/account state guards so incomplete onboarding cannot access protected flows.
-- [ ] Prepare an email verification-code service abstraction if HealthPocket requires an additional app-level email confirmation.
-- [ ] Verification codes must expire, be single-use, rate-limited, and never stored in plaintext.
-- [ ] Implement resend cooldown and attempt limits.
-- [ ] Do not treat client-side verification state as authoritative.
+- [x] Create/retrieve the HealthPocket user document after successful Google authentication.
+- [x] Prevent duplicate HealthPocket profiles for the same authenticated identity.
+- [x] Implement first-login vs returning-user routing state.
+- [x] Persist authenticated sessions correctly across app restarts.
+- [x] Implement logout and clear local sensitive/session state correctly.
+- [x] Implement account-disabled/deleted handling.
+- [x] Implement backend/account state guards so incomplete onboarding cannot access protected flows.
+- [x] Prepare an email verification-code service abstraction if HealthPocket requires an additional app-level email confirmation.
+- [x] Verification codes must expire, be single-use, rate-limited, and never stored in plaintext. *(Policy/contract prepared; no second code flow is active in the Google-only MVP.)*
+- [x] Implement resend cooldown and attempt limits. *(Policy/contract prepared for a future trusted backend implementation.)*
+- [x] Do not treat client-side verification state as authoritative.
 
 ## 2. 6-Digit App PIN
 
-- [ ] Support creation and confirmation of a 6-digit PIN.
-- [ ] Never store the PIN as plaintext in Firestore, logs, analytics, or local preferences.
-- [ ] Prefer device-secure storage / platform credential protection for app-unlock material.
-- [ ] Implement PIN verification for returning authenticated users.
-- [ ] Implement retry/lockout protection against repeated guessing.
-- [ ] Implement forgotten/reset PIN flow requiring re-authentication with Google.
-- [ ] Ensure logout invalidates PIN-only re-entry until Google authentication occurs again.
-- [ ] Test app restart, token expiry, logout, PIN reset, and reinstall edge cases.
+- [x] Support creation and confirmation of a 6-digit PIN.
+- [x] Never store the PIN as plaintext in Firestore, logs, analytics, or local preferences.
+- [x] Prefer device-secure storage / platform credential protection for app-unlock material.
+- [x] Implement PIN verification for returning authenticated users.
+- [x] Implement retry/lockout protection against repeated guessing.
+- [x] Implement forgotten/reset PIN flow requiring re-authentication with Google.
+- [x] Ensure logout invalidates PIN-only re-entry until Google authentication occurs again.
+- [x] Test app restart, token expiry, logout, PIN reset, and reinstall edge cases.
 
 ## 3. User Profile
 
-- [ ] Create a canonical user profile model.
-- [ ] Support name, email, date of birth, location, profile image reference, onboarding status, createdAt, and updatedAt.
-- [ ] Treat Google email/identity fields appropriately as identity-provider data.
-- [ ] Support profile editing for editable fields.
-- [ ] Implement profile photo upload to Firebase Storage.
-- [ ] Validate file type and size.
-- [ ] Restrict profile image write/delete permissions to the owning user.
-- [ ] Clean up/reconcile replaced profile images where appropriate.
-- [ ] Provide safe defaults/initials when no image exists.
-- [ ] Avoid collecting unnecessary identity/KYC data in the MVP.
+- [x] Create a canonical user profile model.
+- [x] Support name, email, date of birth, location, profile image reference, onboarding status, createdAt, and updatedAt.
+- [x] Treat Google email/identity fields appropriately as identity-provider data.
+- [x] Support profile editing for editable fields.
+- [ ] Implement profile photo upload to Firebase Storage. *(Code and emulator coverage complete; pending one-time DEV Storage bucket setup and deployment.)*
+- [x] Validate file type and size.
+- [ ] Restrict profile image write/delete permissions to the owning user. *(Prototype rules pass emulator tests; pending DEV Storage bucket setup and deployment.)*
+- [x] Clean up/reconcile replaced profile images where appropriate.
+- [x] Provide safe defaults/initials when no image exists.
+- [x] Avoid collecting unnecessary identity/KYC data in the MVP.
 
 ## 4. Wallet & Ledger Foundation — Critical
 

@@ -27,6 +27,7 @@ void main() {
         phoneNumber: '',
         emailVerified: true,
       );
+      await appState.completeProfileOnboarding();
       appState.familyPocketStore.resetForNewUser(
         userId: 'demo-user',
         name: 'Amara Okafor',
@@ -114,6 +115,13 @@ void main() {
       );
       addTearDown(restored.dispose);
       addTearDown(auth.dispose);
+      restored.profileStore.beginRegistration(
+        fullName: 'Amara Okafor',
+        email: 'amara@example.com',
+        phoneNumber: '',
+        emailVerified: true,
+      );
+      await restored.completeProfileOnboarding();
       await restored.refreshFamilyPockets();
 
       expect(restored.familyPocketStore.pockets, hasLength(1));

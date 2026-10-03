@@ -1,5 +1,7 @@
 enum KycStatus { notStarted, pending, verified, rejected, demoComplete }
 
+enum AccountOnboardingStatus { incomplete, complete }
+
 class UserProfile {
   const UserProfile({
     required this.fullName,
@@ -7,6 +9,8 @@ class UserProfile {
     required this.phoneNumber,
     required this.stateOfResidence,
     required this.memberSince,
+    this.updatedAt,
+    this.profileImagePath,
     this.dateOfBirth,
     this.gender,
     this.residentialAddress = '',
@@ -22,6 +26,8 @@ class UserProfile {
   final String phoneNumber;
   final String stateOfResidence;
   final DateTime memberSince;
+  final DateTime? updatedAt;
+  final String? profileImagePath;
   final DateTime? dateOfBirth;
   final String? gender;
   final String residentialAddress;
@@ -31,11 +37,16 @@ class UserProfile {
   final bool phoneVerified;
   final bool demoKycComplete;
 
+  DateTime get createdAt => memberSince;
+
   UserProfile copyWith({
     String? fullName,
     String? email,
     String? phoneNumber,
     String? stateOfResidence,
+    DateTime? updatedAt,
+    String? profileImagePath,
+    bool clearProfileImage = false,
     DateTime? dateOfBirth,
     String? gender,
     String? residentialAddress,
@@ -51,6 +62,10 @@ class UserProfile {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       stateOfResidence: stateOfResidence ?? this.stateOfResidence,
       memberSince: memberSince,
+      updatedAt: updatedAt ?? this.updatedAt,
+      profileImagePath: clearProfileImage
+          ? null
+          : profileImagePath ?? this.profileImagePath,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       gender: gender ?? this.gender,
       residentialAddress: residentialAddress ?? this.residentialAddress,

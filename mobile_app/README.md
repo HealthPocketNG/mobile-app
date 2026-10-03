@@ -60,7 +60,7 @@ Install and run the Firestore security-rule tests with:
 
 ```bash
 npm install --prefix firebase-tests
-firebase emulators:exec --only auth,firestore --project demo-healthpocket "npm --prefix firebase-tests test"
+firebase emulators:exec --only auth,firestore,storage --project demo-healthpocket "npm --prefix firebase-tests test"
 ```
 
 ## Before production distribution
@@ -152,3 +152,8 @@ slice. Real provider onboarding and administration remain in `TODO.md`.
 Website copy is drafted in `privacy-policy/terms.txt`. It is not publication-ready:
 resolve the owner checklist, review actual data practices, and supply the final
 Privacy and Terms URLs before connecting the app's website links.
+
+Backend identifiers are created through `lib/core/data/backend_ids.dart`.
+Firestore mutations use the privacy-safe structured logger in
+`lib/core/logging/backend_logger.dart`; its allowlist intentionally excludes
+PII, credentials, tokens, identifiers, payloads, and exception messages.

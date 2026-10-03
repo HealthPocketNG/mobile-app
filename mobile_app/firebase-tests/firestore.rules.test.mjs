@@ -47,6 +47,7 @@ const profileFor = (uid, email = `${uid}@example.com`) => ({
   emailVerified: true,
   phoneVerified: false,
   kycStatus: 'notStarted',
+  onboardingStatus: 'incomplete',
   notificationPreferences: {
     savingsReminders: true,
     familyActivity: true,
@@ -203,6 +204,33 @@ test('user profiles are private to their owner', async () => {
   );
 });
 
+test('membership identity is bound to its document path', async () => {
+  await seedFamilyPocket();
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(
+      doc(context.firestore(), 'family_pockets/family-secure/members/alias'),
+      {
+        pocketId: 'family-secure',
+        userId: 'victim',
+        name: 'Victim',
+        role: 'member',
+        canContribute: true,
+        isBeneficiary: false,
+        status: 'accepted',
+        joinedAt: now,
+      },
+    );
+  });
+  await assertFails(
+    getDoc(
+      doc(
+        verifiedContext('victim').firestore(),
+        'family_pockets/family-secure/members/alias',
+      ),
+    ),
+  );
+});
+
 test('unverified email accounts cannot access application data', async () => {
   const unverifiedDb = environment.authenticatedContext('owner', {
     email: 'owner@example.com',
@@ -287,6 +315,67 @@ test('profile schema and immutable identity cannot be polluted', async () => {
   );
 });
 
+test('profile image references stay inside the owners storage path', async () => {
+  const ownerDb = verifiedContext('owner').firestore();
+  const reference = doc(ownerDb, 'users/owner');
+  await assertSucceeds(setDoc(reference, profileFor('owner')));
+
+  await assertSucceeds(
+    updateDoc(reference, {
+      profileImagePath:
+        'users/owner/profile/0123456789abcdef0123456789abcdef.jpg',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    updateDoc(reference, {
+      profileImagePath:
+        'users/stranger/profile/0123456789abcdef0123456789abcdef.jpg',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    updateDoc(reference, {
+      profileImagePath: 'https://example.com/untrusted.jpg',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(reference, {
+      profileImagePath: null,
+      updatedAt: serverTimestamp(),
+    }),
+  );
+});
+
+test('onboarding completion requires profile details and cannot be reverted', async () => {
+  const ownerDb = verifiedContext('owner').firestore();
+  const reference = doc(ownerDb, 'users/owner');
+  await assertSucceeds(setDoc(reference, profileFor('owner')));
+
+  await assertFails(
+    updateDoc(reference, {
+      onboardingStatus: 'complete',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(reference, {
+      dateOfBirth: now,
+      gender: 'Female',
+      residentialAddress: '12 Health Street',
+      onboardingStatus: 'complete',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    updateDoc(reference, {
+      onboardingStatus: 'incomplete',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+});
+
 test('client-selected audit timestamps are rejected', async () => {
   const ownerDb = verifiedContext('owner').firestore();
   await assertFails(
@@ -304,6 +393,74 @@ test('client-selected audit timestamps are rejected', async () => {
       createdAt: now,
       updatedAt: now,
     }),
+  );
+});
+
+test('owner IDs are canonical and cannot be duplicated on alternate paths', async () => {
+  const ownerDb = verifiedContext('owner').firestore();
+  await assertFails(
+    setDoc(doc(ownerDb, 'personal_health_pockets/alternate-pocket'), {
+      userId: 'owner',
+      currency: 'NGN',
+      status: 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertSucceeds(
+    setDoc(doc(ownerDb, 'personal_health_pockets/personal-owner'), {
+      userId: 'owner',
+      currency: 'NGN',
+      status: 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(doc(ownerDb, 'savings_plans/alternate-plan'), {
+      userId: 'owner',
+      personalHealthPocketId: 'personal-owner',
+      contributionAmountKobo: 500000,
+      frequency: 'weekly',
+      startDate: now,
+      nextContributionDate: null,
+      status: 'active',
+      fundingSourceId: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+});
+
+test('a Family Pocket requires a canonical ID and atomic founding admin', async () => {
+  const ownerDb = verifiedContext('owner').firestore();
+  await assertFails(
+    setDoc(doc(ownerDb, 'family_pockets/family-owner'), {
+      name: 'Orphan Family',
+      beneficiaryLimit: 2,
+      createdBy: 'owner',
+      currency: 'NGN',
+      status: 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertFails(
+    setDoc(
+      doc(
+        ownerDb,
+        'family_pockets/family_owner_00000000000000000000000000000009',
+      ),
+      {
+        name: 'Orphan Family',
+        beneficiaryLimit: 2,
+        createdBy: 'owner',
+        currency: 'NGN',
+        status: 'active',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    ),
   );
 });
 
@@ -344,6 +501,7 @@ test('an owner can create and edit the default savings plan', async () => {
 
 test('Family Pocket and founding admin are created atomically', async () => {
   const ownerDb = verifiedContext('owner').firestore();
+  const pocketId = 'family_owner_00000000000000000000000000000001';
   await assertSucceeds(
     setDoc(doc(ownerDb, 'users/owner'), {
       ...profileFor('owner'),
@@ -351,7 +509,7 @@ test('Family Pocket and founding admin are created atomically', async () => {
     }),
   );
   const batch = writeBatch(ownerDb);
-  batch.set(doc(ownerDb, 'family_pockets/family-1'), {
+  batch.set(doc(ownerDb, `family_pockets/${pocketId}`), {
     name: 'Nwosu Family',
     beneficiaryLimit: 2,
     createdBy: 'owner',
@@ -360,8 +518,8 @@ test('Family Pocket and founding admin are created atomically', async () => {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  batch.set(doc(ownerDb, 'family_pockets/family-1/members/owner'), {
-    pocketId: 'family-1',
+  batch.set(doc(ownerDb, `family_pockets/${pocketId}/members/owner`), {
+    pocketId,
     userId: 'owner',
     name: 'Ada Nwosu',
     role: 'admin',
@@ -381,13 +539,13 @@ test('Family Pocket and founding admin are created atomically', async () => {
     )),
   );
   await assertSucceeds(
-    getDocs(collection(ownerDb, 'family_pockets/family-1/members')),
+    getDocs(collection(ownerDb, `family_pockets/${pocketId}/members`)),
   );
   await assertFails(
     getDocs(
       collection(
         verifiedContext('stranger').firestore(),
-        'family_pockets/family-1/members',
+        `family_pockets/${pocketId}/members`,
       ),
     ),
   );
@@ -461,7 +619,8 @@ test('an invitee can discover and accept only their verified-email invite', asyn
       profileFor('invitee', 'tola@example.com'),
     ),
   );
-  const invitePath = 'family_pockets/family-secure/invites/invite-1';
+  const inviteId = 'invite_admin_00000000000000000000000000000001';
+  const invitePath = `family_pockets/family-secure/invites/${inviteId}`;
   await assertSucceeds(
     setDoc(doc(adminDb, invitePath), {
       pocketId: 'family-secure',
@@ -531,7 +690,7 @@ test('an invitee can discover and accept only their verified-email invite', asyn
     {
       pocketId: 'family-secure',
       userId: 'invitee',
-      invitationId: 'invite-1',
+      invitationId: inviteId,
       name: 'HealthPocket User',
       role: 'member',
       canContribute: true,
@@ -544,7 +703,7 @@ test('an invitee can discover and accept only their verified-email invite', asyn
   await assertSucceeds(getDoc(doc(inviteeDb, 'family_pockets/family-secure')));
 
   await assertFails(
-    setDoc(doc(memberDb, 'family_pockets/family-secure/invites/attack'), {
+    setDoc(doc(memberDb, 'family_pockets/family-secure/invites/invite_member_00000000000000000000000000000001'), {
       pocketId: 'family-secure',
       pocketName: 'Secure Family',
       inviteeName: 'Attack',
@@ -560,7 +719,7 @@ test('an invitee can discover and accept only their verified-email invite', asyn
     }),
   );
   await assertFails(
-    setDoc(doc(adminDb, 'family_pockets/family-secure/invites/polluted'), {
+    setDoc(doc(adminDb, 'family_pockets/family-secure/invites/invite_admin_00000000000000000000000000000002'), {
       pocketId: 'family-secure',
       pocketName: 'Secure Family',
       inviteeName: 'x'.repeat(101),
@@ -613,15 +772,18 @@ test('beneficiary invitations reserve at most two slots and release declined slo
     return batch.commit();
   };
 
-  await assertSucceeds(reserve('beneficiary-invite-2', 'two@example.com', 2));
-  await assertFails(reserve('beneficiary-invite-3', 'three@example.com', 3));
+  const invite2 = 'invite_admin_00000000000000000000000000000012';
+  const invite3 = 'invite_admin_00000000000000000000000000000013';
+  const invite4 = 'invite_admin_00000000000000000000000000000014';
+  await assertSucceeds(reserve(invite2, 'two@example.com', 2));
+  await assertFails(reserve(invite3, 'three@example.com', 3));
 
   const inviteeDb = verifiedContext('invitee-two', 'two@example.com').firestore();
   const decline = writeBatch(inviteeDb);
   decline.update(
     doc(
       inviteeDb,
-      'family_pockets/family-secure/invites/beneficiary-invite-2',
+      `family_pockets/family-secure/invites/${invite2}`,
     ),
     {
       status: 'declined',
@@ -634,7 +796,7 @@ test('beneficiary invitations reserve at most two slots and release declined slo
   );
   await assertSucceeds(decline.commit());
 
-  await assertSucceeds(reserve('beneficiary-invite-4', 'four@example.com', 2));
+  await assertSucceeds(reserve(invite4, 'four@example.com', 2));
   const fourthDb = verifiedContext('invitee-four', 'four@example.com').firestore();
   await assertSucceeds(
     setDoc(
@@ -646,7 +808,7 @@ test('beneficiary invitations reserve at most two slots and release declined slo
   acceptance.update(
     doc(
       fourthDb,
-      'family_pockets/family-secure/invites/beneficiary-invite-4',
+      `family_pockets/family-secure/invites/${invite4}`,
     ),
     {
       status: 'accepted',
@@ -659,7 +821,7 @@ test('beneficiary invitations reserve at most two slots and release declined slo
     {
       pocketId: 'family-secure',
       userId: 'invitee-four',
-      invitationId: 'beneficiary-invite-4',
+      invitationId: invite4,
       name: 'HealthPocket User',
       role: 'member',
       canContribute: false,
@@ -896,6 +1058,22 @@ test('a non-member cannot write into a Family Pocket activity feed', async () =>
       relatedEntityId: 'contribution-1',
       familyPocketId: 'family-1',
       createdAt: now,
+    }),
+  );
+});
+
+test('even active members cannot manufacture audit activity', async () => {
+  await seedFamilyPocket();
+  const memberDb = verifiedContext('member').firestore();
+  await assertFails(
+    setDoc(doc(memberDb, 'activities/member-forged-event'), {
+      userId: 'member',
+      activityType: 'contributionRecorded',
+      metadata: { amount: 5000 },
+      relatedEntityType: 'contribution',
+      relatedEntityId: 'forged-contribution',
+      familyPocketId: 'family-secure',
+      createdAt: serverTimestamp(),
     }),
   );
 });

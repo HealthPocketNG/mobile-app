@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:healthpocket/app/health_pocket_app.dart';
 import 'package:healthpocket/core/data/firestore/firestore_repositories.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
+import 'package:healthpocket/features/profile/data/firebase_profile_photo_repository.dart';
 
 enum AppEnvironment { development, production }
 
@@ -88,6 +90,10 @@ Future<void> bootstrapFirebase({
       _firebaseEmulatorHost,
       8080,
     );
+    await FirebaseStorage.instance.useStorageEmulator(
+      _firebaseEmulatorHost,
+      9199,
+    );
   }
   final authRepository = await FirebaseAuthRepository.initialize(
     FirebaseAuth.instance,
@@ -101,6 +107,9 @@ Future<void> bootstrapFirebase({
       authRepository: authRepository,
       pinRepository: SecureAppPinRepository(storage: FlutterSecureValueStore()),
       profileRepository: repositories.profiles,
+      profilePhotoRepository: FirebaseProfilePhotoRepository(
+        FirebaseStorage.instance,
+      ),
       savingsRepository: repositories.savings,
       contributionRepository: repositories.contributions,
       familyPocketRepository: repositories.familyPockets,

@@ -29,6 +29,14 @@ void main() {
         await appState.acceptAuthentication(result),
         AuthFlowDestination.personalInformation,
       );
+      expect(profiles.createdCount, 1);
+      expect(
+        await appState.acceptAuthentication(
+          AuthResult(user: result.user, isNewUser: false),
+        ),
+        AuthFlowDestination.personalInformation,
+      );
+      expect(profiles.createdCount, 1);
 
       appState.profileStore.updatePersonalInformation(
         dateOfBirth: DateTime(1995, 4, 18),
@@ -228,21 +236,53 @@ void main() {
 class _MemoryProfileRepository implements ProfileRepository {
   UserProfileDocumentData? data;
   bool failSave = false;
+  int createdCount = 0;
 
   @override
   Future<UserProfileDocumentData?> getProfile(String userId) async => data;
+
+  @override
+  Future<ProfileProvisioningResult> getOrCreateProfile(AuthUser user) async {
+    final existing = data;
+    if (existing != null) {
+      return ProfileProvisioningResult(data: existing, wasCreated: false);
+    }
+    final profile = UserProfile(
+      fullName: user.displayName ?? 'HealthPocket User',
+      email: user.email ?? '',
+      phoneNumber: '',
+      stateOfResidence: '',
+      memberSince: DateTime.now(),
+      emailVerified: user.emailVerified,
+    );
+    await saveProfile(
+      userId: user.uid,
+      profile: profile,
+      notifications: const NotificationPreferences(
+        savingsReminders: true,
+        familyActivity: true,
+        healthReminders: true,
+        productUpdates: false,
+      ),
+      onboardingStatus: AccountOnboardingStatus.incomplete,
+    );
+    createdCount++;
+    return ProfileProvisioningResult(data: data!, wasCreated: true);
+  }
 
   @override
   Future<void> saveProfile({
     required String userId,
     required UserProfile profile,
     required NotificationPreferences notifications,
+    required AccountOnboardingStatus onboardingStatus,
   }) async {
     if (failSave) throw StateError('simulated profile write failure');
     data = UserProfileDocumentData(
       profile: profile,
       notifications: notifications,
       kycStatus: KycStatus.notStarted,
+      onboardingStatus: onboardingStatus,
     );
   }
 

@@ -20,6 +20,7 @@ class SavingsPlan {
   });
 
   final String id;
+
   /// Scheduled contribution amount in integer kobo.
   final int contributionAmountKobo;
   final SavingsFrequency frequency;

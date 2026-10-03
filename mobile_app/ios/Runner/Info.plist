@@ -4,6 +4,8 @@
 <dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan HealthPocket demo provider QR codes for simulated care requests.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select a profile photo for your HealthPocket account.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

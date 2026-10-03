@@ -19,6 +19,9 @@ class InMemoryAuthRepository implements AuthRepository {
   Future<bool> hasActiveSession() async => _user != null;
 
   @override
+  Future<AuthUser?> restoreSession() async => _user;
+
+  @override
   Stream<AuthUser?> watchUser() => _controller.stream;
 
   @override

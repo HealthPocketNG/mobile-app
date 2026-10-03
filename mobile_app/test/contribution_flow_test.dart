@@ -5,6 +5,7 @@ import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
+import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
@@ -223,6 +224,7 @@ void main() {
       profile: profiles.data.profile.copyWith(fullName: 'Amara Nwosu'),
       notifications: profiles.data.notifications,
       kycStatus: profiles.data.kycStatus,
+      onboardingStatus: profiles.data.onboardingStatus,
     );
     savings.plan = savings.plan.copyWith(contributionAmountKobo: 900000);
     await contributions.recordDevelopmentContribution(
@@ -287,6 +289,7 @@ ProfileRepository _profileRepository() => _MemoryProfileRepository(
       productUpdates: false,
     ),
     kycStatus: KycStatus.notStarted,
+    onboardingStatus: AccountOnboardingStatus.complete,
   ),
 );
 
@@ -317,15 +320,21 @@ class _MemoryProfileRepository implements ProfileRepository {
   Future<UserProfileDocumentData?> getProfile(String userId) async => data;
 
   @override
+  Future<ProfileProvisioningResult> getOrCreateProfile(AuthUser user) async =>
+      ProfileProvisioningResult(data: data, wasCreated: false);
+
+  @override
   Future<void> saveProfile({
     required String userId,
     required UserProfile profile,
     required NotificationPreferences notifications,
+    required AccountOnboardingStatus onboardingStatus,
   }) async {
     data = UserProfileDocumentData(
       profile: profile,
       notifications: notifications,
       kycStatus: KycStatus.notStarted,
+      onboardingStatus: onboardingStatus,
     );
   }
 

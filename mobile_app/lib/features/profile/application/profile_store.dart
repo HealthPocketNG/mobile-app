@@ -39,6 +39,24 @@ class ProfileStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clear() {
+    _profile = UserProfile(
+      fullName: '',
+      email: '',
+      phoneNumber: '',
+      stateOfResidence: '',
+      memberSince: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    );
+    _notifications = const NotificationPreferences(
+      savingsReminders: false,
+      familyActivity: false,
+      healthReminders: false,
+      productUpdates: false,
+    );
+    _biometricUnlock = false;
+    notifyListeners();
+  }
+
   void verifyPhoneNumber() {
     if (_profile.phoneVerified) return;
     _profile = _profile.copyWith(phoneVerified: true);

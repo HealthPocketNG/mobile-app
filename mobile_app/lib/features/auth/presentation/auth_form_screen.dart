@@ -77,16 +77,14 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
             const SizedBox(height: AppSpacing.xl),
             Text(
               _isSignUp ? 'Create your account' : 'Welcome back',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Continue securely with your Google account.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
+              style: Theme.of(context).textTheme.bodyLarge
+                  ?.copyWith(color: AppColors.inkMuted),
             ),
             if (_isSignUp) ...[
               const SizedBox(height: AppSpacing.lg),

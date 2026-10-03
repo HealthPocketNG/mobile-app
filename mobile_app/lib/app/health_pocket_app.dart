@@ -10,6 +10,7 @@ class HealthPocketApp extends StatefulWidget {
     this.authRepository,
     this.pinRepository,
     this.profileRepository,
+    this.profilePhotoRepository,
     this.savingsRepository,
     this.contributionRepository,
     this.familyPocketRepository,
@@ -19,6 +20,7 @@ class HealthPocketApp extends StatefulWidget {
   final AuthRepository? authRepository;
   final AppPinRepository? pinRepository;
   final ProfileRepository? profileRepository;
+  final ProfilePhotoRepository? profilePhotoRepository;
   final SavingsRepository? savingsRepository;
   final ContributionRepository? contributionRepository;
   final FamilyPocketRepository? familyPocketRepository;
@@ -38,6 +40,7 @@ class _HealthPocketAppState extends State<HealthPocketApp> {
       authRepository: widget.authRepository,
       pinRepository: widget.pinRepository,
       profileRepository: widget.profileRepository,
+      profilePhotoRepository: widget.profilePhotoRepository,
       savingsRepository: widget.savingsRepository,
       contributionRepository: widget.contributionRepository,
       familyPocketRepository: widget.familyPocketRepository,

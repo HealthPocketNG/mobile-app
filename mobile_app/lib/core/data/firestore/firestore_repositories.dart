@@ -2,8 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:healthpocket/core/data/backend_ids.dart';
 import 'package:healthpocket/core/data/firestore/firestore_documents.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
+import 'package:healthpocket/core/logging/backend_logger.dart';
 import 'package:healthpocket/features/activity/domain/activity_record.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
@@ -35,6 +37,29 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<bool> hasActiveSession() async => currentUser != null;
+
+  @override
+  Future<AuthUser?> restoreSession() async {
+    final existing = _auth.currentUser;
+    if (existing == null) return null;
+    try {
+      await existing.reload();
+      final restored = _mapGoogleUser(_auth.currentUser);
+      if (restored == null) await _signOutSafely();
+      return restored;
+    } on FirebaseAuthException catch (error) {
+      if ({
+        'user-disabled',
+        'user-not-found',
+        'invalid-user-token',
+        'user-token-expired',
+      }.contains(error.code)) {
+        await _signOutSafely();
+        return null;
+      }
+      throw _failure(error);
+    }
+  }
 
   @override
   Future<AuthResult?> signInWithGoogle() async {
@@ -87,7 +112,17 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> signOut() async {
-    if (!kIsWeb) await _googleSignIn.signOut();
+    await _signOutSafely();
+  }
+
+  Future<void> _signOutSafely() async {
+    if (!kIsWeb) {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {
+        // Firebase sign-out must still run if the provider cache is absent.
+      }
+    }
     await _auth.signOut();
   }
 
@@ -121,12 +156,15 @@ class FirebaseAuthRepository implements AuthRepository {
 }
 
 class FirestoreProfileRepository implements ProfileRepository {
-  FirestoreProfileRepository(this._firestore);
+  FirestoreProfileRepository(this._firestore, {BackendLogger? logger})
+    : _logger = logger ?? BackendLogger.instance;
 
   final FirebaseFirestore _firestore;
+  final BackendLogger _logger;
 
   DocumentReference<UserProfileDocument> _profile(String userId) =>
-      FirestoreDocumentCollections.users(_firestore).doc(userId);
+      FirestoreDocumentCollections.users(_firestore)
+          .doc(BackendIds.requireUserId(userId));
 
   @override
   Stream<UserProfileDocumentData?> watchProfile(String userId) =>
@@ -137,32 +175,96 @@ class FirestoreProfileRepository implements ProfileRepository {
       _profileData(await _profile(userId).get());
 
   @override
+  Future<ProfileProvisioningResult> getOrCreateProfile(AuthUser user) =>
+      _logger.trace<ProfileProvisioningResult>(
+        repository: 'profile',
+        operation: 'get_or_create',
+        entity: 'user_profile',
+        action: () => _firestore.runTransaction((transaction) async {
+          final reference = _profile(user.uid);
+          final snapshot = await transaction.get(reference);
+          if (snapshot.exists) {
+            return ProfileProvisioningResult(
+              data: _profileData(snapshot)!,
+              wasCreated: false,
+            );
+          }
+
+          final now = DateTime.now();
+          final document = UserProfileDocument.fromDomain(
+            userId: user.uid,
+            profile: UserProfile(
+              fullName: user.displayName?.trim().isNotEmpty == true
+                  ? user.displayName!.trim()
+                  : 'HealthPocket User',
+              email: user.email ?? '',
+              phoneNumber: '',
+              stateOfResidence: '',
+              memberSince: now,
+              emailVerified: user.emailVerified,
+            ),
+            notifications: const NotificationPreferences(
+              savingsReminders: true,
+              familyActivity: true,
+              healthReminders: true,
+              productUpdates: false,
+            ),
+            onboardingStatus: AccountOnboardingStatus.incomplete,
+            updatedAt: now,
+          );
+          transaction.set(
+            _firestore.collection('users').doc(reference.id),
+            document.toMap(
+              createdAtOverride: FieldValue.serverTimestamp(),
+              updatedAtOverride: FieldValue.serverTimestamp(),
+            ),
+          );
+          return ProfileProvisioningResult(
+            data: UserProfileDocumentData(
+              profile: document.profile,
+              notifications: document.notifications,
+              kycStatus: document.kycStatus,
+              onboardingStatus: document.onboardingStatus,
+            ),
+            wasCreated: true,
+          );
+        }),
+      );
+
+  @override
   Future<void> saveProfile({
     required String userId,
     required UserProfile profile,
     required NotificationPreferences notifications,
-  }) async {
-    final reference = _profile(userId);
-    final existing = await reference.get();
-    final document = UserProfileDocument.fromDomain(
-      userId: userId,
-      profile: profile,
-      notifications: notifications,
-      updatedAt: DateTime.now(),
-    );
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .set(
-          document.toMap(
-            createdAtOverride: existing.exists
-                ? Timestamp.fromDate(existing.data()!.profile.memberSince)
-                : FieldValue.serverTimestamp(),
-            updatedAtOverride: FieldValue.serverTimestamp(),
-          ),
-          SetOptions(merge: true),
-        );
-  }
+    required AccountOnboardingStatus onboardingStatus,
+  }) => _logger.trace<void>(
+    repository: 'profile',
+    operation: 'save',
+    entity: 'user_profile',
+    action: () async {
+      final reference = _profile(userId);
+      final existing = await reference.get();
+      final document = UserProfileDocument.fromDomain(
+        userId: userId,
+        profile: profile,
+        notifications: notifications,
+        onboardingStatus: onboardingStatus,
+        updatedAt: DateTime.now(),
+      );
+      await _firestore
+          .collection('users')
+          .doc(reference.id)
+          .set(
+            document.toMap(
+              createdAtOverride: existing.exists
+                  ? Timestamp.fromDate(existing.data()!.profile.memberSince)
+                  : FieldValue.serverTimestamp(),
+              updatedAtOverride: FieldValue.serverTimestamp(),
+            ),
+            SetOptions(merge: true),
+          );
+    },
+  );
 
   UserProfileDocumentData? _profileData(
     DocumentSnapshot<UserProfileDocument> snapshot,
@@ -173,14 +275,17 @@ class FirestoreProfileRepository implements ProfileRepository {
       profile: document.profile,
       notifications: document.notifications,
       kycStatus: document.kycStatus,
+      onboardingStatus: document.onboardingStatus,
     );
   }
 }
 
 class FirestoreSavingsRepository implements SavingsRepository {
-  FirestoreSavingsRepository(this._firestore);
+  FirestoreSavingsRepository(this._firestore, {BackendLogger? logger})
+    : _logger = logger ?? BackendLogger.instance;
 
   final FirebaseFirestore _firestore;
+  final BackendLogger _logger;
 
   @override
   Stream<PersonalHealthPocket?> watchPersonalPocket(String userId) =>
@@ -225,36 +330,51 @@ class FirestoreSavingsRepository implements SavingsRepository {
   }
 
   @override
-  Future<void> savePersonalPocket(PersonalHealthPocket pocket) async {
-    final reference = FirestoreDocumentCollections.personalPockets(_firestore)
-        .doc(pocket.id);
-    // A direct read of a document that does not exist cannot prove ownership
-    // from resource.data and is therefore denied by the private collection
-    // rules. Querying by the authenticated owner works for both an empty first
-    // result and an idempotent retry.
-    final existing = await getPersonalPocket(pocket.userId);
-    final persistedPocket = PersonalHealthPocket(
-      id: pocket.id,
-      userId: pocket.userId,
-      currency: pocket.currency,
-      status: pocket.status,
-      createdAt: existing?.id == pocket.id
-          ? existing!.createdAt
-          : pocket.createdAt,
-      updatedAt: pocket.updatedAt,
-    );
-    await _firestore
-        .collection(reference.parent.path)
-        .doc(reference.id)
-        .set(
-          PersonalHealthPocketDocument(persistedPocket).toMap(
-            createdAtOverride: existing?.id == pocket.id
-                ? Timestamp.fromDate(existing!.createdAt)
-                : FieldValue.serverTimestamp(),
-            updatedAtOverride: FieldValue.serverTimestamp(),
-          ),
+  Future<void> savePersonalPocket(
+    PersonalHealthPocket pocket,
+  ) => _logger.trace<void>(
+    repository: 'savings',
+    operation: 'save',
+    entity: 'personal_pocket',
+    action: () async {
+      final expectedId = BackendIds.personalPocket(pocket.userId);
+      if (pocket.id != expectedId) {
+        throw ArgumentError.value(
+          pocket.id,
+          'pocket.id',
+          'Unexpected pocket ID.',
         );
-  }
+      }
+      final reference = FirestoreDocumentCollections.personalPockets(_firestore)
+          .doc(expectedId);
+      // A direct read of a document that does not exist cannot prove ownership
+      // from resource.data and is therefore denied by the private collection
+      // rules. Querying by the authenticated owner works for both an empty first
+      // result and an idempotent retry.
+      final existing = await getPersonalPocket(pocket.userId);
+      final persistedPocket = PersonalHealthPocket(
+        id: pocket.id,
+        userId: pocket.userId,
+        currency: pocket.currency,
+        status: pocket.status,
+        createdAt: existing?.id == pocket.id
+            ? existing!.createdAt
+            : pocket.createdAt,
+        updatedAt: pocket.updatedAt,
+      );
+      await _firestore
+          .collection(reference.parent.path)
+          .doc(reference.id)
+          .set(
+            PersonalHealthPocketDocument(persistedPocket).toMap(
+              createdAtOverride: existing?.id == pocket.id
+                  ? Timestamp.fromDate(existing!.createdAt)
+                  : FieldValue.serverTimestamp(),
+              updatedAtOverride: FieldValue.serverTimestamp(),
+            ),
+          );
+    },
+  );
 
   @override
   Future<void> savePlan({
@@ -263,47 +383,59 @@ class FirestoreSavingsRepository implements SavingsRepository {
     required SavingsPlan plan,
     DateTime? nextContributionDate,
     String? fundingSourceId,
-  }) async {
-    final plans = FirestoreDocumentCollections.savingsPlans(_firestore);
-    final existingSnapshot = await plans
-        .where('userId', isEqualTo: userId)
-        .limit(5)
-        .get();
-    SavingsPlanDocument? existing;
-    for (final document in existingSnapshot.docs) {
-      if (document.id == plan.id) {
-        existing = document.data();
-        break;
+  }) => _logger.trace<void>(
+    repository: 'savings',
+    operation: 'save',
+    entity: 'savings_plan',
+    action: () async {
+      final expectedPlanId = BackendIds.savingsPlan(userId);
+      if (plan.id != expectedPlanId ||
+          personalHealthPocketId != BackendIds.personalPocket(userId)) {
+        throw ArgumentError('Unexpected savings ownership or identifier.');
       }
-    }
-    final now = DateTime.now();
-    final document = SavingsPlanDocument(
-      plan: plan,
-      userId: userId,
-      personalHealthPocketId: personalHealthPocketId,
-      nextContributionDate: nextContributionDate,
-      fundingSourceId: fundingSourceId,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    );
-    await _firestore
-        .collection('savings_plans')
-        .doc(plan.id)
-        .set(
-          document.toMap(
-            createdAtOverride: existing == null
-                ? FieldValue.serverTimestamp()
-                : Timestamp.fromDate(existing.createdAt),
-            updatedAtOverride: FieldValue.serverTimestamp(),
-          ),
-        );
-  }
+      final plans = FirestoreDocumentCollections.savingsPlans(_firestore);
+      final existingSnapshot = await plans
+          .where('userId', isEqualTo: userId)
+          .limit(5)
+          .get();
+      SavingsPlanDocument? existing;
+      for (final document in existingSnapshot.docs) {
+        if (document.id == plan.id) {
+          existing = document.data();
+          break;
+        }
+      }
+      final now = DateTime.now();
+      final document = SavingsPlanDocument(
+        plan: plan,
+        userId: userId,
+        personalHealthPocketId: personalHealthPocketId,
+        nextContributionDate: nextContributionDate,
+        fundingSourceId: fundingSourceId,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      );
+      await _firestore
+          .collection('savings_plans')
+          .doc(plan.id)
+          .set(
+            document.toMap(
+              createdAtOverride: existing == null
+                  ? FieldValue.serverTimestamp()
+                  : Timestamp.fromDate(existing.createdAt),
+              updatedAtOverride: FieldValue.serverTimestamp(),
+            ),
+          );
+    },
+  );
 }
 
 class FirestoreContributionRepository implements ContributionRepository {
-  FirestoreContributionRepository(this._firestore);
+  FirestoreContributionRepository(this._firestore, {BackendLogger? logger})
+    : _logger = logger ?? BackendLogger.instance;
 
   final FirebaseFirestore _firestore;
+  final BackendLogger _logger;
 
   Query<ContributionDocument> _personalContributionQuery({
     required String userId,
@@ -373,72 +505,87 @@ class FirestoreContributionRepository implements ContributionRepository {
   @override
   Future<void> recordDevelopmentContribution(
     ContributionRecord contribution,
-  ) async {
-    _validateDevelopmentContribution(contribution);
-    final reference = _firestore
-        .collection('contributions')
-        .doc(contribution.id);
-    await _firestore.runTransaction((transaction) async {
-      final existing = await transaction.get(reference);
-      if (existing.exists) {
-        final existingData = existing.data();
-        if (existingData?['contributorUserId'] !=
-                contribution.contributorUserId ||
-            existingData?['idempotencyKey'] != contribution.idempotencyKey ||
-            existingData?['personalHealthPocketId'] !=
-                contribution.personalHealthPocketId ||
-            existingData?['savingsPlanId'] != contribution.savingsPlanId ||
-            existingData?['amountKobo'] != contribution.amountKobo ||
-            existingData?['currency'] != contribution.currency) {
-          throw StateError('The contribution idempotency key is unavailable.');
+  ) => _logger.trace<void>(
+    repository: 'contribution',
+    operation: 'create_idempotent',
+    entity: 'personal_contribution',
+    action: () async {
+      _validateDevelopmentContribution(contribution);
+      final reference = _firestore
+          .collection('contributions')
+          .doc(contribution.id);
+      await _firestore.runTransaction((transaction) async {
+        final existing = await transaction.get(reference);
+        if (existing.exists) {
+          final existingData = existing.data();
+          if (existingData?['contributorUserId'] !=
+                  contribution.contributorUserId ||
+              existingData?['idempotencyKey'] != contribution.idempotencyKey ||
+              existingData?['personalHealthPocketId'] !=
+                  contribution.personalHealthPocketId ||
+              existingData?['savingsPlanId'] != contribution.savingsPlanId ||
+              existingData?['amountKobo'] != contribution.amountKobo ||
+              existingData?['currency'] != contribution.currency) {
+            throw StateError(
+              'The contribution idempotency key is unavailable.',
+            );
+          }
+          return;
         }
-        return;
-      }
-      transaction.set(
-        reference,
-        ContributionDocument(contribution)
-            .toMap(createdAtOverride: FieldValue.serverTimestamp()),
-      );
-    });
-  }
+        transaction.set(
+          reference,
+          ContributionDocument(contribution)
+              .toMap(createdAtOverride: FieldValue.serverTimestamp()),
+        );
+      });
+    },
+  );
 
   @override
   Future<void> recordDevelopmentFamilyContribution(
     ContributionRecord contribution,
-  ) async {
-    _validateDevelopmentFamilyContribution(contribution);
-    final reference = _firestore
-        .collection('contributions')
-        .doc(contribution.id);
-    await _firestore.runTransaction((transaction) async {
-      final existing = await transaction.get(reference);
-      if (existing.exists) {
-        final existingData = existing.data();
-        if (existingData?['contributorUserId'] !=
-                contribution.contributorUserId ||
-            existingData?['idempotencyKey'] != contribution.idempotencyKey ||
-            existingData?['familyPocketId'] != contribution.familyPocketId ||
-            existingData?['amountKobo'] != contribution.amountKobo ||
-            existingData?['currency'] != contribution.currency ||
-            existingData?['contributorName'] != contribution.contributorName) {
-          throw StateError('The contribution idempotency key is unavailable.');
+  ) => _logger.trace<void>(
+    repository: 'contribution',
+    operation: 'create_idempotent',
+    entity: 'family_contribution',
+    action: () async {
+      _validateDevelopmentFamilyContribution(contribution);
+      final reference = _firestore
+          .collection('contributions')
+          .doc(contribution.id);
+      await _firestore.runTransaction((transaction) async {
+        final existing = await transaction.get(reference);
+        if (existing.exists) {
+          final existingData = existing.data();
+          if (existingData?['contributorUserId'] !=
+                  contribution.contributorUserId ||
+              existingData?['idempotencyKey'] != contribution.idempotencyKey ||
+              existingData?['familyPocketId'] != contribution.familyPocketId ||
+              existingData?['amountKobo'] != contribution.amountKobo ||
+              existingData?['currency'] != contribution.currency ||
+              existingData?['contributorName'] !=
+                  contribution.contributorName) {
+            throw StateError(
+              'The contribution idempotency key is unavailable.',
+            );
+          }
+          return;
         }
-        return;
-      }
-      transaction.set(
-        reference,
-        ContributionDocument(contribution)
-            .toMap(createdAtOverride: FieldValue.serverTimestamp()),
-      );
-    });
-  }
+        transaction.set(
+          reference,
+          ContributionDocument(contribution)
+              .toMap(createdAtOverride: FieldValue.serverTimestamp()),
+        );
+      });
+    },
+  );
 
   void _validateDevelopmentContribution(ContributionRecord contribution) {
-    final expectedId =
-        'dev_${contribution.contributorUserId}_${contribution.idempotencyKey}';
-    final validKey = RegExp(r'^[A-Za-z0-9_-]{16,80}$');
+    final expectedId = BackendIds.personalContribution(
+      contribution.contributorUserId,
+      contribution.idempotencyKey,
+    );
     if (contribution.id != expectedId ||
-        !validKey.hasMatch(contribution.idempotencyKey) ||
         contribution.personalHealthPocketId == null ||
         contribution.familyPocketId != null ||
         contribution.contributorName != null ||
@@ -455,12 +602,12 @@ class FirestoreContributionRepository implements ContributionRepository {
   }
 
   void _validateDevelopmentFamilyContribution(ContributionRecord contribution) {
-    final expectedId =
-        'dev_family_${contribution.contributorUserId}_${contribution.idempotencyKey}';
-    final validKey = RegExp(r'^[A-Za-z0-9_-]{16,80}$');
+    final expectedId = BackendIds.familyContribution(
+      contribution.contributorUserId,
+      contribution.idempotencyKey,
+    );
     final name = contribution.contributorName;
     if (contribution.id != expectedId ||
-        !validKey.hasMatch(contribution.idempotencyKey) ||
         contribution.personalHealthPocketId != null ||
         contribution.savingsPlanId != null ||
         contribution.familyPocketId == null ||
@@ -480,9 +627,11 @@ class FirestoreContributionRepository implements ContributionRepository {
 }
 
 class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
-  FirestoreFamilyPocketRepository(this._firestore);
+  FirestoreFamilyPocketRepository(this._firestore, {BackendLogger? logger})
+    : _logger = logger ?? BackendLogger.instance;
 
   final FirebaseFirestore _firestore;
+  final BackendLogger _logger;
 
   @override
   Future<List<FamilyPocket>> getPocketsForUser(String userId) async {
@@ -624,121 +773,155 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
     required FamilyPocket pocket,
     required String createdBy,
     required FamilyMembership adminMembership,
-  }) {
-    if (adminMembership.id != createdBy ||
-        adminMembership.userId != createdBy ||
-        adminMembership.pocketId != pocket.id ||
-        adminMembership.role != FamilyRole.admin ||
-        adminMembership.status != FamilyMembershipStatus.accepted ||
-        !adminMembership.canContribute ||
-        adminMembership.isBeneficiary) {
-      throw ArgumentError(
-        'The founding membership must be the accepted admin.',
+  }) => _logger.trace<void>(
+    repository: 'family_pocket',
+    operation: 'create',
+    entity: 'family_pocket',
+    action: () async {
+      if (!BackendIds.isFamilyPocketForUser(pocket.id, createdBy)) {
+        throw ArgumentError.value(
+          pocket.id,
+          'pocket.id',
+          'Unexpected pocket ID.',
+        );
+      }
+      if (adminMembership.id != createdBy ||
+          adminMembership.userId != createdBy ||
+          adminMembership.pocketId != pocket.id ||
+          adminMembership.role != FamilyRole.admin ||
+          adminMembership.status != FamilyMembershipStatus.accepted ||
+          !adminMembership.canContribute ||
+          adminMembership.isBeneficiary) {
+        throw ArgumentError(
+          'The founding membership must be the accepted admin.',
+        );
+      }
+      final now = DateTime.now();
+      final batch = _firestore.batch();
+      batch.set<Map<String, Object?>>(
+        _firestore.collection('family_pockets').doc(pocket.id),
+        FamilyPocketDocument(
+          pocket: pocket,
+          createdBy: createdBy,
+          currency: 'NGN',
+          status: FamilyPocketStatus.active,
+          createdAt: now,
+          updatedAt: now,
+        ).toMap(
+          createdAtOverride: FieldValue.serverTimestamp(),
+          updatedAtOverride: FieldValue.serverTimestamp(),
+        ),
       );
-    }
-    final now = DateTime.now();
-    final batch = _firestore.batch();
-    batch.set<Map<String, Object?>>(
-      _firestore.collection('family_pockets').doc(pocket.id),
-      FamilyPocketDocument(
-        pocket: pocket,
-        createdBy: createdBy,
-        currency: 'NGN',
-        status: FamilyPocketStatus.active,
-        createdAt: now,
-        updatedAt: now,
-      ).toMap(
-        createdAtOverride: FieldValue.serverTimestamp(),
-        updatedAtOverride: FieldValue.serverTimestamp(),
-      ),
-    );
-    batch.set<Map<String, Object?>>(
-      _firestore
-          .collection('family_pockets')
-          .doc(pocket.id)
-          .collection('members')
-          .doc(adminMembership.id),
-      FamilyMembershipDocument(adminMembership)
-          .toMap(joinedAtOverride: FieldValue.serverTimestamp()),
-    );
-    return batch.commit();
-  }
+      batch.set<Map<String, Object?>>(
+        _firestore
+            .collection('family_pockets')
+            .doc(pocket.id)
+            .collection('members')
+            .doc(adminMembership.id),
+        FamilyMembershipDocument(adminMembership)
+            .toMap(joinedAtOverride: FieldValue.serverTimestamp()),
+      );
+      await batch.commit();
+    },
+  );
 
   @override
-  Future<void> createInvitation(FamilyInvitation invitation) async {
-    if (invitation.status != FamilyInvitationStatus.pending ||
-        (!invitation.canContribute && !invitation.isBeneficiary) ||
-        invitation.email != invitation.email.toLowerCase() ||
-        invitation.expiresAt.isBefore(DateTime.now())) {
-      throw ArgumentError('Invalid Family Pocket invitation.');
-    }
-    final duplicate = await _firestore
-        .collection('family_pockets')
-        .doc(invitation.pocketId)
-        .collection('invites')
-        .where('email', isEqualTo: invitation.email)
-        .where('status', isEqualTo: FamilyInvitationStatus.pending.name)
-        .limit(1)
-        .get();
-    if (duplicate.docs.isNotEmpty) {
-      throw StateError('This person already has a pending invitation.');
-    }
+  Future<void> createInvitation(FamilyInvitation invitation) =>
+      _logger.trace<void>(
+        repository: 'family_pocket',
+        operation: 'create',
+        entity: 'invitation',
+        action: () async {
+          if (!BackendIds.isInvitationForUser(
+            invitation.id,
+            invitation.createdBy,
+          )) {
+            throw ArgumentError.value(
+              invitation.id,
+              'invitation.id',
+              'Unexpected invitation ID.',
+            );
+          }
+          if (invitation.status != FamilyInvitationStatus.pending ||
+              (!invitation.canContribute && !invitation.isBeneficiary) ||
+              invitation.email != invitation.email.toLowerCase() ||
+              invitation.expiresAt.isBefore(DateTime.now())) {
+            throw ArgumentError('Invalid Family Pocket invitation.');
+          }
+          final duplicate = await _firestore
+              .collection('family_pockets')
+              .doc(invitation.pocketId)
+              .collection('invites')
+              .where('email', isEqualTo: invitation.email)
+              .where('status', isEqualTo: FamilyInvitationStatus.pending.name)
+              .limit(1)
+              .get();
+          if (duplicate.docs.isNotEmpty) {
+            throw StateError('This person already has a pending invitation.');
+          }
 
-    final pocketReference = _firestore
-        .collection('family_pockets')
-        .doc(invitation.pocketId);
-    final invitationReference = pocketReference
-        .collection('invites')
-        .doc(invitation.id);
-    await _firestore.runTransaction((transaction) async {
-      int? beneficiarySlot;
-      DocumentReference<Map<String, dynamic>>? slotReference;
-      if (invitation.isBeneficiary) {
-        final first = pocketReference.collection('beneficiary_slots').doc('1');
-        final second = pocketReference.collection('beneficiary_slots').doc('2');
-        final firstSnapshot = await transaction.get(first);
-        final secondSnapshot = await transaction.get(second);
-        if (!firstSnapshot.exists) {
-          beneficiarySlot = 1;
-          slotReference = first;
-        } else if (!secondSnapshot.exists) {
-          beneficiarySlot = 2;
-          slotReference = second;
-        } else {
-          throw StateError('This pocket already has two beneficiary slots.');
-        }
-      }
-      final storedInvitation = FamilyInvitation(
-        id: invitation.id,
-        pocketId: invitation.pocketId,
-        pocketName: invitation.pocketName,
-        inviteeName: invitation.inviteeName,
-        email: invitation.email,
-        inviterName: invitation.inviterName,
-        canContribute: invitation.canContribute,
-        isBeneficiary: invitation.isBeneficiary,
-        beneficiarySlot: beneficiarySlot,
-        status: invitation.status,
-        createdBy: invitation.createdBy,
-        createdAt: invitation.createdAt,
-        expiresAt: invitation.expiresAt,
+          final pocketReference = _firestore
+              .collection('family_pockets')
+              .doc(invitation.pocketId);
+          final invitationReference = pocketReference
+              .collection('invites')
+              .doc(invitation.id);
+          await _firestore.runTransaction((transaction) async {
+            int? beneficiarySlot;
+            DocumentReference<Map<String, dynamic>>? slotReference;
+            if (invitation.isBeneficiary) {
+              final first = pocketReference
+                  .collection('beneficiary_slots')
+                  .doc('1');
+              final second = pocketReference
+                  .collection('beneficiary_slots')
+                  .doc('2');
+              final firstSnapshot = await transaction.get(first);
+              final secondSnapshot = await transaction.get(second);
+              if (!firstSnapshot.exists) {
+                beneficiarySlot = 1;
+                slotReference = first;
+              } else if (!secondSnapshot.exists) {
+                beneficiarySlot = 2;
+                slotReference = second;
+              } else {
+                throw StateError(
+                  'This pocket already has two beneficiary slots.',
+                );
+              }
+            }
+            final storedInvitation = FamilyInvitation(
+              id: invitation.id,
+              pocketId: invitation.pocketId,
+              pocketName: invitation.pocketName,
+              inviteeName: invitation.inviteeName,
+              email: invitation.email,
+              inviterName: invitation.inviterName,
+              canContribute: invitation.canContribute,
+              isBeneficiary: invitation.isBeneficiary,
+              beneficiarySlot: beneficiarySlot,
+              status: invitation.status,
+              createdBy: invitation.createdBy,
+              createdAt: invitation.createdAt,
+              expiresAt: invitation.expiresAt,
+            );
+            transaction.set(
+              invitationReference,
+              FamilyInvitationDocument(storedInvitation)
+                  .toMap(createdAtOverride: FieldValue.serverTimestamp()),
+            );
+            if (slotReference != null) {
+              transaction.set(slotReference, {
+                'pocketId': invitation.pocketId,
+                'slot': beneficiarySlot,
+                'state': 'reserved',
+                'invitationId': invitation.id,
+                'updatedAt': FieldValue.serverTimestamp(),
+              });
+            }
+          });
+        },
       );
-      transaction.set(
-        invitationReference,
-        FamilyInvitationDocument(storedInvitation)
-            .toMap(createdAtOverride: FieldValue.serverTimestamp()),
-      );
-      if (slotReference != null) {
-        transaction.set(slotReference, {
-          'pocketId': invitation.pocketId,
-          'slot': beneficiarySlot,
-          'state': 'reserved',
-          'invitationId': invitation.id,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-    });
-  }
 
   @override
   Future<void> respondToInvitation({
@@ -746,79 +929,93 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
     required String userId,
     required String userName,
     required bool accept,
-  }) async {
-    final pocketReference = _firestore
-        .collection('family_pockets')
-        .doc(invitation.pocketId);
-    final invitationReference = pocketReference
-        .collection('invites')
-        .doc(invitation.id);
-    final memberReference = pocketReference.collection('members').doc(userId);
-    final slot = invitation.beneficiarySlot;
-    final slotReference = slot == null
-        ? null
-        : pocketReference.collection('beneficiary_slots').doc('$slot');
-    await _firestore.runTransaction((transaction) async {
-      final current = await transaction.get(invitationReference);
-      if (!current.exists || current.data()?['status'] != 'pending') {
-        throw StateError('This invitation is no longer pending.');
-      }
-      transaction.update(invitationReference, {
-        'status': accept ? 'accepted' : 'declined',
-        'respondedBy': userId,
-        'respondedAt': FieldValue.serverTimestamp(),
-      });
-      if (accept) {
-        transaction.set(
-          memberReference,
-          FamilyMembershipDocument(
-            FamilyMembership(
-              id: userId,
-              pocketId: invitation.pocketId,
-              userId: userId,
-              invitationId: invitation.id,
-              name: userName,
-              role: FamilyRole.member,
-              canContribute: invitation.canContribute,
-              isBeneficiary: invitation.isBeneficiary,
-              beneficiarySlot: slot,
-              status: FamilyMembershipStatus.accepted,
-              joinedAt: null,
-            ),
-          ).toMap(joinedAtOverride: FieldValue.serverTimestamp()),
-        );
-        if (slotReference != null) {
-          transaction.update(slotReference, {
-            'state': 'accepted',
-            'memberUserId': userId,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+  }) => _logger.trace<void>(
+    repository: 'family_pocket',
+    operation: accept ? 'accept_invitation' : 'decline_invitation',
+    entity: 'invitation',
+    action: () async {
+      final pocketReference = _firestore
+          .collection('family_pockets')
+          .doc(invitation.pocketId);
+      final invitationReference = pocketReference
+          .collection('invites')
+          .doc(invitation.id);
+      final memberReference = pocketReference.collection('members').doc(userId);
+      final slot = invitation.beneficiarySlot;
+      final slotReference = slot == null
+          ? null
+          : pocketReference.collection('beneficiary_slots').doc('$slot');
+      await _firestore.runTransaction((transaction) async {
+        final current = await transaction.get(invitationReference);
+        if (!current.exists || current.data()?['status'] != 'pending') {
+          throw StateError('This invitation is no longer pending.');
         }
-      } else if (slotReference != null) {
-        transaction.delete(slotReference);
-      }
-    });
-  }
+        transaction.update(invitationReference, {
+          'status': accept ? 'accepted' : 'declined',
+          'respondedBy': userId,
+          'respondedAt': FieldValue.serverTimestamp(),
+        });
+        if (accept) {
+          transaction.set(
+            memberReference,
+            FamilyMembershipDocument(
+              FamilyMembership(
+                id: userId,
+                pocketId: invitation.pocketId,
+                userId: userId,
+                invitationId: invitation.id,
+                name: userName,
+                role: FamilyRole.member,
+                canContribute: invitation.canContribute,
+                isBeneficiary: invitation.isBeneficiary,
+                beneficiarySlot: slot,
+                status: FamilyMembershipStatus.accepted,
+                joinedAt: null,
+              ),
+            ).toMap(joinedAtOverride: FieldValue.serverTimestamp()),
+          );
+          if (slotReference != null) {
+            transaction.update(slotReference, {
+              'state': 'accepted',
+              'memberUserId': userId,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+        } else if (slotReference != null) {
+          transaction.delete(slotReference);
+        }
+      });
+    },
+  );
 
   @override
-  Future<void> cancelInvitation(FamilyInvitation invitation) async {
-    final pocketReference = _firestore
-        .collection('family_pockets')
-        .doc(invitation.pocketId);
-    final batch = _firestore.batch();
-    batch.update(pocketReference.collection('invites').doc(invitation.id), {
-      'status': FamilyInvitationStatus.cancelled.name,
-      'respondedBy': invitation.createdBy,
-      'respondedAt': FieldValue.serverTimestamp(),
-    });
-    final slot = invitation.beneficiarySlot;
-    if (slot != null) {
-      batch.delete(
-        pocketReference.collection('beneficiary_slots').doc('$slot'),
+  Future<void> cancelInvitation(FamilyInvitation invitation) =>
+      _logger.trace<void>(
+        repository: 'family_pocket',
+        operation: 'cancel_invitation',
+        entity: 'invitation',
+        action: () async {
+          final pocketReference = _firestore
+              .collection('family_pockets')
+              .doc(invitation.pocketId);
+          final batch = _firestore.batch();
+          batch.update(
+            pocketReference.collection('invites').doc(invitation.id),
+            {
+              'status': FamilyInvitationStatus.cancelled.name,
+              'respondedBy': invitation.createdBy,
+              'respondedAt': FieldValue.serverTimestamp(),
+            },
+          );
+          final slot = invitation.beneficiarySlot;
+          if (slot != null) {
+            batch.delete(
+              pocketReference.collection('beneficiary_slots').doc('$slot'),
+            );
+          }
+          await batch.commit();
+        },
       );
-    }
-    await batch.commit();
-  }
 
   @override
   Future<void> markMemberRemoved({
@@ -826,22 +1023,29 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
     required String memberId,
     required bool wasBeneficiary,
     int? beneficiarySlot,
-  }) async {
-    final pocketReference = _firestore
-        .collection('family_pockets')
-        .doc(pocketId);
-    final batch = _firestore.batch();
-    batch.update(pocketReference.collection('members').doc(memberId), {
-      'status': FamilyMembershipStatus.removed.name,
-      'removedAt': FieldValue.serverTimestamp(),
-    });
-    if (wasBeneficiary && beneficiarySlot != null) {
-      batch.delete(
-        pocketReference.collection('beneficiary_slots').doc('$beneficiarySlot'),
-      );
-    }
-    await batch.commit();
-  }
+  }) => _logger.trace<void>(
+    repository: 'family_pocket',
+    operation: 'remove_member',
+    entity: 'membership',
+    action: () async {
+      final pocketReference = _firestore
+          .collection('family_pockets')
+          .doc(pocketId);
+      final batch = _firestore.batch();
+      batch.update(pocketReference.collection('members').doc(memberId), {
+        'status': FamilyMembershipStatus.removed.name,
+        'removedAt': FieldValue.serverTimestamp(),
+      });
+      if (wasBeneficiary && beneficiarySlot != null) {
+        batch.delete(
+          pocketReference
+              .collection('beneficiary_slots')
+              .doc('$beneficiarySlot'),
+        );
+      }
+      await batch.commit();
+    },
+  );
 }
 
 class FirestoreActivityRepository implements ActivityRepository {
@@ -876,10 +1080,17 @@ class FirebaseRepositoryBundle {
   FirebaseRepositoryBundle({
     required this.auth,
     required FirebaseFirestore firestore,
-  }) : profiles = FirestoreProfileRepository(firestore),
-       savings = FirestoreSavingsRepository(firestore),
-       contributions = FirestoreContributionRepository(firestore),
-       familyPockets = FirestoreFamilyPocketRepository(firestore),
+    BackendLogger? logger,
+  }) : profiles = FirestoreProfileRepository(firestore, logger: logger),
+       savings = FirestoreSavingsRepository(firestore, logger: logger),
+       contributions = FirestoreContributionRepository(
+         firestore,
+         logger: logger,
+       ),
+       familyPockets = FirestoreFamilyPocketRepository(
+         firestore,
+         logger: logger,
+       ),
        activities = FirestoreActivityRepository(firestore);
 
   final AuthRepository auth;

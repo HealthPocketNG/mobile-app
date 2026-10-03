@@ -14,6 +14,7 @@ class UserProfileDocument {
     required this.profile,
     required this.notifications,
     required this.kycStatus,
+    required this.onboardingStatus,
     required this.updatedAt,
   });
 
@@ -22,19 +23,22 @@ class UserProfileDocument {
   final UserProfile profile;
   final NotificationPreferences notifications;
   final KycStatus kycStatus;
+  final AccountOnboardingStatus onboardingStatus;
   final DateTime updatedAt;
 
   factory UserProfileDocument.fromDomain({
     required String userId,
     required UserProfile profile,
     required NotificationPreferences notifications,
+    required AccountOnboardingStatus onboardingStatus,
     required DateTime updatedAt,
   }) {
     return UserProfileDocument(
       id: userId,
       userId: userId,
-      profile: profile,
+      profile: profile.copyWith(updatedAt: updatedAt),
       notifications: notifications,
+      onboardingStatus: onboardingStatus,
       kycStatus: profile.demoKycComplete
           ? KycStatus.demoComplete
           : KycStatus.notStarted,
@@ -58,6 +62,8 @@ class UserProfileDocument {
         phoneNumber: firestoreString(data, 'phoneNumber'),
         stateOfResidence: firestoreString(data, 'stateOfResidence'),
         memberSince: firestoreDateTime(data, 'createdAt'),
+        updatedAt: firestoreDateTime(data, 'updatedAt'),
+        profileImagePath: firestoreNullableString(data, 'profileImagePath'),
         dateOfBirth: firestoreNullableDateTime(data, 'dateOfBirth'),
         gender: firestoreNullableString(data, 'gender'),
         residentialAddress: firestoreString(data, 'residentialAddress'),
@@ -74,6 +80,15 @@ class UserProfileDocument {
         productUpdates: firestoreBool(notifications, 'productUpdates'),
       ),
       kycStatus: kycStatus,
+      // Profiles written before onboardingStatus was introduced represent
+      // beta users who had already passed the old onboarding gate.
+      onboardingStatus: data['onboardingStatus'] == null
+          ? AccountOnboardingStatus.complete
+          : firestoreEnum(
+              data,
+              'onboardingStatus',
+              AccountOnboardingStatus.values,
+            ),
       updatedAt: firestoreDateTime(data, 'updatedAt'),
     );
   }
@@ -87,6 +102,7 @@ class UserProfileDocument {
     'email': profile.email,
     'phoneNumber': profile.phoneNumber,
     'stateOfResidence': profile.stateOfResidence,
+    'profileImagePath': profile.profileImagePath,
     'dateOfBirth': profile.dateOfBirth == null
         ? null
         : firestoreTimestamp(profile.dateOfBirth!),
@@ -97,6 +113,7 @@ class UserProfileDocument {
     'emailVerified': profile.emailVerified,
     'phoneVerified': profile.phoneVerified,
     'kycStatus': kycStatus.name,
+    'onboardingStatus': onboardingStatus.name,
     'notificationPreferences': {
       'savingsReminders': notifications.savingsReminders,
       'familyActivity': notifications.familyActivity,
@@ -166,12 +183,11 @@ class SavingsPlanDocument {
 
   factory SavingsPlanDocument.fromMap(String id, Map<String, dynamic> data) {
     final legacyAmountNaira = data['contributionAmount'];
-    final amountKobo = data['contributionAmountKobo'] ??
+    final amountKobo =
+        data['contributionAmountKobo'] ??
         (legacyAmountNaira is int ? legacyAmountNaira * 100 : null);
     if (amountKobo is! int) {
-      throw const FormatException(
-        'Expected integer "contributionAmountKobo".',
-      );
+      throw const FormatException('Expected integer "contributionAmountKobo".');
     }
     return SavingsPlanDocument(
       plan: SavingsPlan(

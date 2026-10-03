@@ -7,7 +7,8 @@ enum DemoAuthorizationStatus { created, rejected, cancelled, expired }
 int? parseCareAmount(String raw) {
   if (!RegExp(r'^\d{1,7}(\.\d{1,2})?$').hasMatch(raw.trim())) return null;
   final parts = raw.trim().split('.');
-  final kobo = int.parse(parts[0]) * 100 +
+  final kobo =
+      int.parse(parts[0]) * 100 +
       (parts.length == 2 ? int.parse(parts[1].padRight(2, '0')) : 0);
   return kobo > 0 && kobo <= 100000000 ? kobo : null;
 }
@@ -54,8 +55,8 @@ class DemoAuthorizationSession {
   DemoAuthorizationResult? _result;
   DemoAuthorizationResult? get result => _result;
   CareProvider get selectedProvider => providers.firstWhere(
-        (provider) => provider.id == selectedProviderId && provider.isDemo,
-      );
+    (provider) => provider.id == selectedProviderId && provider.isDemo,
+  );
 
   DemoAuthorizationResult resolve(String raw) {
     if (_result != null) return _result!;
@@ -73,23 +74,22 @@ class DemoAuthorizationSession {
     } else if (!scanned.isPartner || !selectedProvider.isPartner) {
       rejection = 'This QR is not linked to a valid HealthPocket partner.';
     } else if (scannedId != selectedProviderId) {
-      rejection =
-          'QR code mismatch. This code belongs to another HealthPocket partner.';
+      rejection = 'QR code mismatch. This code belongs to another HealthPocket partner.';
     }
     return _result = rejection != null
         ? DemoAuthorizationResult(DemoAuthorizationStatus.rejected, rejection)
         : DemoAuthorizationResult(
             DemoAuthorizationStatus.created,
             'Demo authorization created',
-            reference: 'DEMO-${List.generate(8, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join()}',
+            reference:
+                'DEMO-${List.generate(8, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join()}',
           );
   }
 
-  DemoAuthorizationResult cancel() => _result ??=
-      const DemoAuthorizationResult(
-        DemoAuthorizationStatus.cancelled,
-        'Demo scan cancelled. No authorization was created.',
-      );
+  DemoAuthorizationResult cancel() => _result ??= const DemoAuthorizationResult(
+    DemoAuthorizationStatus.cancelled,
+    'Demo scan cancelled. No authorization was created.',
+  );
 
   void clear() => _result = null;
 }

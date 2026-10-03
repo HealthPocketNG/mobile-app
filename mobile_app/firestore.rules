@@ -6,7 +6,8 @@ service cloud.firestore {
     // Assumed data model
     // ===============================================================
     // users/{uid}: private profile PII, verification booleans, notification
-    // preferences, and immutable createdAt. Document ID and userId equal Auth UID.
+    // preferences, an optional owner-scoped profileImagePath, and immutable
+    // createdAt. Document ID and userId equal Auth UID.
     // personal_health_pockets/{id}: userId, NGN currency, lifecycle status,
     // createdAt, updatedAt. It never stores a mutable balance.
     // savings_plans/{id}: owner/pocket IDs, recurring amount/frequency, schedule,
@@ -83,7 +84,33 @@ service cloud.firestore {
     }
 
     function validId(value) {
-      return validString(value, 1, 128);
+      return validString(value, 1, 256)
+        && value.matches('^[A-Za-z0-9_-]{1,256}$');
+    }
+
+    function validUserId(value) {
+      return validString(value, 1, 128)
+        && value.matches('^[A-Za-z0-9_-]{1,128}$');
+    }
+
+    function isCanonicalPersonalPocketId(pocketId, userId) {
+      return pocketId == 'personal-' + userId;
+    }
+
+    function isCanonicalSavingsPlanId(planId, userId) {
+      return planId == 'personal-plan-' + userId;
+    }
+
+    function isCanonicalFamilyPocketId(pocketId, userId) {
+      return pocketId.matches(
+        '^family_' + userId + '_[A-Fa-f0-9]{32}$'
+      );
+    }
+
+    function isCanonicalInvitationId(inviteId, userId) {
+      return inviteId.matches(
+        '^invite_' + userId + '_[A-Fa-f0-9]{32}$'
+      );
     }
 
     function personalPocketPath(pocketId) {
@@ -165,6 +192,17 @@ service cloud.firestore {
       return hasVerifiedIdentity()
         && existsAfter(familyPocketPath(pocketId))
         && getAfter(familyPocketPath(pocketId)).data.createdBy == request.auth.uid;
+    }
+
+    function willHaveFoundingAdmin(pocketId) {
+      return existsAfter(memberPath(pocketId, request.auth.uid))
+        && getAfter(memberPath(pocketId, request.auth.uid)).data.userId
+          == request.auth.uid
+        && getAfter(memberPath(pocketId, request.auth.uid)).data.pocketId
+          == pocketId
+        && getAfter(memberPath(pocketId, request.auth.uid)).data.role == 'admin'
+        && getAfter(memberPath(pocketId, request.auth.uid)).data.status
+          == 'accepted';
     }
 
     function isActiveMember(pocketId) {
@@ -249,20 +287,45 @@ service cloud.firestore {
         && data.kycStatus == 'notStarted';
     }
 
+    function validOnboardingStatus(data) {
+      return data.onboardingStatus in ['incomplete', 'complete']
+        && (data.onboardingStatus == 'incomplete'
+          || (data.dateOfBirth is timestamp
+            && validString(data.gender, 1, 40)
+            && validString(data.stateOfResidence, 1, 60)
+            && validString(data.residentialAddress, 1, 240)));
+    }
+
+    function validProfileImagePath(data) {
+      return !('profileImagePath' in data)
+        || data.profileImagePath == null
+        || (validString(data.profileImagePath, 52, 320)
+          && data.profileImagePath.matches(
+            '^users/' + data.userId
+              + '/profile/[A-Fa-f0-9]{32}\\.(jpg|png|webp)$'
+          ));
+    }
+
+    function onboardingStatusNotReverted() {
+      return resource.data.get('onboardingStatus', 'complete') != 'complete'
+        || request.resource.data.onboardingStatus == 'complete';
+    }
+
     function isValidUser(data) {
       return data.keys().hasOnly([
           'userId', 'fullName', 'email', 'phoneNumber', 'stateOfResidence',
           'dateOfBirth', 'gender', 'residentialAddress', 'nextOfKinName',
           'nextOfKinPhone', 'emailVerified', 'phoneVerified', 'kycStatus',
-          'notificationPreferences', 'createdAt', 'updatedAt'
+          'notificationPreferences', 'onboardingStatus', 'profileImagePath',
+          'createdAt', 'updatedAt'
         ])
         && data.keys().hasAll([
           'userId', 'fullName', 'email', 'phoneNumber', 'stateOfResidence',
           'dateOfBirth', 'gender', 'residentialAddress', 'nextOfKinName',
           'nextOfKinPhone', 'emailVerified', 'phoneVerified', 'kycStatus',
-          'notificationPreferences', 'createdAt', 'updatedAt'
+          'notificationPreferences', 'onboardingStatus', 'createdAt', 'updatedAt'
         ])
-        && validId(data.userId)
+        && validUserId(data.userId)
         && validString(data.fullName, 1, 100)
         && authEmailMatches(data.email)
         && validString(data.phoneNumber, 0, 32)
@@ -273,6 +336,8 @@ service cloud.firestore {
         && validString(data.nextOfKinName, 0, 100)
         && validString(data.nextOfKinPhone, 0, 32)
         && validProfileVerification(data)
+        && validOnboardingStatus(data)
+        && validProfileImagePath(data)
         && validNotificationPreferences(data.notificationPreferences)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -285,7 +350,7 @@ service cloud.firestore {
         && data.keys().hasAll([
           'userId', 'currency', 'status', 'createdAt', 'updatedAt'
         ])
-        && validId(data.userId)
+        && validUserId(data.userId)
         && data.currency == 'NGN'
         && data.status in ['active', 'restricted', 'closed']
         && data.createdAt is timestamp
@@ -303,7 +368,7 @@ service cloud.firestore {
           'frequency', 'startDate', 'nextContributionDate', 'status',
           'fundingSourceId', 'createdAt', 'updatedAt'
         ])
-        && validId(data.userId)
+        && validUserId(data.userId)
         && validId(data.personalHealthPocketId)
         && data.contributionAmountKobo is int
         && data.contributionAmountKobo > 0
@@ -328,7 +393,7 @@ service cloud.firestore {
           'amountKobo', 'currency', 'status', 'origin', 'moneyMovement',
           'idempotencyKey', 'createdAt'
         ])
-        && validId(data.contributorUserId)
+        && validUserId(data.contributorUserId)
         && data.contributorUserId == request.auth.uid
         && validId(data.personalHealthPocketId)
         && validId(data.savingsPlanId)
@@ -365,7 +430,7 @@ service cloud.firestore {
           'idempotencyKey', 'createdAt'
         ])
         && data.contributorUserId == request.auth.uid
-        && validId(data.contributorUserId)
+        && validUserId(data.contributorUserId)
         && validId(data.familyPocketId)
         && validString(data.contributorName, 1, 100)
         && data.contributorName
@@ -398,7 +463,7 @@ service cloud.firestore {
         ])
         && validString(data.name, 1, 80)
         && data.beneficiaryLimit == 2
-        && validId(data.createdBy)
+        && validUserId(data.createdBy)
         && data.currency == 'NGN'
         && data.status in ['active', 'archived']
         && data.createdAt is timestamp
@@ -416,7 +481,7 @@ service cloud.firestore {
           'isBeneficiary', 'status', 'joinedAt'
         ])
         && validId(data.pocketId)
-        && validId(data.userId)
+        && validUserId(data.userId)
         && (!('invitationId' in data) || validId(data.invitationId))
         && validString(data.name, 1, 100)
         && data.role in ['admin', 'member']
@@ -462,7 +527,7 @@ service cloud.firestore {
           || (data.isBeneficiary == false && !('beneficiarySlot' in data))
         )
         && data.status in ['pending', 'accepted', 'declined', 'cancelled']
-        && validId(data.createdBy)
+        && validUserId(data.createdBy)
         && data.createdAt is timestamp
         && data.expiresAt is timestamp
         && data.expiresAt > data.createdAt
@@ -471,7 +536,7 @@ service cloud.firestore {
             && !('respondedBy' in data)
             && !('respondedAt' in data))
           || (data.status != 'pending'
-            && validId(data.respondedBy)
+            && validUserId(data.respondedBy)
             && data.respondedAt is timestamp)
         );
     }
@@ -497,51 +562,24 @@ service cloud.firestore {
         );
     }
 
-    function isValidActivityMetadata(data) {
-      return data is map
-        && data.keys().hasOnly(['amount', 'currency', 'note', 'memberName'])
-        && (!('amount' in data)
-          || (data.amount is int && data.amount > 0
-            && data.amount <= 1000000000))
-        && (!('currency' in data) || data.currency == 'NGN')
-        && (!('note' in data) || validString(data.note, 0, 280))
-        && (!('memberName' in data)
-          || validString(data.memberName, 1, 100));
-    }
-
-    function isValidActivity(data) {
-      return data.keys().hasOnly([
-          'userId', 'activityType', 'metadata', 'relatedEntityType',
-          'relatedEntityId', 'familyPocketId', 'createdAt'
-        ])
-        && data.keys().hasAll([
-          'userId', 'activityType', 'metadata', 'relatedEntityType',
-          'relatedEntityId', 'createdAt'
-        ])
-        && data.userId == request.auth.uid
-        && validId(data.userId)
-        && validString(data.activityType, 1, 64)
-        && isValidActivityMetadata(data.metadata)
-        && validString(data.relatedEntityType, 1, 64)
-        && validId(data.relatedEntityId)
-        && (!('familyPocketId' in data) || validId(data.familyPocketId))
-        && data.createdAt is timestamp;
-    }
-
     // ===============================================================
     // Access rules
     // ===============================================================
     match /users/{userId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
+        && validUserId(userId)
         && uidUnchanged(userId)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
+        && request.resource.data.onboardingStatus == 'incomplete'
         && isValidUser(request.resource.data);
       allow update: if isOwner(userId)
+        && validUserId(userId)
         && uidNotModified()
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
+        && onboardingStatusNotReverted()
         && isValidUser(request.resource.data);
       allow delete: if false;
     }
@@ -551,14 +589,17 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
       allow create: if hasVerifiedIdentity()
         && request.resource.data.userId == request.auth.uid
+        && isCanonicalPersonalPocketId(pocketId, request.auth.uid)
         && request.resource.data.status == 'active'
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && isValidPersonalPocket(request.resource.data);
       allow update: if hasVerifiedIdentity()
         && resource.data.userId == request.auth.uid
+        && isCanonicalPersonalPocketId(pocketId, request.auth.uid)
         && uidNotModified()
         && request.resource.data.currency == resource.data.currency
+        && request.resource.data.status == resource.data.status
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
         && isValidPersonalPocket(request.resource.data);
@@ -570,12 +611,14 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
       allow create: if hasVerifiedIdentity()
         && request.resource.data.userId == request.auth.uid
+        && isCanonicalSavingsPlanId(planId, request.auth.uid)
         && ownsPersonalPocket(request.resource.data.personalHealthPocketId)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && isValidSavingsPlan(request.resource.data);
       allow update: if hasVerifiedIdentity()
         && resource.data.userId == request.auth.uid
+        && isCanonicalSavingsPlanId(planId, request.auth.uid)
         && uidNotModified()
         && request.resource.data.personalHealthPocketId
           == resource.data.personalHealthPocketId
@@ -617,6 +660,8 @@ service cloud.firestore {
       allow read: if isActiveMember(pocketId) || isPocketCreator(pocketId);
       allow create: if hasVerifiedIdentity()
         && request.resource.data.createdBy == request.auth.uid
+        && isCanonicalFamilyPocketId(pocketId, request.auth.uid)
+        && willHaveFoundingAdmin(pocketId)
         && request.resource.data.status == 'active'
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
@@ -632,7 +677,8 @@ service cloud.firestore {
       match /members/{memberId} {
         allow read: if isActiveMember(pocketId)
           || (hasVerifiedIdentity()
-            && resource.data.userId == request.auth.uid)
+            && resource.data.userId == request.auth.uid
+            && memberId == request.auth.uid)
           || isPocketCreator(pocketId);
         allow create: if hasVerifiedIdentity()
           && request.resource.data.pocketId == pocketId
@@ -692,6 +738,7 @@ service cloud.firestore {
             )
           );
         allow update: if isAdmin(pocketId)
+          && memberId == resource.data.userId
           && request.resource.data.pocketId == resource.data.pocketId
           && request.resource.data.userId == resource.data.userId
           && request.resource.data.joinedAt == resource.data.joinedAt
@@ -723,6 +770,7 @@ service cloud.firestore {
         allow create: if isAdmin(pocketId)
           && request.resource.data.pocketId == pocketId
           && request.resource.data.createdBy == request.auth.uid
+          && isCanonicalInvitationId(inviteId, request.auth.uid)
           && request.resource.data.createdAt == request.time
           && request.resource.data.expiresAt > request.time
           && request.resource.data.expiresAt
@@ -874,11 +922,9 @@ service cloud.firestore {
         || ('familyPocketId' in resource.data
           && isActiveMember(resource.data.familyPocketId))
       );
-      allow create: if hasVerifiedIdentity()
-        && (!('familyPocketId' in request.resource.data)
-          || isActiveMember(request.resource.data.familyPocketId))
-        && request.resource.data.createdAt == request.time
-        && isValidActivity(request.resource.data);
+      // Audit events must come from a future trusted service, never a client
+      // that can manufacture its own history.
+      allow create: if false;
       allow update, delete: if false;
     }
 

@@ -16,6 +16,9 @@ void main() {
       phoneNumber: '+2348012345678',
       stateOfResidence: 'Lagos',
       memberSince: createdAt,
+      updatedAt: updatedAt,
+      profileImagePath:
+          'users/user-1/profile/0123456789abcdef0123456789abcdef.jpg',
       dateOfBirth: DateTime.utc(1993, 5, 12),
       gender: 'Female',
       residentialAddress: '12 Adeola Street',
@@ -36,6 +39,7 @@ void main() {
       userId: 'user-1',
       profile: profile,
       notifications: notifications,
+      onboardingStatus: AccountOnboardingStatus.complete,
       updatedAt: updatedAt,
     ).toMap();
     final decoded = UserProfileDocument.fromMap('user-1', encoded);
@@ -44,8 +48,11 @@ void main() {
     expect(decoded.profile.fullName, profile.fullName);
     expect(decoded.profile.dateOfBirth?.toUtc(), profile.dateOfBirth);
     expect(decoded.profile.demoKycComplete, isTrue);
+    expect(decoded.profile.profileImagePath, profile.profileImagePath);
+    expect(decoded.profile.updatedAt?.toUtc(), updatedAt);
     expect(decoded.notifications.healthReminders, isFalse);
     expect(decoded.kycStatus, KycStatus.demoComplete);
+    expect(decoded.onboardingStatus, AccountOnboardingStatus.complete);
     expect(decoded.updatedAt.toUtc(), updatedAt);
   });
 

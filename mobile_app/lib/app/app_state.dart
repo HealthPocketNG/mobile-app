@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:healthpocket/core/data/backend_ids.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
@@ -22,6 +22,7 @@ class AppState extends ChangeNotifier {
     AuthRepository? authRepository,
     AppPinRepository? pinRepository,
     this.profileRepository,
+    this.profilePhotoRepository,
     this.savingsRepository,
     this.contributionRepository,
     this.familyPocketRepository,
@@ -34,6 +35,7 @@ class AppState extends ChangeNotifier {
   final AuthRepository authRepository;
   final AppPinRepository pinRepository;
   final ProfileRepository? profileRepository;
+  final ProfilePhotoRepository? profilePhotoRepository;
   final SavingsRepository? savingsRepository;
   final ContributionRepository? contributionRepository;
   final FamilyPocketRepository? familyPocketRepository;
@@ -43,13 +45,18 @@ class AppState extends ChangeNotifier {
   final SavingsStore savingsStore = SavingsStore();
   bool _hasCompletedOnboarding = false;
   bool _pendingNewAccount = false;
+  AccountOnboardingStatus _onboardingStatus =
+      AccountOnboardingStatus.incomplete;
   String? _personalHealthPocketId;
 
   bool get hasCompletedOnboarding => _hasCompletedOnboarding;
   bool get hasPendingNewAccount => _pendingNewAccount;
+  bool get canAccessProtectedFlows =>
+      authRepository.currentUser?.emailVerified == true &&
+      _onboardingStatus == AccountOnboardingStatus.complete;
 
   Future<AuthFlowDestination> resolveStartup() async {
-    final user = authRepository.currentUser;
+    final user = await authRepository.restoreSession();
     if (user == null) return AuthFlowDestination.welcome;
     if (!user.emailVerified) {
       await authRepository.signOut();
@@ -59,45 +66,54 @@ class AppState extends ChangeNotifier {
   }
 
   Future<AuthFlowDestination> acceptAuthentication(AuthResult result) async {
-    _pendingNewAccount = result.isNewUser;
-    if (result.isNewUser) {
-      _beginRegistrationFor(result.user);
-    }
     if (!result.user.emailVerified) {
       await authRepository.signOut();
       throw const AuthFailure(
         'Use a Google account with a verified email address.',
       );
     }
-    if (result.isNewUser) return AuthFlowDestination.personalInformation;
+    if (profileRepository == null) {
+      _pendingNewAccount = result.isNewUser;
+      if (result.isNewUser) _beginRegistrationFor(result.user);
+    }
     return _destinationForVerifiedUser(result.user);
   }
 
   Future<void> setPin(String pin) async {
-    final userId = authRepository.currentUserId;
-    if (userId == null) throw const AuthFailure('Your session has expired.');
-    await pinRepository.setPin(userId: userId, pin: pin);
+    final user = _requireVerifiedGoogleUser();
+    await pinRepository.setPin(userId: user.uid, pin: pin);
     _pendingNewAccount = false;
   }
 
   Future<PinVerificationResult> verifyPin(String pin) async {
-    final userId = authRepository.currentUserId;
-    if (userId == null) throw const AuthFailure('Your session has expired.');
-    return pinRepository.verifyPin(userId: userId, pin: pin);
+    final user = _requireVerifiedGoogleUser();
+    return pinRepository.verifyPin(userId: user.uid, pin: pin);
   }
 
-  Future<void> resetPinAfterReauthentication() async {
-    final userId = authRepository.currentUserId;
-    if (userId == null) throw const AuthFailure('Your session has expired.');
-    await pinRepository.clearPin(userId);
+  Future<bool> reauthenticateAndResetPin() async {
+    final user = _requireVerifiedGoogleUser();
+    final completed = await authRepository.reauthenticateWithGoogle();
+    if (!completed) return false;
+    final restored = _requireVerifiedGoogleUser();
+    if (restored.uid != user.uid) {
+      throw const AuthFailure(
+        'The Google account does not match this HealthPocket session.',
+      );
+    }
+    await pinRepository.clearPin(user.uid);
+    return true;
   }
 
   Future<void> signOut() async {
+    _hasCompletedOnboarding = false;
     _pendingNewAccount = false;
+    _onboardingStatus = AccountOnboardingStatus.incomplete;
     _personalHealthPocketId = null;
-    savingsStore.clearContributionState();
+    profileStore.clear();
+    savingsStore.resetForOnboarding();
     familyPocketStore.resetForNewUser(name: '', email: '');
     await authRepository.signOut();
+    notifyListeners();
   }
 
   Future<AuthFlowDestination> _destinationForVerifiedUser(AuthUser user) async {
@@ -108,36 +124,10 @@ class AppState extends ChangeNotifier {
     final profiles = profileRepository;
     final savings = savingsRepository;
     if (profiles != null && savings != null) {
-      final profileData = await profiles.getProfile(user.uid);
+      final provisioned = await profiles.getOrCreateProfile(user);
+      final profileData = provisioned.data;
       final pocket = await savings.getPersonalPocket(user.uid);
       final plan = await savings.getPlan(user.uid);
-
-      if (profileData == null) {
-        _pendingNewAccount = true;
-        if (profileData == null) {
-          profileStore.beginRegistration(
-            fullName: user.displayName?.trim().isNotEmpty == true
-                ? user.displayName!.trim()
-                : 'HealthPocket User',
-            email: user.email ?? '',
-            phoneNumber: '',
-            emailVerified: user.emailVerified,
-          );
-        } else {
-          profileStore.hydrate(
-            profile: profileData.profile,
-            notifications: profileData.notifications,
-          );
-        }
-        if (plan != null) savingsStore.hydrate(plan: plan);
-        _startFamilyPocketRestore(
-          userId: user.uid,
-          name: profileStore.profile.fullName,
-          email: profileStore.profile.email,
-        );
-        _hasCompletedOnboarding = false;
-        return AuthFlowDestination.personalInformation;
-      }
 
       profileStore.hydrate(
         profile: profileData.profile,
@@ -153,11 +143,28 @@ class AppState extends ChangeNotifier {
         name: profileData.profile.fullName,
         email: profileData.profile.email,
       );
-      _hasCompletedOnboarding = true;
-    } else if (profiles != null &&
-        await profiles.getProfile(user.uid) == null) {
-      _pendingNewAccount = true;
-      _beginRegistrationFor(user);
+      _onboardingStatus = profileData.onboardingStatus;
+      _hasCompletedOnboarding =
+          _onboardingStatus == AccountOnboardingStatus.complete;
+      _pendingNewAccount = provisioned.wasCreated || !_hasCompletedOnboarding;
+      if (!_hasCompletedOnboarding) {
+        savingsStore.hydrate(plan: plan);
+        return AuthFlowDestination.personalInformation;
+      }
+    } else if (profiles != null) {
+      final provisioned = await profiles.getOrCreateProfile(user);
+      profileStore.hydrate(
+        profile: provisioned.data.profile,
+        notifications: provisioned.data.notifications,
+      );
+      _onboardingStatus = provisioned.data.onboardingStatus;
+      _hasCompletedOnboarding =
+          _onboardingStatus == AccountOnboardingStatus.complete;
+      _pendingNewAccount = provisioned.wasCreated || !_hasCompletedOnboarding;
+      if (!_hasCompletedOnboarding) {
+        return AuthFlowDestination.personalInformation;
+      }
+    } else if (_pendingNewAccount) {
       return AuthFlowDestination.personalInformation;
     }
 
@@ -180,6 +187,7 @@ class AppState extends ChangeNotifier {
 
   void beginRegistration() {
     _hasCompletedOnboarding = false;
+    _onboardingStatus = AccountOnboardingStatus.incomplete;
     _personalHealthPocketId = null;
     savingsStore.resetForOnboarding();
     familyPocketStore.resetForNewUser(
@@ -210,7 +218,7 @@ class AppState extends ChangeNotifier {
       demoKycComplete: false,
     );
     final pocket = PersonalHealthPocket(
-      id: 'personal-${user.uid}',
+      id: BackendIds.personalPocket(user.uid),
       userId: user.uid,
       currency: 'NGN',
       status: PersonalHealthPocketStatus.active,
@@ -218,7 +226,7 @@ class AppState extends ChangeNotifier {
       updatedAt: now,
     );
     final plan = SavingsPlan(
-      id: 'personal-plan-${user.uid}',
+      id: BackendIds.savingsPlan(user.uid),
       contributionAmountKobo: currentPlan.contributionAmountKobo,
       frequency: currentPlan.frequency,
       startDate: currentPlan.startDate,
@@ -236,16 +244,19 @@ class AppState extends ChangeNotifier {
     final savings = savingsRepository;
     if (profiles != null && savings != null) {
       // Deterministic IDs make each step safe to retry if connectivity fails.
-      await profiles.saveProfile(
-        userId: user.uid,
-        profile: profile,
-        notifications: profileStore.notifications,
-      );
       await savings.savePersonalPocket(pocket);
       await savings.savePlan(
         userId: user.uid,
         personalHealthPocketId: pocket.id,
         plan: plan,
+      );
+      // Mark onboarding complete last so a partial retry can never unlock a
+      // protected flow before all of its persisted setup exists.
+      await profiles.saveProfile(
+        userId: user.uid,
+        profile: profile,
+        notifications: profileStore.notifications,
+        onboardingStatus: AccountOnboardingStatus.complete,
       );
     }
 
@@ -257,6 +268,8 @@ class AppState extends ChangeNotifier {
     );
 
     _hasCompletedOnboarding = true;
+    _onboardingStatus = AccountOnboardingStatus.complete;
+    _pendingNewAccount = false;
     notifyListeners();
   }
 
@@ -277,7 +290,7 @@ class AppState extends ChangeNotifier {
       demoKycComplete: false,
     );
     final pocket = PersonalHealthPocket(
-      id: 'personal-${user.uid}',
+      id: BackendIds.personalPocket(user.uid),
       userId: user.uid,
       currency: 'NGN',
       status: PersonalHealthPocketStatus.active,
@@ -291,20 +304,23 @@ class AppState extends ChangeNotifier {
     _personalHealthPocketId = pocket.id;
     final profiles = profileRepository;
     final savings = savingsRepository;
+    if (savings != null) await savings.savePersonalPocket(pocket);
     if (profiles != null) {
       await profiles.saveProfile(
         userId: user.uid,
         profile: profile,
         notifications: profileStore.notifications,
+        onboardingStatus: AccountOnboardingStatus.complete,
       );
     }
-    if (savings != null) await savings.savePersonalPocket(pocket);
     _startFamilyPocketRestore(
       userId: user.uid,
       name: profile.fullName,
       email: profile.email,
     );
     _hasCompletedOnboarding = true;
+    _onboardingStatus = AccountOnboardingStatus.complete;
+    _pendingNewAccount = false;
     notifyListeners();
   }
 
@@ -313,6 +329,7 @@ class AppState extends ChangeNotifier {
     required SavingsFrequency frequency,
     required DateTime startDate,
   }) async {
+    _requireCompletedUserId();
     final currentPlan = savingsStore.plan;
     if (currentPlan == null) {
       throw StateError('No savings plan is available to update.');
@@ -327,6 +344,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> toggleSavingsPlan() async {
+    _requireCompletedUserId();
     final currentPlan = savingsStore.plan;
     if (currentPlan == null) {
       throw StateError('No savings plan is available to update.');
@@ -352,6 +370,7 @@ class AppState extends ChangeNotifier {
       fullName: draft.fullName.trim(),
       phoneNumber: draft.phoneNumber.trim(),
       stateOfResidence: draft.stateOfResidence.trim(),
+      updatedAt: DateTime.now(),
       phoneVerified:
           previous.phoneNumber == draft.phoneNumber.trim() &&
           previous.phoneVerified,
@@ -360,6 +379,7 @@ class AppState extends ChangeNotifier {
       userId: userId,
       profile: updated,
       notifications: profileStore.notifications,
+      onboardingStatus: _onboardingStatus,
     );
     if (authRepository.currentUserId != userId) {
       throw const AuthFailure('Your account changed while saving.');
@@ -368,6 +388,84 @@ class AppState extends ChangeNotifier {
       profile: updated,
       notifications: profileStore.notifications,
     );
+  }
+
+  Future<void> updateProfilePhoto({
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final userId = _requireCompletedUserId();
+    final photos = profilePhotoRepository;
+    final profiles = profileRepository;
+    if (photos == null || profiles == null) {
+      throw StateError('Profile photos are not available in this build.');
+    }
+    final previous = profileStore.profile;
+    final newPath = await photos.upload(
+      userId: userId,
+      bytes: bytes,
+      contentType: contentType,
+    );
+    final updated = previous.copyWith(
+      profileImagePath: newPath,
+      updatedAt: DateTime.now(),
+    );
+    try {
+      await profiles.saveProfile(
+        userId: userId,
+        profile: updated,
+        notifications: profileStore.notifications,
+        onboardingStatus: _onboardingStatus,
+      );
+    } catch (_) {
+      try {
+        await photos.delete(userId: userId, storagePath: newPath);
+      } catch (_) {}
+      rethrow;
+    }
+    if (authRepository.currentUserId != userId) {
+      throw const AuthFailure('Your account changed while saving.');
+    }
+    profileStore.hydrate(
+      profile: updated,
+      notifications: profileStore.notifications,
+    );
+    final oldPath = previous.profileImagePath;
+    if (oldPath != null && oldPath != newPath) {
+      try {
+        await photos.delete(userId: userId, storagePath: oldPath);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> removeProfilePhoto() async {
+    final userId = _requireCompletedUserId();
+    final previous = profileStore.profile;
+    final oldPath = previous.profileImagePath;
+    if (oldPath == null) return;
+    final updated = previous.copyWith(
+      clearProfileImage: true,
+      updatedAt: DateTime.now(),
+    );
+    await profileRepository?.saveProfile(
+      userId: userId,
+      profile: updated,
+      notifications: profileStore.notifications,
+      onboardingStatus: _onboardingStatus,
+    );
+    if (authRepository.currentUserId != userId) {
+      throw const AuthFailure('Your account changed while saving.');
+    }
+    profileStore.hydrate(
+      profile: updated,
+      notifications: profileStore.notifications,
+    );
+    try {
+      await profilePhotoRepository?.delete(
+        userId: userId,
+        storagePath: oldPath,
+      );
+    } catch (_) {}
   }
 
   Future<void> updatePersonalDetails(
@@ -399,17 +497,20 @@ class AppState extends ChangeNotifier {
         ? current.copyWith(
             nextOfKinName: draft.nextOfKinName.trim(),
             nextOfKinPhone: draft.nextOfKinPhone.trim(),
+            updatedAt: DateTime.now(),
           )
         : current.copyWith(
             dateOfBirth: draft.dateOfBirth,
             gender: draft.gender,
             residentialAddress: draft.residentialAddress.trim(),
             stateOfResidence: draft.stateOfResidence.trim(),
+            updatedAt: DateTime.now(),
           );
     await profileRepository?.saveProfile(
       userId: userId,
       profile: updated,
       notifications: profileStore.notifications,
+      onboardingStatus: _onboardingStatus,
     );
     if (authRepository.currentUserId != userId) {
       throw const AuthFailure('Your account changed while saving.');
@@ -433,6 +534,7 @@ class AppState extends ChangeNotifier {
         userId: userId,
         profile: profileStore.profile,
         notifications: notifications,
+        onboardingStatus: _onboardingStatus,
       );
     }
     if (authRepository.currentUserId != userId) {
@@ -442,12 +544,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> refreshDashboard() async {
-    final userId = authRepository.currentUserId;
+    final userId = _requireCompletedUserId();
     final profiles = profileRepository;
     final savings = savingsRepository;
-    if (userId == null) {
-      throw const AuthFailure('Your session has expired.');
-    }
     if (profiles == null || savings == null) {
       return;
     }
@@ -495,22 +594,19 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> refreshFamilyPockets() async {
-    final userId = authRepository.currentUserId;
-    if (userId == null) {
-      throw const AuthFailure('Your session has expired.');
-    }
+    final userId = _requireCompletedUserId();
     await _loadFamilyPockets(userId);
   }
 
   Future<void> createFamilyPocket({required String name}) async {
-    final userId = _requireUserId();
+    final userId = _requireCompletedUserId();
     final repository = familyPocketRepository;
     if (repository == null) {
       familyPocketStore.createPocket(name: name);
       return;
     }
     final now = DateTime.now();
-    final pocketId = 'family_${userId}_${createDevelopmentContributionKey()}';
+    final pocketId = BackendIds.familyPocket(userId);
     await repository.createPocket(
       pocket: FamilyPocket(id: pocketId, name: name.trim(), members: const []),
       createdBy: userId,
@@ -535,7 +631,7 @@ class AppState extends ChangeNotifier {
     required bool canContribute,
     required bool isBeneficiary,
   }) async {
-    final userId = _requireUserId();
+    final userId = _requireCompletedUserId();
     final pocket = familyPocketStore.selectedPocket;
     final repository = familyPocketRepository;
     if (pocket == null || !familyPocketStore.canManageMembers) {
@@ -555,7 +651,7 @@ class AppState extends ChangeNotifier {
     }
     await repository.createInvitation(
       FamilyInvitation(
-        id: 'invite_${userId}_${createDevelopmentContributionKey()}',
+        id: BackendIds.invitation(userId),
         pocketId: pocket.id,
         pocketName: pocket.name,
         inviteeName: name.trim(),
@@ -576,7 +672,7 @@ class AppState extends ChangeNotifier {
     FamilyInvitation invitation, {
     required bool accept,
   }) async {
-    final userId = _requireUserId();
+    final userId = _requireCompletedUserId();
     final repository = familyPocketRepository;
     if (repository == null) {
       if (!familyPocketStore.respondToInvitation(
@@ -597,7 +693,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> cancelFamilyInvitation(FamilyInvitation invitation) async {
-    final userId = _requireUserId();
+    final userId = _requireCompletedUserId();
     final repository = familyPocketRepository;
     if (repository == null) {
       if (!familyPocketStore.cancelInvitation(invitation.id)) {
@@ -610,7 +706,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> removeFamilyMember(String memberId) async {
-    final userId = _requireUserId();
+    final userId = _requireCompletedUserId();
     final pocket = familyPocketStore.selectedPocket;
     final repository = familyPocketRepository;
     if (pocket == null || !familyPocketStore.canManageMembers) {
@@ -647,7 +743,7 @@ class AppState extends ChangeNotifier {
     if (amountNaira <= 0 || amountNaira > 1000000000) {
       throw ArgumentError.value(amountNaira, 'amountNaira');
     }
-    final userId = _requireUserId();
+    final userId = _requireCompletedUserId();
     final pocket = familyPocketStore.selectedPocket;
     final repository = contributionRepository;
     if (pocket == null || repository == null) {
@@ -657,7 +753,7 @@ class AppState extends ChangeNotifier {
     }
     await repository.recordDevelopmentFamilyContribution(
       ContributionRecord(
-        id: 'dev_family_${userId}_$idempotencyKey',
+        id: BackendIds.familyContribution(userId, idempotencyKey),
         contributorUserId: userId,
         familyPocketId: pocket.id,
         contributorName: profileStore.profile.fullName,
@@ -676,6 +772,25 @@ class AppState extends ChangeNotifier {
   String _requireUserId() {
     final userId = authRepository.currentUserId;
     if (userId == null) throw const AuthFailure('Your session has expired.');
+    return userId;
+  }
+
+  AuthUser _requireVerifiedGoogleUser() {
+    final user = authRepository.currentUser;
+    if (user == null) throw const AuthFailure('Your session has expired.');
+    if (!user.emailVerified || !user.usesGoogle) {
+      throw const AuthFailure(
+        'Sign in again with your verified Google account.',
+      );
+    }
+    return user;
+  }
+
+  String _requireCompletedUserId() {
+    final userId = _requireUserId();
+    if (!canAccessProtectedFlows) {
+      throw const AuthFailure('Complete account setup before continuing.');
+    }
     return userId;
   }
 
@@ -740,24 +855,17 @@ class AppState extends ChangeNotifier {
   Future<void> _persistSavingsPlan(SavingsPlan plan) async {
     final savings = savingsRepository;
     if (savings != null) {
-      final userId = authRepository.currentUserId;
-      if (userId == null) {
-        throw const AuthFailure('Your session has expired.');
-      }
+      final userId = _requireCompletedUserId();
       await savings.savePlan(
         userId: userId,
-        personalHealthPocketId: 'personal-$userId',
+        personalHealthPocketId: BackendIds.personalPocket(userId),
         plan: plan,
       );
     }
     savingsStore.replacePlan(plan);
   }
 
-  String createDevelopmentContributionKey() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    return bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
-  }
+  String createDevelopmentContributionKey() => BackendIds.newRequestKey();
 
   Future<void> recordDevelopmentContribution({
     required int amountNaira,
@@ -775,21 +883,12 @@ class AppState extends ChangeNotifier {
         'Enter an amount from ₦1 to ₦1,000,000,000.',
       );
     }
-    if (!RegExp(r'^[A-Za-z0-9_-]{16,80}$').hasMatch(idempotencyKey)) {
-      throw ArgumentError.value(
-        idempotencyKey,
-        'idempotencyKey',
-        'Use a 16–80 character contribution request key.',
-      );
-    }
-    final userId = authRepository.currentUserId;
+    BackendIds.requireRequestKey(idempotencyKey);
+    final userId = _requireCompletedUserId();
     final pocketId = _personalHealthPocketId;
     final plan = savingsStore.plan;
     final repository = contributionRepository;
-    if (userId == null ||
-        pocketId == null ||
-        plan == null ||
-        repository == null) {
+    if (pocketId == null || plan == null || repository == null) {
       throw StateError(
         'Your savings setup is not ready. Refresh and try again.',
       );
@@ -797,7 +896,7 @@ class AppState extends ChangeNotifier {
 
     await repository.recordDevelopmentContribution(
       ContributionRecord(
-        id: 'dev_${userId}_$idempotencyKey',
+        id: BackendIds.personalContribution(userId, idempotencyKey),
         contributorUserId: userId,
         personalHealthPocketId: pocketId,
         savingsPlanId: plan.id,

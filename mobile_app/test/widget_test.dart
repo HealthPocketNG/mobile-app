@@ -48,11 +48,11 @@ void main() {
     await tester.drag(find.byType(ListView).last, const Offset(0, -700));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Sign up with Google'));
+    await tester.tap(find.text('Continue with Google'));
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Accept the Terms and Privacy Policy to sign up with Google.'),
+      find.text('Please accept the Terms and Privacy Policy.'),
       findsOneWidget,
     );
   });

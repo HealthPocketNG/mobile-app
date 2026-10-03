@@ -46,9 +46,11 @@ List<CareProvider> filterCareProviders(
     .where(
       (provider) =>
           (provider.name.toLowerCase().contains(query.trim().toLowerCase()) ||
-              _typeSearchLabel(provider.type).contains(query.trim().toLowerCase()) ||
+              _typeSearchLabel(provider.type)
+                  .contains(query.trim().toLowerCase()) ||
               provider.services.any(
-                (service) => service.toLowerCase().contains(query.trim().toLowerCase()),
+                (service) =>
+                    service.toLowerCase().contains(query.trim().toLowerCase()),
               )) &&
           (state == null || provider.state == state) &&
           (type == null || provider.type == type),

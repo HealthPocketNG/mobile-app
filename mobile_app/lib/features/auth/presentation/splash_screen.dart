@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/app/app_state.dart';
+import 'package:healthpocket/core/logging/backend_logger.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/widgets/app_brand_logo.dart';
 
@@ -18,6 +19,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   Timer? _startupTimer;
   String? _errorMessage;
+  bool _isResolving = false;
 
   @override
   void initState() {
@@ -26,6 +28,11 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _resolveSession() async {
+    if (_isResolving) return;
+    setState(() {
+      _isResolving = true;
+      _errorMessage = null;
+    });
     try {
       final destination = await widget.appState.resolveStartup();
       if (!mounted) return;
@@ -33,10 +40,51 @@ class _SplashScreenState extends State<SplashScreen> {
         context,
         appRouteForAuthFlow(destination).path,
       );
-    } catch (_) {
+    } catch (error) {
+      BackendLogger.instance.error(
+        'auth.session.restore_failed',
+        fields: {
+          'operation': 'restore_session',
+          'entity': 'auth_session',
+          'outcome': 'failure',
+          'errorType': error.runtimeType.toString(),
+        },
+      );
       if (mounted) {
         setState(() {
           _errorMessage = 'We could not restore your session. Try again.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isResolving = false);
+    }
+  }
+
+  Future<void> _discardSession() async {
+    if (_isResolving) return;
+    setState(() => _isResolving = true);
+    try {
+      await widget.appState.signOut();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoute.welcome.path,
+        (route) => false,
+      );
+    } catch (error) {
+      BackendLogger.instance.error(
+        'auth.session.discard_failed',
+        fields: {
+          'operation': 'discard_session',
+          'entity': 'auth_session',
+          'outcome': 'failure',
+          'errorType': error.runtimeType.toString(),
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _isResolving = false;
+          _errorMessage = 'We could not reset this session. Try again.';
         });
       }
     }
@@ -94,11 +142,12 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {
-                      setState(() => _errorMessage = null);
-                      _resolveSession();
-                    },
+                    onPressed: _isResolving ? null : _resolveSession,
                     child: const Text('Try again'),
+                  ),
+                  TextButton(
+                    onPressed: _isResolving ? null : _discardSession,
+                    child: const Text('Sign out and start again'),
                   ),
                 ],
               ],

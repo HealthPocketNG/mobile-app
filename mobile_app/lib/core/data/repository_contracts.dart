@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:healthpocket/features/activity/domain/activity_record.dart';
 import 'package:healthpocket/features/auth/domain/app_pin.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
@@ -13,6 +15,7 @@ abstract interface class AuthRepository {
   AuthUser? get currentUser;
   String? get currentUserId;
   Stream<AuthUser?> watchUser();
+  Future<AuthUser?> restoreSession();
   Future<bool> hasActiveSession();
   Future<AuthResult?> signInWithGoogle();
   Future<bool> reauthenticateWithGoogle();
@@ -32,11 +35,36 @@ abstract interface class AppPinRepository {
 abstract interface class ProfileRepository {
   Stream<UserProfileDocumentData?> watchProfile(String userId);
   Future<UserProfileDocumentData?> getProfile(String userId);
+  Future<ProfileProvisioningResult> getOrCreateProfile(AuthUser user);
   Future<void> saveProfile({
     required String userId,
     required UserProfile profile,
     required NotificationPreferences notifications,
+    required AccountOnboardingStatus onboardingStatus,
   });
+}
+
+abstract interface class ProfilePhotoRepository {
+  Future<String> upload({
+    required String userId,
+    required Uint8List bytes,
+    required String contentType,
+  });
+  Future<String?> getDownloadUrl({
+    required String userId,
+    required String? storagePath,
+  });
+  Future<void> delete({required String userId, required String storagePath});
+}
+
+class ProfileProvisioningResult {
+  const ProfileProvisioningResult({
+    required this.data,
+    required this.wasCreated,
+  });
+
+  final UserProfileDocumentData data;
+  final bool wasCreated;
 }
 
 class UserProfileDocumentData {
@@ -44,11 +72,13 @@ class UserProfileDocumentData {
     required this.profile,
     required this.notifications,
     required this.kycStatus,
+    required this.onboardingStatus,
   });
 
   final UserProfile profile;
   final NotificationPreferences notifications;
   final KycStatus kycStatus;
+  final AccountOnboardingStatus onboardingStatus;
 }
 
 abstract interface class SavingsRepository {

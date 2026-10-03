@@ -47,12 +47,13 @@ class AppRouter {
   Route<void> onGenerateRoute(RouteSettings settings) {
     final route = AppRoute.values.where((item) => item.path == settings.name);
     final destination = route.isEmpty ? AppRoute.splash : route.first;
+    final guardedDestination = _guard(destination);
 
     return MaterialPageRoute<void>(
       settings: settings,
       builder: (context) => FamilyInvitationScope(
         store: appState.familyPocketStore,
-        child: switch (destination) {
+        child: switch (guardedDestination) {
           AppRoute.splash => SplashScreen(appState: appState),
           AppRoute.welcome => const WelcomeScreen(),
           AppRoute.signIn => AuthFormScreen(
@@ -127,8 +128,13 @@ class AppRouter {
           AppRoute.profile => ProfileScreen(
             onSaveAccount: appState.updateAccountDetails,
             onSavePersonalDetails: appState.updatePersonalDetails,
+            onUploadProfilePhoto: (bytes, contentType) => appState
+                .updateProfilePhoto(bytes: bytes, contentType: contentType),
+            onRemoveProfilePhoto: appState.removeProfilePhoto,
+            profilePhotoRepository: appState.profilePhotoRepository,
             store: appState.profileStore,
             authRepository: appState.authRepository,
+            onSignOut: appState.signOut,
             onSaveNotificationPreferences:
                 appState.updateNotificationPreferences,
           ),
@@ -139,6 +145,26 @@ class AppRouter {
         },
       ),
     );
+  }
+
+  AppRoute _guard(AppRoute destination) {
+    const protected = {
+      AppRoute.createPin,
+      AppRoute.unlockPin,
+      AppRoute.pinRecovery,
+      AppRoute.dashboard,
+      AppRoute.activity,
+      AppRoute.savings,
+      AppRoute.familyPocket,
+      AppRoute.findCare,
+      AppRoute.profile,
+    };
+    if (!protected.contains(destination) || appState.canAccessProtectedFlows) {
+      return destination;
+    }
+    return appState.authRepository.currentUser == null
+        ? AppRoute.welcome
+        : AppRoute.personalInformation;
   }
 }
 

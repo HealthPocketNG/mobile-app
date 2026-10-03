@@ -52,7 +52,7 @@ class _AppPinScreenState extends State<AppPinScreen> {
           setState(() {
             _pinController.clear();
             _message = result.isLocked
-                ? 'Too many attempts. Try again in 30 seconds.'
+                ? _lockoutMessage(result.lockedUntil!)
                 : 'Incorrect PIN. ${result.remainingAttempts} attempts remaining.';
           });
           return;
@@ -68,6 +68,12 @@ class _AppPinScreenState extends State<AppPinScreen> {
       );
     } on AuthFailure catch (error) {
       if (mounted) setState(() => _message = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _message = 'We could not access secure PIN storage. Try again.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -203,4 +209,13 @@ class _AppPinScreenState extends State<AppPinScreen> {
       return null;
     },
   );
+
+  String _lockoutMessage(DateTime lockedUntil) {
+    final remaining = lockedUntil.difference(DateTime.now());
+    final seconds = remaining.inSeconds.clamp(1, 3600).toInt();
+    final wait = seconds >= 60
+        ? '${(seconds / 60).ceil()} minute${seconds > 60 ? 's' : ''}'
+        : '$seconds second${seconds == 1 ? '' : 's'}';
+    return 'Too many attempts. Try again in $wait.';
+  }
 }

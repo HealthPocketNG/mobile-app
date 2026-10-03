@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:healthpocket/features/profile/presentation/support_screen.dart';
 import 'package:healthpocket/features/profile/presentation/edit_personal_details_screen.dart';
 import 'package:healthpocket/app/app_router.dart';
@@ -9,25 +12,39 @@ import 'package:healthpocket/core/widgets/initials_avatar.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
+import 'package:healthpocket/features/profile/domain/profile_photo.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
+
+typedef ProfilePhotoUploadCallback = Future<void> Function(
+  Uint8List bytes,
+  String contentType,
+);
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     required this.store,
     super.key,
     this.authRepository,
+    this.onSignOut,
     this.onSaveNotificationPreferences,
     this.onSaveAccount,
     this.onSavePersonalDetails,
+    this.profilePhotoRepository,
+    this.onUploadProfilePhoto,
+    this.onRemoveProfilePhoto,
   });
 
   final ProfileStore store;
   final AuthRepository? authRepository;
+  final Future<void> Function()? onSignOut;
   final Future<void> Function(UserProfile profile)? onSaveAccount;
   final Future<void> Function(UserProfile profile, bool emergencyContact)?
   onSavePersonalDetails;
   final Future<void> Function(NotificationPreferences notifications)?
   onSaveNotificationPreferences;
+  final ProfilePhotoRepository? profilePhotoRepository;
+  final ProfilePhotoUploadCallback? onUploadProfilePhoto;
+  final Future<void> Function()? onRemoveProfilePhoto;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -35,9 +52,74 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _savingNotifications = false;
+  bool _savingPhoto = false;
 
   ProfileStore get store => widget.store;
   AuthRepository? get authRepository => widget.authRepository;
+
+  Future<void> _editPhoto() async {
+    if (_savingPhoto || widget.onUploadProfilePhoto == null) return;
+    final remove = store.profile.profileImagePath == null
+        ? false
+        : await showModalBottomSheet<bool>(
+            context: context,
+            builder: (context) => SafeArea(
+              child: Wrap(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.photo_library_outlined),
+                    title: const Text('Choose a new photo'),
+                    onTap: () => Navigator.pop(context, false),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline),
+                    title: const Text('Remove current photo'),
+                    textColor: AppColors.error,
+                    iconColor: AppColors.error,
+                    onTap: () => Navigator.pop(context, true),
+                  ),
+                ],
+              ),
+            ),
+          );
+    if (!mounted || remove == null && store.profile.profileImagePath != null) {
+      return;
+    }
+    setState(() => _savingPhoto = true);
+    try {
+      if (remove == true) {
+        await widget.onRemoveProfilePhoto?.call();
+        if (mounted) _showMessage(context, 'Profile photo removed');
+        return;
+      }
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 88,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      final contentType = ProfilePhotoPolicy.detectContentType(bytes);
+      if (contentType == null) {
+        throw const FormatException('Unsupported profile photo type.');
+      }
+      if (bytes.isEmpty || bytes.length > ProfilePhotoPolicy.maximumBytes) {
+        throw const FormatException('Profile photo is too large.');
+      }
+      await widget.onUploadProfilePhoto!(bytes, contentType);
+      if (mounted) _showMessage(context, 'Profile photo updated');
+    } catch (_) {
+      if (mounted) {
+        _showMessage(
+          context,
+          'Use a JPG, PNG, or WebP image no larger than 5 MB.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingPhoto = false);
+    }
+  }
 
   Future<void> _editDetails(bool emergencyContact) async {
     final saved = await Navigator.push<bool>(
@@ -95,7 +177,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _signOut(BuildContext context) async {
-    await authRepository?.signOut();
+    final signOut = widget.onSignOut;
+    if (signOut != null) {
+      await signOut();
+    } else {
+      await authRepository?.signOut();
+    }
     if (!context.mounted) return;
     Navigator.pushNamedAndRemoveUntil(
       context,
@@ -153,7 +240,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: const TextStyle(color: AppColors.inkMuted),
               ),
               const SizedBox(height: AppSpacing.md),
-              _ProfileHeader(profile: profile),
+              _ProfileHeader(
+                profile: profile,
+                userId: authRepository?.currentUserId,
+                photoRepository: widget.profilePhotoRepository,
+                editing: _savingPhoto,
+                onEdit: _editPhoto,
+              ),
               const SizedBox(height: AppSpacing.xl),
               const _SectionTitle('Quick access'),
               const SizedBox(height: AppSpacing.sm),
@@ -340,9 +433,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.profile});
+  const _ProfileHeader({
+    required this.profile,
+    required this.userId,
+    required this.photoRepository,
+    required this.editing,
+    required this.onEdit,
+  });
 
   final UserProfile profile;
+  final String? userId;
+  final ProfilePhotoRepository? photoRepository;
+  final bool editing;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -356,17 +459,34 @@ class _ProfileHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 31,
-            backgroundColor: Colors.white.withValues(alpha: 0.18),
-            child: Text(
-              _initials(profile.fullName),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _ProfilePhoto(
+                profile: profile,
+                userId: userId,
+                repository: photoRepository,
               ),
-            ),
+              Positioned(
+                right: -8,
+                bottom: -8,
+                child: IconButton.filled(
+                  tooltip: 'Change profile photo',
+                  onPressed: editing ? null : onEdit,
+                  icon: editing
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.camera_alt_outlined, size: 17),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.primaryDark,
+                    minimumSize: const Size.square(34),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -404,6 +524,54 @@ class _ProfileHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ProfilePhoto extends StatelessWidget {
+  const _ProfilePhoto({
+    required this.profile,
+    required this.userId,
+    required this.repository,
+  });
+
+  final UserProfile profile;
+  final String? userId;
+  final ProfilePhotoRepository? repository;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = profile.profileImagePath;
+    final uid = userId;
+    final photos = repository;
+    if (path == null || uid == null || photos == null) return _fallback();
+    return FutureBuilder<String?>(
+      future: photos.getDownloadUrl(userId: uid, storagePath: path),
+      builder: (context, snapshot) {
+        final url = snapshot.data;
+        if (url == null) return _fallback();
+        return CircleAvatar(
+          radius: 31,
+          backgroundColor: Colors.white.withValues(alpha: 0.18),
+          foregroundImage: NetworkImage(url),
+          child: _initialsText(),
+        );
+      },
+    );
+  }
+
+  Widget _fallback() => CircleAvatar(
+    radius: 31,
+    backgroundColor: Colors.white.withValues(alpha: 0.18),
+    child: _initialsText(),
+  );
+
+  Widget _initialsText() => Text(
+    _initials(profile.fullName),
+    style: const TextStyle(
+      color: Colors.white,
+      fontSize: 20,
+      fontWeight: FontWeight.w800,
+    ),
+  );
 }
 
 class _SectionTitle extends StatelessWidget {

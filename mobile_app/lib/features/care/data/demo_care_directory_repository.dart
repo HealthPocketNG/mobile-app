@@ -13,7 +13,8 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       type: CareProviderType.clinic,
       address: 'Abraka Road, Delta State',
       closingTime: '8:00 PM',
-      description: 'A fictional neighbourhood clinic for beta experience testing.',
+      description:
+          'A fictional neighbourhood clinic for beta experience testing.',
       services: ['Consultation', 'Health & Wellness'],
     ),
     CareProvider(
@@ -25,7 +26,8 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       type: CareProviderType.pharmacy,
       address: 'Oghaire Street, Abraka, Delta State',
       closingTime: '8:00 PM',
-      description: 'A fictional local pharmacy listing for beta experience testing.',
+      description:
+          'A fictional local pharmacy listing for beta experience testing.',
       services: ['Prescription Drugs', 'OTC Medicines', 'Health & Wellness'],
     ),
     CareProvider(

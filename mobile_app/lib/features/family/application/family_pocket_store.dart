@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:healthpocket/core/data/backend_ids.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/data/mock_family_data.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
@@ -152,7 +153,7 @@ class FamilyPocketStore extends ChangeNotifier {
   }
 
   void createPocket({required String name}) {
-    final id = 'pocket-${DateTime.now().microsecondsSinceEpoch}';
+    final id = BackendIds.familyPocket(_currentUserId);
     _pockets.insert(
       0,
       FamilyPocket(
@@ -191,7 +192,7 @@ class FamilyPocketStore extends ChangeNotifier {
       invitations: [
         ...pocket.invitations,
         FamilyInvitation(
-          id: 'invite-${DateTime.now().microsecondsSinceEpoch}',
+          id: BackendIds.invitation(_currentUserId),
           pocketId: pocket.id,
           pocketName: pocket.name,
           inviteeName: name,
@@ -294,10 +295,11 @@ class FamilyPocketStore extends ChangeNotifier {
   void recordContribution(int amount) {
     final pocket = selectedPocket;
     if (pocket == null) return;
+    final requestKey = BackendIds.newRequestKey();
     _contributions.insert(
       0,
       ContributionRecord(
-        id: 'family-contribution-${DateTime.now().microsecondsSinceEpoch}',
+        id: BackendIds.familyContribution(_currentUserId, requestKey),
         contributorUserId: _currentUserId,
         familyPocketId: pocket.id,
         contributorName: _currentUserName,
@@ -306,8 +308,7 @@ class FamilyPocketStore extends ChangeNotifier {
         status: ContributionStatus.recorded,
         origin: ContributionOrigin.devSimulation,
         moneyMovement: false,
-        idempotencyKey:
-            'local${DateTime.now().microsecondsSinceEpoch.toString()}',
+        idempotencyKey: requestKey,
         createdAt: DateTime.now(),
       ),
     );

@@ -47,8 +47,9 @@ current personal and family histories derive directly from contribution records.
 ## Collections
 
 - `users/{userId}` stores profile data, notification preferences, KYC status,
-  and creation/update timestamps. The document ID must equal the Firebase Auth
-  UID.
+  `onboardingStatus`, and creation/update timestamps. The document ID must equal
+  the Firebase Auth UID. Google sign-in provisions this document transactionally;
+  repeated sign-ins retrieve the same document instead of creating duplicates.
 - `personal_health_pockets/{pocketId}` stores ownership, currency, lifecycle
   status, and timestamps. It does not store a mutable balance.
 - `savings_plans/{planId}` stores a user's recurring amount, frequency, start
@@ -83,9 +84,20 @@ current personal and family histories derive directly from contribution records.
 - Firebase Auth is the account authority. Google is the only MVP sign-in
   provider; Firestore rejects non-Google and unverified-email identities.
 - The six-digit HealthPocket app PIN is device-local only. Firestore has no PIN
-  field. Only a salted PBKDF2-SHA256 hash is placed in OS-protected secure
-  storage, with local attempt throttling. A new device must use Firebase sign-in
-  and creates its own local PIN.
+  field, and neither application logging nor analytics receives the PIN. A
+  versioned record containing only a random 16-byte salt and a
+  PBKDF2-HMAC-SHA256 hash is placed in OS-protected secure storage. Legacy
+  records are migrated locally; incomplete, corrupt, or unsupported records are
+  deleted and require a new PIN after Google authentication. Android backup is
+  disabled so this app-unlock material is not restored onto another install.
+- PIN guessing is throttled in secure storage after five failures, with
+  persisted progressive cooldowns of 2 minutes, 5 minutes, 15 minutes, and one
+  hour. Closing or restarting the app does not bypass an active cooldown.
+- A PIN is only an unlock factor for an already authenticated, verified Google
+  identity. Logout or Firebase token/session loss blocks PIN verification.
+  Forgotten-PIN recovery reauthenticates the same Google UID before deleting
+  the old local credential. A new device or reinstall must authenticate with
+  Google and create its own local PIN.
 
 - Savings-plan preferences and contribution records use positive integer kobo
   (`contributionAmountKobo` and `amountKobo`) and explicitly store
@@ -123,6 +135,73 @@ current personal and family histories derive directly from contribution records.
   work tracked in `TODO.md`.
 - Firestore document deletion is disabled by the rules for financial and audit
   records. The DEV database itself also has deletion protection enabled.
+
+## Identifier conventions
+
+- Firebase Auth UID is the canonical user ID and the `users/{uid}` document ID.
+- New profiles begin with `onboardingStatus: incomplete`. Only the owning,
+  verified Google identity can complete onboarding, required personal fields
+  must be present, and Security Rules prevent reverting `complete` to
+  `incomplete`. Profiles created before this field was introduced are decoded as
+  complete for beta-user compatibility.
+- A user's one personal pocket and one MVP savings plan use deterministic IDs:
+  `personal-{uid}` and `personal-plan-{uid}`. This makes onboarding retries
+  idempotent and prevents duplicate owner records.
+- New Family Pockets and invitations use an owner prefix plus a cryptographically
+  random 128-bit hexadecimal token: `family_{uid}_{token}` and
+  `invite_{uid}_{token}`.
+- Development contribution IDs are deterministic idempotency paths:
+  `dev_{uid}_{requestKey}` and `dev_family_{uid}_{requestKey}`.
+- Application-generated IDs are limited to path-safe ASCII letters, digits,
+  `_`, and `-`. Construction and validation live in
+  `lib/core/data/backend_ids.dart` and are independently enforced by Firestore
+  Security Rules.
+
+## User profile and photo boundary
+
+- `users/{uid}` is the canonical private profile. The document ID and `userId`
+  equal the Firebase Auth UID, and only that verified Google identity may read
+  or write it. It contains name, provider-managed email, optional date of birth
+  and location details, onboarding state, notification preferences, an optional
+  `profileImagePath`, and trusted `createdAt` / `updatedAt` timestamps.
+- Email and email-verification state are copied from Firebase Auth and cannot be
+  changed independently by the client. Profile editing is limited to the
+  user-editable name, phone, location, personal, emergency-contact, photo, and
+  notification fields.
+- Profile photos use `users/{uid}/profile/{random32}.{jpg|png|webp}` in Firebase
+  Storage. The app checks the file signature, restricts images to JPG, PNG, or
+  WebP, and enforces a 5 MiB maximum before upload. Firestore accepts only a
+  photo path scoped to the same UID. A successful replacement updates Firestore
+  before deleting the old object; a failed profile write attempts to remove the
+  newly uploaded orphan.
+- Initials remain the safe fallback when no image exists or a download fails.
+  The MVP stores no identity documents, selfies, BVN/NIN, or other production
+  KYC material in the user profile or profile-photo area.
+- The profile-photo code and prototype Storage Rules pass local emulator tests.
+  DEV deployment is pending one-time creation of the project's default Firebase
+  Storage bucket; production remains unchanged.
+
+## Privacy-safe operational logging
+
+Firestore mutation repositories emit structured `started`, `success`, and
+`failure` lifecycle events through `BackendLogger`. Logged fields use a strict
+allowlist: repository, operation, entity type, outcome, error type, record
+count, and retry flag. User IDs, document IDs, names, email addresses, phone
+numbers, PINs, tokens, request bodies, Firestore payloads, and exception
+messages are never logged. The default sink writes JSON to `dart:developer`;
+it does not create another Firestore collection or transmit logs externally.
+
+## Rules hardening notes
+
+- New owner records must use canonical document IDs, and relationship IDs must
+  agree with their document paths.
+- Family Pocket creation must atomically include its accepted founding admin.
+- Membership identity is bound to the membership document ID.
+- Client-created activity/audit events are denied. A future trusted backend is
+  responsible for creating authoritative audit events.
+- Existing legacy personal/savings records can still be read through
+  owner-scoped queries, but cannot be duplicated or rewritten onto a
+  non-canonical path.
 
 ## Repository boundary
 

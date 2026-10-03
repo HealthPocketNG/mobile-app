@@ -20,8 +20,7 @@ class _PinRecoveryScreenState extends State<PinRecoveryScreen> {
 
   Future<void> _withGoogle() async {
     await _reauthenticate(() async {
-      final completed = await widget.appState.authRepository
-          .reauthenticateWithGoogle();
+      final completed = await widget.appState.reauthenticateAndResetPin();
       if (!completed) throw const AuthFailure('Google Sign-In was cancelled.');
     });
   }
@@ -33,7 +32,6 @@ class _PinRecoveryScreenState extends State<PinRecoveryScreen> {
     });
     try {
       await operation();
-      await widget.appState.resetPinAfterReauthentication();
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(
         context,
@@ -42,6 +40,12 @@ class _PinRecoveryScreenState extends State<PinRecoveryScreen> {
       );
     } on AuthFailure catch (error) {
       if (mounted) setState(() => _message = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _message = 'We could not reset the local PIN. Try again.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
