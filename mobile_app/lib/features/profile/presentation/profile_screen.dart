@@ -30,6 +30,7 @@ class ProfileScreen extends StatefulWidget {
     this.onSaveAccount,
     this.onSavePersonalDetails,
     this.profilePhotoRepository,
+    this.providerPhotoUrl,
     this.onUploadProfilePhoto,
     this.onRemoveProfilePhoto,
   });
@@ -43,6 +44,7 @@ class ProfileScreen extends StatefulWidget {
   final Future<void> Function(NotificationPreferences notifications)?
   onSaveNotificationPreferences;
   final ProfilePhotoRepository? profilePhotoRepository;
+  final String? providerPhotoUrl;
   final ProfilePhotoUploadCallback? onUploadProfilePhoto;
   final Future<void> Function()? onRemoveProfilePhoto;
 
@@ -244,6 +246,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 profile: profile,
                 userId: authRepository?.currentUserId,
                 photoRepository: widget.profilePhotoRepository,
+                providerPhotoUrl: widget.providerPhotoUrl,
+                canEditPhoto: widget.onUploadProfilePhoto != null,
                 editing: _savingPhoto,
                 onEdit: _editPhoto,
               ),
@@ -437,6 +441,8 @@ class _ProfileHeader extends StatelessWidget {
     required this.profile,
     required this.userId,
     required this.photoRepository,
+    required this.providerPhotoUrl,
+    required this.canEditPhoto,
     required this.editing,
     required this.onEdit,
   });
@@ -444,6 +450,8 @@ class _ProfileHeader extends StatelessWidget {
   final UserProfile profile;
   final String? userId;
   final ProfilePhotoRepository? photoRepository;
+  final String? providerPhotoUrl;
+  final bool canEditPhoto;
   final bool editing;
   final VoidCallback onEdit;
 
@@ -466,26 +474,28 @@ class _ProfileHeader extends StatelessWidget {
                 profile: profile,
                 userId: userId,
                 repository: photoRepository,
+                providerPhotoUrl: providerPhotoUrl,
               ),
-              Positioned(
-                right: -8,
-                bottom: -8,
-                child: IconButton.filled(
-                  tooltip: 'Change profile photo',
-                  onPressed: editing ? null : onEdit,
-                  icon: editing
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.camera_alt_outlined, size: 17),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.primaryDark,
-                    minimumSize: const Size.square(34),
+              if (canEditPhoto)
+                Positioned(
+                  right: -8,
+                  bottom: -8,
+                  child: IconButton.filled(
+                    tooltip: 'Change profile photo',
+                    onPressed: editing ? null : onEdit,
+                    icon: editing
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.camera_alt_outlined, size: 17),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.primaryDark,
+                      minimumSize: const Size.square(34),
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(width: AppSpacing.md),
@@ -531,23 +541,27 @@ class _ProfilePhoto extends StatelessWidget {
     required this.profile,
     required this.userId,
     required this.repository,
+    required this.providerPhotoUrl,
   });
 
   final UserProfile profile;
   final String? userId;
   final ProfilePhotoRepository? repository;
+  final String? providerPhotoUrl;
 
   @override
   Widget build(BuildContext context) {
     final path = profile.profileImagePath;
     final uid = userId;
     final photos = repository;
-    if (path == null || uid == null || photos == null) return _fallback();
+    if (path == null || uid == null || photos == null) {
+      return _providerOrInitials();
+    }
     return FutureBuilder<String?>(
       future: photos.getDownloadUrl(userId: uid, storagePath: path),
       builder: (context, snapshot) {
         final url = snapshot.data;
-        if (url == null) return _fallback();
+        if (url == null) return _providerOrInitials();
         return CircleAvatar(
           radius: 31,
           backgroundColor: Colors.white.withValues(alpha: 0.18),
@@ -555,6 +569,18 @@ class _ProfilePhoto extends StatelessWidget {
           child: _initialsText(),
         );
       },
+    );
+  }
+
+  Widget _providerOrInitials() {
+    final url = providerPhotoUrl;
+    if (url == null || !url.startsWith('https://')) return _fallback();
+    return CircleAvatar(
+      radius: 31,
+      backgroundColor: Colors.white.withValues(alpha: 0.18),
+      foregroundImage: NetworkImage(url),
+      onForegroundImageError: (_, _) {},
+      child: _initialsText(),
     );
   }
 

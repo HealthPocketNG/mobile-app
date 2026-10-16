@@ -54,31 +54,31 @@
 - [x] Support name, email, date of birth, location, profile image reference, onboarding status, createdAt, and updatedAt.
 - [x] Treat Google email/identity fields appropriately as identity-provider data.
 - [x] Support profile editing for editable fields.
-- [ ] Implement profile photo upload to Firebase Storage. *(Code and emulator coverage complete; pending one-time DEV Storage bucket setup and deployment.)*
+- [ ] Implement profile photo upload to Firebase Storage. *(Deferred by product decision on 2026-10-16. Code and emulator coverage are retained; live upload remains disabled pending DEV Storage billing/bucket setup.)*
 - [x] Validate file type and size.
-- [ ] Restrict profile image write/delete permissions to the owning user. *(Prototype rules pass emulator tests; pending DEV Storage bucket setup and deployment.)*
+- [ ] Restrict profile image write/delete permissions to the owning user. *(Deferred by product decision on 2026-10-16. Prototype rules remain locally tested; DEV deployment awaits Storage billing/bucket setup.)*
 - [x] Clean up/reconcile replaced profile images where appropriate.
 - [x] Provide safe defaults/initials when no image exists.
 - [x] Avoid collecting unnecessary identity/KYC data in the MVP.
 
 ## 4. Wallet & Ledger Foundation — Critical
 
-- [ ] Introduce a wallet/account model for every HealthPocket user.
-- [ ] Build a **ledger-first** money architecture.
-- [ ] Never allow Flutter to directly set or arbitrarily increment/decrement authoritative balances.
-- [ ] Represent every financial movement as an immutable ledger/transaction event.
-- [ ] Support at minimum: credit, debit, pending, completed, failed, reversed/cancelled where applicable.
-- [ ] Store transaction amount in kobo.
-- [ ] Store unique transaction/reference IDs.
-- [ ] Store source/type, user ID, timestamps, status, provider/family-pocket references where applicable.
-- [ ] Make transaction creation idempotent to prevent duplicate credits/debits.
-- [ ] Protect against double processing/retries.
-- [ ] Implement atomic/transactional balance updates where cached balances are maintained.
-- [ ] Prevent negative balances.
-- [ ] Build reconciliation checks between wallet balance and ledger.
-- [ ] Ensure completed financial history cannot be edited/deleted by the client.
-- [ ] Create server-side functions/services as the only authority allowed to finalize balance-changing operations.
-- [ ] Add tests for concurrency, retries, duplicate requests, interrupted operations, and insufficient balance.
+- [ ] Introduce a wallet/account model for every HealthPocket user. *(Model, new-profile trigger, and idempotent self-provisioning callable are locally complete; DEV Functions deployment and existing-user backfill await billing.)*
+- [x] Build a **ledger-first** money architecture.
+- [x] Never allow Flutter to directly set or arbitrarily increment/decrement authoritative balances.
+- [x] Represent every financial movement as an immutable ledger/transaction event.
+- [x] Support at minimum: credit, debit, pending, completed, failed, reversed/cancelled where applicable.
+- [x] Store transaction amount in kobo.
+- [x] Store unique transaction/reference IDs.
+- [x] Store source/type, user ID, timestamps, status, provider/family-pocket references where applicable.
+- [x] Make transaction creation idempotent to prevent duplicate credits/debits.
+- [x] Protect against double processing/retries.
+- [x] Implement atomic/transactional balance updates where cached balances are maintained.
+- [x] Prevent negative balances.
+- [x] Build reconciliation checks between wallet balance and ledger.
+- [x] Ensure completed financial history cannot be edited/deleted by the client.
+- [x] Create server-side functions/services as the only authority allowed to finalize balance-changing operations.
+- [x] Add tests for concurrency, retries, duplicate requests, interrupted operations, and insufficient balance.
 
 ## 5. Payment Provider Abstraction — No Real Payments Yet
 

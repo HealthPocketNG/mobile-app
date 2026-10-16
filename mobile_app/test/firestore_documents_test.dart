@@ -5,6 +5,7 @@ import 'package:healthpocket/features/contributions/domain/contribution_record.d
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
+import 'package:healthpocket/features/wallet/domain/wallet_account.dart';
 
 void main() {
   test('profile document round-trips the current MVP profile', () {
@@ -222,5 +223,57 @@ void main() {
     expect(encoded, isNot(contains('personalHealthPocketId')));
     expect(decoded.amountKobo, 750050);
     expect(decoded.contributorName, 'Tayo Bello');
+  });
+
+  test('server-owned wallet and ledger documents decode as typed models', () {
+    final timestamp = Timestamp.fromDate(DateTime.utc(2026, 10, 15, 20));
+    final wallet = WalletAccountDocument.fromMap('user-1', {
+      'schemaVersion': 1,
+      'userId': 'user-1',
+      'currency': 'NGN',
+      'availableBalanceKobo': 125050,
+      'status': 'active',
+      'version': 3,
+      'createdAt': timestamp,
+      'updatedAt': timestamp,
+    }).wallet;
+    final entry = LedgerEntryDocument.fromMap('entry-1', {
+      'schemaVersion': 1,
+      'operationId': 'op-1',
+      'userId': 'user-1',
+      'walletId': 'user-1',
+      'direction': 'debit',
+      'amountKobo': 25050,
+      'currency': 'NGN',
+      'status': 'completed',
+      'source': 'healthcare_payment',
+      'providerReference': null,
+      'familyPocketId': null,
+      'reversesLedgerEntryId': null,
+      'createdAt': timestamp,
+    }).entry;
+    final operation = FinancialOperationDocument.fromMap('op-1', {
+      'schemaVersion': 1,
+      'userId': 'user-1',
+      'walletId': 'user-1',
+      'direction': 'debit',
+      'amountKobo': 25050,
+      'currency': 'NGN',
+      'status': 'completed',
+      'source': 'healthcare_payment',
+      'ledgerEntryId': 'entry-1',
+      'failureCode': null,
+      'providerReference': null,
+      'familyPocketId': null,
+      'createdAt': timestamp,
+      'updatedAt': timestamp,
+    }).operation;
+
+    expect(wallet.availableBalanceKobo, 125050);
+    expect(wallet.status, WalletStatus.active);
+    expect(entry.signedAmountKobo, -25050);
+    expect(entry.source, FinancialSource.healthcarePayment);
+    expect(operation.status, FinancialOperationStatus.completed);
+    expect(operation.ledgerEntryId, 'entry-1');
   });
 }

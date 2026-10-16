@@ -6,6 +6,7 @@ import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
+import 'package:healthpocket/features/wallet/domain/wallet_account.dart';
 
 class UserProfileDocument {
   const UserProfileDocument({
@@ -291,6 +292,84 @@ class ContributionDocument {
   }
 }
 
+class WalletAccountDocument {
+  const WalletAccountDocument(this.wallet);
+
+  final WalletAccount wallet;
+
+  factory WalletAccountDocument.fromMap(String id, Map<String, dynamic> data) =>
+      WalletAccountDocument(
+        WalletAccount(
+          id: id,
+          userId: firestoreString(data, 'userId'),
+          currency: firestoreString(data, 'currency'),
+          availableBalanceKobo: firestoreInt(data, 'availableBalanceKobo'),
+          status: firestoreEnum(data, 'status', WalletStatus.values),
+          version: firestoreInt(data, 'version'),
+          createdAt: firestoreDateTime(data, 'createdAt'),
+          updatedAt: firestoreDateTime(data, 'updatedAt'),
+        ),
+      );
+}
+
+class LedgerEntryDocument {
+  const LedgerEntryDocument(this.entry);
+
+  final LedgerEntry entry;
+
+  factory LedgerEntryDocument.fromMap(String id, Map<String, dynamic> data) =>
+      LedgerEntryDocument(
+        LedgerEntry(
+          id: id,
+          operationId: firestoreString(data, 'operationId'),
+          userId: firestoreString(data, 'userId'),
+          walletId: firestoreString(data, 'walletId'),
+          direction: firestoreEnum(data, 'direction', LedgerDirection.values),
+          amountKobo: firestoreInt(data, 'amountKobo'),
+          currency: firestoreString(data, 'currency'),
+          status: firestoreEnum(data, 'status', LedgerEntryStatus.values),
+          source: FinancialSource.fromFirestore(
+            firestoreString(data, 'source'),
+          ),
+          createdAt: firestoreDateTime(data, 'createdAt'),
+          providerReference: firestoreNullableString(data, 'providerReference'),
+          familyPocketId: firestoreNullableString(data, 'familyPocketId'),
+          reversesLedgerEntryId: firestoreNullableString(
+            data,
+            'reversesLedgerEntryId',
+          ),
+        ),
+      );
+}
+
+class FinancialOperationDocument {
+  const FinancialOperationDocument(this.operation);
+
+  final FinancialOperation operation;
+
+  factory FinancialOperationDocument.fromMap(
+    String id,
+    Map<String, dynamic> data,
+  ) => FinancialOperationDocument(
+    FinancialOperation(
+      id: id,
+      userId: firestoreString(data, 'userId'),
+      walletId: firestoreString(data, 'walletId'),
+      direction: firestoreEnum(data, 'direction', LedgerDirection.values),
+      amountKobo: firestoreInt(data, 'amountKobo'),
+      currency: firestoreString(data, 'currency'),
+      status: firestoreEnum(data, 'status', FinancialOperationStatus.values),
+      source: FinancialSource.fromFirestore(firestoreString(data, 'source')),
+      createdAt: firestoreDateTime(data, 'createdAt'),
+      updatedAt: firestoreDateTime(data, 'updatedAt'),
+      ledgerEntryId: firestoreNullableString(data, 'ledgerEntryId'),
+      failureCode: firestoreNullableString(data, 'failureCode'),
+      providerReference: firestoreNullableString(data, 'providerReference'),
+      familyPocketId: firestoreNullableString(data, 'familyPocketId'),
+    ),
+  );
+}
+
 class FamilyPocketDocument {
   const FamilyPocketDocument({
     required this.pocket,
@@ -537,6 +616,42 @@ abstract final class FirestoreDocumentCollections {
         fromFirestore: (snapshot, _) =>
             ContributionDocument.fromMap(snapshot.id, snapshot.data()!),
         toFirestore: (document, _) => document.toMap(),
+      );
+
+  static CollectionReference<WalletAccountDocument> wallets(
+    FirebaseFirestore firestore,
+  ) => firestore
+      .collection('wallets')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            WalletAccountDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (_, _) => throw UnsupportedError(
+          'Wallets are server-owned and cannot be written by Flutter.',
+        ),
+      );
+
+  static CollectionReference<LedgerEntryDocument> ledgerEntries(
+    FirebaseFirestore firestore,
+  ) => firestore
+      .collection('ledger_entries')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            LedgerEntryDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (_, _) => throw UnsupportedError(
+          'Ledger entries are immutable server-owned records.',
+        ),
+      );
+
+  static CollectionReference<FinancialOperationDocument> financialOperations(
+    FirebaseFirestore firestore,
+  ) => firestore
+      .collection('financial_operations')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            FinancialOperationDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (_, _) => throw UnsupportedError(
+          'Financial operations are server-owned records.',
+        ),
       );
 
   static CollectionReference<FamilyPocketDocument> familyPockets(

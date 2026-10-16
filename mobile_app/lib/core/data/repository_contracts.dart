@@ -8,6 +8,7 @@ import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
+import 'package:healthpocket/features/wallet/domain/wallet_account.dart';
 
 /// Feature code depends on these contracts, never directly on Firebase or a
 /// future payment, KYC, banking, or investment provider.
@@ -118,6 +119,21 @@ abstract interface class ContributionRepository {
   Future<void> recordDevelopmentFamilyContribution(
     ContributionRecord contribution,
   );
+}
+
+/// Clients can observe authoritative financial data but cannot mutate it.
+/// Balance-changing commands belong to trusted backend services only.
+abstract interface class WalletRepository {
+  Stream<WalletAccount?> watchWallet(String userId);
+  Future<WalletAccount?> getWallet(String userId);
+  Future<List<LedgerEntry>> getLedgerEntries({
+    required String userId,
+    int limit = 50,
+  });
+  Future<List<FinancialOperation>> getFinancialOperations({
+    required String userId,
+    int limit = 50,
+  });
 }
 
 abstract interface class FamilyPocketRepository {

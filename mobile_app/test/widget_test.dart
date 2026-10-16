@@ -349,6 +349,27 @@ void main() {
     expect(preference.value, isFalse);
   });
 
+  testWidgets('uses Google photo fallback while live uploads are disabled', (
+    tester,
+  ) async {
+    final store = ProfileStore();
+    addTearDown(store.dispose);
+    const googlePhoto = 'https://example.test/google-avatar.jpg';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileScreen(store: store, providerPhotoUrl: googlePhoto),
+      ),
+    );
+
+    final images = tester
+        .widgetList<CircleAvatar>(find.byType(CircleAvatar))
+        .map((avatar) => avatar.foregroundImage)
+        .whereType<NetworkImage>();
+    expect(images.any((image) => image.url == googlePhoto), isTrue);
+    expect(find.byTooltip('Change profile photo'), findsNothing);
+  });
+
   test('connects MVP onboarding data to the shared app stores', () async {
     final appState = AppState();
     addTearDown(appState.dispose);

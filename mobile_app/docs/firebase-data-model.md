@@ -60,6 +60,18 @@ current personal and family histories derive directly from contribution records.
   `status: recorded`, `origin: dev_simulation`, `moneyMovement: false`, the
   owning pocket ID, a personal plan ID when applicable, an idempotency key, and
   a server `createdAt`.
+- `wallets/{userId}` is the server-owned cached account view for one Firebase
+  user. It stores NGN `availableBalanceKobo`, lifecycle status, a monotonic
+  transaction version, and trusted timestamps. The client may read its own
+  wallet but cannot create, update, increment, decrement, or delete it.
+- `financial_operations/{operationId}` stores the trusted lifecycle of a
+  balance-changing request: pending, completed, failed, cancelled, or reversed.
+  IDs and request fingerprints are deterministically derived from the user and
+  idempotency key, so a retry returns the original outcome and conflicting reuse
+  is rejected.
+- `ledger_entries/{entryId}` stores immutable completed credit/debit postings in
+  integer kobo. A reversal creates a separate compensating entry linked to the
+  original entry; completed history is never rewritten or deleted.
 - `family_pockets/{pocketId}` stores the pocket name, fixed beneficiary limit
   of two, creator, currency, status, and timestamps.
 - `family_pockets/{pocketId}/members/{memberId}` stores non-PII membership
@@ -108,6 +120,22 @@ current personal and family histories derive directly from contribution records.
   value. The dashboard activity feed reads this same ordered record list.
 - A Family Pocket development balance follows the same rule and is derived from
   immutable family-scoped records visible only to active members.
+- DEV simulation contributions remain explicitly non-monetary and are not
+  migrated into the authoritative wallet. The trusted ledger is a separate
+  boundary used only by server-side funding/payment services.
+- The authoritative wallet balance is a transactionally updated cache of
+  immutable completed ledger postings. Every debit checks the current balance
+  inside the same Firestore transaction, preventing negative balances under
+  concurrency. Failed and cancelled operations create no ledger posting.
+- `functions/src/ledger-service.js` owns pending creation, finalization,
+  reversal, idempotency, atomic cache updates, and reconciliation. No generic
+  client-callable credit/debit function is exported. Future payment adapters
+  must call this service only after trusted verification.
+- New profile creation provisions a zero-balance wallet through a Firestore
+  trigger. `ensureMyWallet` provides an authenticated, idempotent backfill path
+  that can only create the caller's zero-balance wallet. DEV deployment and the
+  existing-user backfill remain pending until Cloud Functions billing is
+  available.
 - The mobile client can create only those non-monetary development records.
   Real/provider-originated deposits, payments, settlement and withdrawals are
   rejected. A trusted backend or provider webhook must own those writes later.
@@ -174,12 +202,23 @@ current personal and family histories derive directly from contribution records.
   photo path scoped to the same UID. A successful replacement updates Firestore
   before deleting the old object; a failed profile write attempts to remove the
   newly uploaded orphan.
-- Initials remain the safe fallback when no image exists or a download fails.
-  The MVP stores no identity documents, selfies, BVN/NIN, or other production
-  KYC material in the user profile or profile-photo area.
+- While live Storage is deferred, the upload control is hidden. The app uses
+  the Google account photo when available, then initials. The MVP stores no
+  identity documents, selfies, BVN/NIN, or other production KYC material in the
+  user profile or profile-photo area.
 - The profile-photo code and prototype Storage Rules pass local emulator tests.
   DEV deployment is pending one-time creation of the project's default Firebase
   Storage bucket; production remains unchanged.
+
+## Wallet and ledger verification
+
+The wallet/ledger foundation is locally verified against the Firestore
+emulator. Tests cover concurrent identical retries, idempotency conflicts,
+resuming an interrupted pending operation, concurrent debits, insufficient
+balance, cancellation, compensating reversal, invalid amounts, and
+reconciliation drift. Security Rules tests prove that owners can query their
+records while anonymous users, other users, and the owning Flutter client
+cannot manufacture or mutate wallet, operation, or ledger data.
 
 ## Privacy-safe operational logging
 

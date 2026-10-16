@@ -15,6 +15,18 @@ service cloud.firestore {
     // contributions/dev_{uid}_{key} or dev_family_{uid}_{key}: immutable
     // DEV-only personal/family record. amountKobo is integer kobo;
     // moneyMovement is always false; createdAt is a server timestamp.
+    // wallets/{uid}: server-owned NGN account cache. userId is immutable;
+    // availableBalanceKobo is a non-negative integer derived from the ledger;
+    // status is active/restricted/closed; version is an integer; createdAt and
+    // updatedAt are trusted timestamps. Clients may only read their own wallet.
+    // ledger_entries/{entryId}: immutable server-created posting with userId,
+    // walletId, operationId, credit/debit direction, positive integer
+    // amountKobo, NGN currency, completed status, source, optional bounded
+    // provider/Family/reversal references, and a trusted createdAt timestamp.
+    // financial_operations/{operationId}: server-owned transaction state with
+    // the same ownership/amount/source fields, pending/completed/failed/
+    // reversed/cancelled status, a request fingerprint, optional references,
+    // and trusted timestamps. Flutter has read-only owner access.
     // family_pockets/{id}: private member-scoped pocket metadata and timestamps.
     // family_pockets/{id}/members/{uid}: non-PII membership display data,
     // authority role, contribution/beneficiary capabilities, lifecycle state,
@@ -654,6 +666,30 @@ service cloud.firestore {
           )
         );
       allow update, delete: if false;
+    }
+
+    match /wallets/{walletId} {
+      allow read: if hasVerifiedIdentity()
+        && walletId == request.auth.uid
+        && resource.data.userId == request.auth.uid;
+      // Wallet creation and every cached-balance mutation bypass rules only
+      // through the Admin SDK in the trusted backend.
+      allow create, update, delete: if false;
+    }
+
+    match /ledger_entries/{entryId} {
+      allow read: if hasVerifiedIdentity()
+        && resource.data.userId == request.auth.uid;
+      // Completed postings are immutable and server-owned. A reversal creates
+      // a compensating entry instead of changing or deleting history.
+      allow create, update, delete: if false;
+    }
+
+    match /financial_operations/{operationId} {
+      allow read: if hasVerifiedIdentity()
+        && resource.data.userId == request.auth.uid;
+      // Only verified backend workflows may progress operation state.
+      allow create, update, delete: if false;
     }
 
     match /family_pockets/{pocketId} {

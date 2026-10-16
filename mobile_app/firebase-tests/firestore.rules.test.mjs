@@ -1107,3 +1107,147 @@ test('unknown collections remain denied', async () => {
     setDoc(doc(ownerDb, 'admin_roles/owner'), { role: 'admin' }),
   );
 });
+
+test('wallet and financial history are owner-readable but client-immutable', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'wallets/owner'), {
+      schemaVersion: 1,
+      userId: 'owner',
+      currency: 'NGN',
+      availableBalanceKobo: 50000,
+      status: 'active',
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await setDoc(doc(db, 'ledger_entries/entry-owner-1'), {
+      schemaVersion: 1,
+      operationId: 'op-owner-1',
+      userId: 'owner',
+      walletId: 'owner',
+      direction: 'credit',
+      amountKobo: 50000,
+      currency: 'NGN',
+      status: 'completed',
+      source: 'mock',
+      providerReference: null,
+      familyPocketId: null,
+      reversesLedgerEntryId: null,
+      createdAt: now,
+    });
+    await setDoc(doc(db, 'financial_operations/op-owner-1'), {
+      schemaVersion: 1,
+      userId: 'owner',
+      walletId: 'owner',
+      direction: 'credit',
+      amountKobo: 50000,
+      currency: 'NGN',
+      status: 'completed',
+      source: 'mock',
+      requestFingerprint: 'a'.repeat(64),
+      providerReference: null,
+      familyPocketId: null,
+      ledgerEntryId: 'entry-owner-1',
+      failureCode: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
+  const ownerDb = verifiedContext('owner').firestore();
+  const strangerDb = verifiedContext('stranger').firestore();
+  const anonymousDb = environment.unauthenticatedContext().firestore();
+  for (const path of [
+    'wallets/owner',
+    'ledger_entries/entry-owner-1',
+    'financial_operations/op-owner-1',
+  ]) {
+    await assertSucceeds(getDoc(doc(ownerDb, path)));
+    await assertFails(getDoc(doc(strangerDb, path)));
+    await assertFails(getDoc(doc(anonymousDb, path)));
+    await assertFails(updateDoc(doc(ownerDb, path), { amountKobo: 999999 }));
+  }
+  await assertFails(
+    setDoc(doc(ownerDb, 'wallets/forged'), {
+      userId: 'owner',
+      availableBalanceKobo: 999999,
+    }),
+  );
+  await assertFails(
+    setDoc(doc(ownerDb, 'ledger_entries/forged'), {
+      userId: 'owner',
+      walletId: 'owner',
+      amountKobo: 999999,
+    }),
+  );
+});
+
+test('financial list queries must be scoped to the authenticated owner', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    for (const uid of ['owner', 'stranger']) {
+      await setDoc(doc(db, `ledger_entries/entry-${uid}`), {
+        schemaVersion: 1,
+        operationId: `op-${uid}`,
+        userId: uid,
+        walletId: uid,
+        direction: 'credit',
+        amountKobo: 100,
+        currency: 'NGN',
+        status: 'completed',
+        source: 'mock',
+        providerReference: null,
+        familyPocketId: null,
+        reversesLedgerEntryId: null,
+        createdAt: now,
+      });
+      await setDoc(doc(db, `financial_operations/op-${uid}`), {
+        schemaVersion: 1,
+        userId: uid,
+        walletId: uid,
+        direction: 'credit',
+        amountKobo: 100,
+        currency: 'NGN',
+        status: 'completed',
+        source: 'mock',
+        requestFingerprint: 'b'.repeat(64),
+        providerReference: null,
+        familyPocketId: null,
+        ledgerEntryId: `entry-${uid}`,
+        failureCode: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  });
+  const ownerDb = verifiedContext('owner').firestore();
+  await assertSucceeds(
+    getDocs(
+      query(
+        collection(ownerDb, 'ledger_entries'),
+        where('userId', '==', 'owner'),
+        orderBy('createdAt', 'desc'),
+      ),
+    ),
+  );
+  await assertFails(getDocs(collection(ownerDb, 'ledger_entries')));
+  await assertFails(
+    getDocs(
+      query(
+        collection(ownerDb, 'ledger_entries'),
+        where('userId', '==', 'stranger'),
+      ),
+    ),
+  );
+  await assertSucceeds(
+    getDocs(
+      query(
+        collection(ownerDb, 'financial_operations'),
+        where('userId', '==', 'owner'),
+        orderBy('createdAt', 'desc'),
+      ),
+    ),
+  );
+  await assertFails(getDocs(collection(ownerDb, 'financial_operations')));
+});

@@ -13,6 +13,7 @@ import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
+import 'package:healthpocket/features/wallet/domain/wallet_account.dart';
 
 class FirebaseAuthRepository implements AuthRepository {
   FirebaseAuthRepository._(this._auth, this._googleSignIn);
@@ -1076,6 +1077,68 @@ class FirestoreActivityRepository implements ActivityRepository {
       .toList(growable: false);
 }
 
+class FirestoreWalletRepository implements WalletRepository {
+  FirestoreWalletRepository(this._firestore);
+
+  final FirebaseFirestore _firestore;
+
+  @override
+  Stream<WalletAccount?> watchWallet(String userId) =>
+      FirestoreDocumentCollections.wallets(_firestore)
+          .doc(BackendIds.requireUserId(userId))
+          .snapshots()
+          .map((snapshot) => snapshot.data()?.wallet);
+
+  @override
+  Future<WalletAccount?> getWallet(String userId) async =>
+      (await FirestoreDocumentCollections.wallets(
+        _firestore,
+      ).doc(BackendIds.requireUserId(userId)).get()).data()?.wallet;
+
+  @override
+  Future<List<LedgerEntry>> getLedgerEntries({
+    required String userId,
+    int limit = 50,
+  }) async {
+    final safeUserId = BackendIds.requireUserId(userId);
+    final safeLimit = _validatedLimit(limit);
+    final snapshot =
+        await FirestoreDocumentCollections.ledgerEntries(_firestore)
+            .where('userId', isEqualTo: safeUserId)
+            .orderBy('createdAt', descending: true)
+            .limit(safeLimit)
+            .get();
+    return snapshot.docs
+        .map((document) => document.data().entry)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<FinancialOperation>> getFinancialOperations({
+    required String userId,
+    int limit = 50,
+  }) async {
+    final safeUserId = BackendIds.requireUserId(userId);
+    final safeLimit = _validatedLimit(limit);
+    final snapshot =
+        await FirestoreDocumentCollections.financialOperations(_firestore)
+            .where('userId', isEqualTo: safeUserId)
+            .orderBy('createdAt', descending: true)
+            .limit(safeLimit)
+            .get();
+    return snapshot.docs
+        .map((document) => document.data().operation)
+        .toList(growable: false);
+  }
+
+  int _validatedLimit(int value) {
+    if (value < 1 || value > 100) {
+      throw RangeError.range(value, 1, 100, 'limit');
+    }
+    return value;
+  }
+}
+
 class FirebaseRepositoryBundle {
   FirebaseRepositoryBundle({
     required this.auth,
@@ -1091,6 +1154,7 @@ class FirebaseRepositoryBundle {
          firestore,
          logger: logger,
        ),
+       wallets = FirestoreWalletRepository(firestore),
        activities = FirestoreActivityRepository(firestore);
 
   final AuthRepository auth;
@@ -1098,5 +1162,6 @@ class FirebaseRepositoryBundle {
   final SavingsRepository savings;
   final ContributionRepository contributions;
   final FamilyPocketRepository familyPockets;
+  final WalletRepository wallets;
   final ActivityRepository activities;
 }

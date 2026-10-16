@@ -128,10 +128,10 @@ class AppRouter {
           AppRoute.profile => ProfileScreen(
             onSaveAccount: appState.updateAccountDetails,
             onSavePersonalDetails: appState.updatePersonalDetails,
-            onUploadProfilePhoto: (bytes, contentType) => appState
-                .updateProfilePhoto(bytes: bytes, contentType: contentType),
-            onRemoveProfilePhoto: appState.removeProfilePhoto,
+            // Live uploads stay disabled until the DEV Storage bucket exists.
+            // Existing paths can render; otherwise Google photo/initials wins.
             profilePhotoRepository: appState.profilePhotoRepository,
+            providerPhotoUrl: appState.authRepository.currentUser?.photoUrl,
             store: appState.profileStore,
             authRepository: appState.authRepository,
             onSignOut: appState.signOut,

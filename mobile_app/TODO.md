@@ -45,6 +45,12 @@ Production changes and real email delivery are not part of this rollout.
 
 ## Before the MVP pilot
 
+- [ ] After Cloud Billing is available, deploy the trusted Functions, wallet
+  indexes, and matching rules to DEV; then backfill a zero-balance wallet for
+  every existing user and reconcile the wallet count against user profiles.
+- [ ] Keep live profile-photo upload disabled until the DEV Storage bucket and
+  owner-only Storage Rules are deployed and verified.
+
 ### Private Android beta distribution
 
 - [x] Add an isolated, lightweight `beta-site/` landing page for the invited
