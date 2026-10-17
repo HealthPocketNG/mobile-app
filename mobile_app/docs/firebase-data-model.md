@@ -52,8 +52,24 @@ current personal and family histories derive directly from contribution records.
   repeated sign-ins retrieve the same document instead of creating duplicates.
 - `personal_health_pockets/{pocketId}` stores ownership, currency, lifecycle
   status, and timestamps. It does not store a mutable balance.
-- `savings_plans/{planId}` stores a user's recurring amount, frequency, start
-  date, next scheduled date, optional funding-source reference, and status.
+- `savings_plans/personal-plan-{userId}` stores one user's recurring amount,
+  daily/weekly/monthly frequency, start date, safely calculated next scheduled
+  date, optional funding-source reference, and active/paused/cancelled status.
+  Cancellation is terminal.
+- `savings_plan_operations/{operationId}` is the server-owned idempotency and
+  audit boundary for plan creation and lifecycle changes.
+- `scheduled_contributions/{occurrenceId}` stores one deterministic recurring
+  occurrence with its expected amount, schedule time, payment attempt/reference,
+  ledger operation, and pending/succeeded/failed outcome. Owners may read these
+  records; only the trusted backend may write them.
+- `funding_transactions/{paymentAttemptId}` is the owner-readable Add Money
+  projection of a trusted server payment attempt. It stores integer kobo,
+  currency, created/pending/completed/failed/cancelled/reversed status, nullable
+  provider and ledger references, failure code, stable transaction reference,
+  nullable receipt number, safe description/channel fields, and timestamps.
+- `notification_events/{eventId}` stores a backend-created, owner-readable
+  queued notification event for a completed, failed, timed-out, or cancelled
+  funding attempt. Flutter cannot create or mutate these events.
 - `contributions/dev_{userId}_{idempotencyKey}` and
   `contributions/dev_family_{userId}_{idempotencyKey}` store immutable personal
   or Family Pocket development records. Each record has `amountKobo`, `NGN`,
@@ -114,6 +130,13 @@ current personal and family histories derive directly from contribution records.
 - Savings-plan preferences and contribution records use positive integer kobo
   (`contributionAmountKobo` and `amountKobo`) and explicitly store
   `currency: NGN` where the record carries currency.
+- Savings schedule calculation is separate from UI code. Daily and weekly
+  occurrences preserve the UTC time; monthly schedules clamp to the last valid
+  calendar day (for example, January 31 advances to February 28 in 2026).
+- The recurring contribution runner uses the provider-neutral payment boundary.
+  In this phase it is exercised only with the local mock adapter. Initialization
+  cannot credit a wallet; a trusted mock verification must succeed first, and a
+  failed occurrence never creates a completed ledger entry.
 - The displayed development balance is derived only from personal contribution
   records whose status is `recorded`, origin is `dev_simulation`, and
   `moneyMovement` is false. It is never stored as an independently editable
@@ -131,6 +154,28 @@ current personal and family histories derive directly from contribution records.
   reversal, idempotency, atomic cache updates, and reconciliation. No generic
   client-callable credit/debit function is exported. Future payment adapters
   must call this service only after trusted verification.
+- The provider-neutral payment boundary lives under
+  `functions/src/payments/`. Server-owned `payment_attempts` retain the expected
+  user, amount, currency, kind, normalized status, and a nullable opaque
+  `providerReference`. Server-owned `provider_events` retain only the normalized
+  callback envelope and processing state, never the raw callback body.
+- Funding initialization and healthcare-payment initiation cannot post ledger
+  entries. Only an adapter verification result or a signature-verified callback
+  can finalize an attempt. Provider events and their ledger operations use
+  deterministic IDs so callback retries and duplicate delivery do not move
+  money twice.
+- Add Money validates ₦500–₦1,000,000 centrally in the trusted payment service.
+  Presets are ₦500, ₦1,000, ₦2,000, ₦5,000, and ₦10,000; custom amounts inside
+  the same range are also accepted. Savings-plan funding uses its own amount
+  policy and is not constrained by the Add Money UI limits.
+- A completed Add Money verification updates the owner-readable funding
+  transaction, posts exactly one funding ledger credit, creates one activity,
+  and queues one notification. Failed, timed-out, and cancelled attempts queue
+  a notification but post no completed ledger credit.
+- The current adapter is a local mock with controllable success, pending,
+  failure, timeout, duplicate-callback, and reversal behavior. It contains no
+  production credentials, makes no payment-network calls, and performs no real
+  MCC verification.
 - New profile creation provisions a zero-balance wallet through a Firestore
   trigger. `ensureMyWallet` provides an authenticated, idempotent backfill path
   that can only create the caller's zero-balance wallet. DEV deployment and the

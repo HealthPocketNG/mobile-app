@@ -334,6 +334,9 @@ class AppState extends ChangeNotifier {
     if (currentPlan == null) {
       throw StateError('No savings plan is available to update.');
     }
+    if (currentPlan.status == SavingsPlanStatus.cancelled) {
+      throw StateError('A cancelled savings plan cannot be updated.');
+    }
     await _persistSavingsPlan(
       currentPlan.copyWith(
         contributionAmountKobo: contributionAmountKobo,
@@ -348,6 +351,9 @@ class AppState extends ChangeNotifier {
     final currentPlan = savingsStore.plan;
     if (currentPlan == null) {
       throw StateError('No savings plan is available to update.');
+    }
+    if (currentPlan.status == SavingsPlanStatus.cancelled) {
+      throw StateError('A cancelled savings plan cannot be resumed.');
     }
     await _persistSavingsPlan(
       currentPlan.copyWith(

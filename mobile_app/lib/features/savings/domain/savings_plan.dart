@@ -1,4 +1,4 @@
-enum SavingsPlanStatus { active, paused }
+enum SavingsPlanStatus { active, paused, cancelled }
 
 enum SavingsFrequency {
   daily('Daily'),

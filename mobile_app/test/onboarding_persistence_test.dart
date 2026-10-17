@@ -313,7 +313,6 @@ class _MemorySavingsRepository implements SavingsRepository {
     required String userId,
     required String personalHealthPocketId,
     required SavingsPlan plan,
-    DateTime? nextContributionDate,
     String? fundingSourceId,
   }) async {
     if (failPlanSave) throw StateError('simulated write failure');

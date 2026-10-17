@@ -9,6 +9,14 @@
       ]
     },
     {
+      "collectionGroup": "savings_plans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextContributionDate", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "contributions",
       "queryScope": "COLLECTION",
       "fields": [
@@ -78,6 +86,22 @@
     },
     {
       "collectionGroup": "financial_operations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "funding_transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notification_events",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/core/data/firestore/firestore_documents.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
+import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 import 'package:healthpocket/features/wallet/domain/wallet_account.dart';
@@ -275,5 +276,33 @@ void main() {
     expect(entry.source, FinancialSource.healthcarePayment);
     expect(operation.status, FinancialOperationStatus.completed);
     expect(operation.ledgerEntryId, 'entry-1');
+  });
+
+  test('server-owned funding transaction decodes receipt metadata', () {
+    final timestamp = Timestamp.fromDate(DateTime.utc(2026, 10, 17, 8, 30));
+    final transaction = FundingTransactionDocument.fromMap('pay-1', {
+      'schemaVersion': 1,
+      'userId': 'user-1',
+      'paymentAttemptId': 'pay-1',
+      'amountKobo': 250000,
+      'currency': 'NGN',
+      'status': 'completed',
+      'provider': 'mock',
+      'providerReference': 'mock_funding_000001',
+      'ledgerOperationId': 'op-1',
+      'failureCode': null,
+      'transactionReference': 'pay-1',
+      'receiptNumber': 'HPF-ABCDEF123456',
+      'description': 'HealthPocket wallet funding',
+      'channel': 'mock',
+      'createdAt': timestamp,
+      'updatedAt': timestamp,
+      'completedAt': timestamp,
+    }).transaction;
+
+    expect(transaction.status, FundingTransactionStatus.completed);
+    expect(transaction.amountKobo, 250000);
+    expect(transaction.hasReceipt, isTrue);
+    expect(transaction.receiptNumber, 'HPF-ABCDEF123456');
   });
 }

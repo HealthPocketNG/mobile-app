@@ -3,6 +3,7 @@ import 'package:healthpocket/core/data/firestore/firestore_serialization.dart';
 import 'package:healthpocket/features/activity/domain/activity_record.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
+import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
@@ -370,6 +371,41 @@ class FinancialOperationDocument {
   );
 }
 
+class FundingTransactionDocument {
+  const FundingTransactionDocument(this.transaction);
+
+  final FundingTransaction transaction;
+
+  factory FundingTransactionDocument.fromMap(
+    String id,
+    Map<String, dynamic> data,
+  ) => FundingTransactionDocument(
+    FundingTransaction(
+      id: id,
+      userId: firestoreString(data, 'userId'),
+      paymentAttemptId: firestoreString(data, 'paymentAttemptId'),
+      amountKobo: firestoreInt(data, 'amountKobo'),
+      currency: firestoreString(data, 'currency'),
+      status: firestoreEnum(
+        data,
+        'status',
+        FundingTransactionStatus.values,
+      ),
+      provider: firestoreString(data, 'provider'),
+      providerReference: firestoreNullableString(data, 'providerReference'),
+      ledgerOperationId: firestoreNullableString(data, 'ledgerOperationId'),
+      failureCode: firestoreNullableString(data, 'failureCode'),
+      transactionReference: firestoreString(data, 'transactionReference'),
+      receiptNumber: firestoreNullableString(data, 'receiptNumber'),
+      description: firestoreString(data, 'description'),
+      channel: firestoreString(data, 'channel'),
+      createdAt: firestoreDateTime(data, 'createdAt'),
+      updatedAt: firestoreDateTime(data, 'updatedAt'),
+      completedAt: firestoreNullableDateTime(data, 'completedAt'),
+    ),
+  );
+}
+
 class FamilyPocketDocument {
   const FamilyPocketDocument({
     required this.pocket,
@@ -651,6 +687,20 @@ abstract final class FirestoreDocumentCollections {
             FinancialOperationDocument.fromMap(snapshot.id, snapshot.data()!),
         toFirestore: (_, _) => throw UnsupportedError(
           'Financial operations are server-owned records.',
+        ),
+      );
+
+  static CollectionReference<FundingTransactionDocument> fundingTransactions(
+    FirebaseFirestore firestore,
+  ) => firestore
+      .collection('funding_transactions')
+      .withConverter(
+        fromFirestore: (snapshot, _) => FundingTransactionDocument.fromMap(
+          snapshot.id,
+          snapshot.data()!,
+        ),
+        toFirestore: (_, _) => throw UnsupportedError(
+          'Funding transactions are server-owned records.',
         ),
       );
 

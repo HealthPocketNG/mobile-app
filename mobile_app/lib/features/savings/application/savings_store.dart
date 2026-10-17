@@ -83,6 +83,9 @@ class SavingsStore extends ChangeNotifier {
   void togglePlan() {
     final currentPlan = _plan;
     if (currentPlan == null) return;
+    if (currentPlan.status == SavingsPlanStatus.cancelled) {
+      throw StateError('A cancelled savings plan cannot be resumed.');
+    }
     _plan = currentPlan.copyWith(
       status: currentPlan.status == SavingsPlanStatus.paused
           ? SavingsPlanStatus.active

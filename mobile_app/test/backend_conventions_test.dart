@@ -10,8 +10,9 @@ void main() {
       FirestoreSavingsRepository,
       FirestoreContributionRepository,
       FirestoreFamilyPocketRepository,
+      FirestoreFundingRepository,
     ];
-    expect(repositoryTypes, hasLength(4));
+    expect(repositoryTypes, hasLength(5));
   });
 
   group('BackendIds', () {

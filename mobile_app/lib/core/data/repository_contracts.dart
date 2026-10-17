@@ -5,6 +5,7 @@ import 'package:healthpocket/features/auth/domain/app_pin.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
+import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
@@ -92,7 +93,6 @@ abstract interface class SavingsRepository {
     required String userId,
     required String personalHealthPocketId,
     required SavingsPlan plan,
-    DateTime? nextContributionDate,
     String? fundingSourceId,
   });
 }
@@ -133,6 +133,19 @@ abstract interface class WalletRepository {
   Future<List<FinancialOperation>> getFinancialOperations({
     required String userId,
     int limit = 50,
+  });
+}
+
+/// Funding transactions are server-owned. Flutter may display their progress
+/// and receipt metadata but cannot create or finalize them through Firestore.
+abstract interface class FundingRepository {
+  Stream<List<FundingTransaction>> watchFundingTransactions({
+    required String userId,
+    int limit = 50,
+  });
+  Future<FundingTransaction?> getFundingTransaction({
+    required String userId,
+    required String transactionId,
   });
 }
 

@@ -12,6 +12,7 @@ import 'package:healthpocket/features/activity/domain/unified_activity_ledger.da
 import 'package:healthpocket/features/activity/presentation/activity_screen.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
+import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -315,6 +316,7 @@ class _PlanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final paused = plan.status == SavingsPlanStatus.paused;
+    final cancelled = plan.status == SavingsPlanStatus.cancelled;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -346,16 +348,23 @@ class _PlanCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      paused ? 'Plan paused' : 'Plan active',
+                      cancelled
+                          ? 'Plan cancelled'
+                          : paused
+                          ? 'Plan paused'
+                          : 'Plan active',
                       style: TextStyle(
-                        color: paused ? AppColors.secondary : AppColors.success,
+                        color: paused || cancelled
+                            ? AppColors.secondary
+                            : AppColors.success,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
-              PopupMenuButton<String>(
+              if (!cancelled)
+                PopupMenuButton<String>(
                 onSelected: (value) => value == 'edit' ? onEdit() : onToggle(),
                 itemBuilder: (context) => [
                   const PopupMenuItem(
@@ -387,7 +396,7 @@ class _PlanCard extends StatelessWidget {
               ),
             ],
           ),
-          if (onContribute != null) ...[
+          if (onContribute != null && !cancelled) ...[
             const SizedBox(height: AppSpacing.md),
             SizedBox(
               width: double.infinity,
@@ -402,6 +411,13 @@ class _PlanCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             const Text(
               'Pausing stops future schedule instructions. Development records remain available in DEV.',
+              style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
+            ),
+          ],
+          if (cancelled) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'This plan is closed. Its previous contribution history remains available.',
               style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
             ),
           ],
@@ -696,7 +712,8 @@ class _ContributionSheetState extends State<_ContributionSheet> {
               crossAxisSpacing: 10,
               childAspectRatio: 1.8,
               children:
-                  [500, 1000, 2000, 5000, 10000]
+                  FundingAmountPolicy.presetAmountsKobo
+                      .map((amountKobo) => amountKobo ~/ 100)
                       .map(
                         (amount) => _AmountPreset(
                           amount: amount,
@@ -749,7 +766,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
                 labelText: 'Contribution amount',
                 prefixText: '₦ ',
               ),
-              validator: _amountValidator,
+              validator: _fundingAmountValidator,
             ),
             const SizedBox(height: AppSpacing.lg),
             AppPrimaryButton(
@@ -1188,6 +1205,19 @@ String? _amountValidator(String? value) =>
     : int.parse(value) > 1000000000
     ? 'Enter no more than ₦1,000,000,000'
     : null;
+
+String? _fundingAmountValidator(String? value) {
+  final amountNaira = int.tryParse(value ?? '');
+  if (amountNaira == null) return 'Enter a valid amount';
+  final amountKobo = amountNaira * 100;
+  if (amountKobo < FundingAmountPolicy.minimumAmountKobo) {
+    return 'Enter at least ₦500';
+  }
+  if (amountKobo > FundingAmountPolicy.maximumAmountKobo) {
+    return 'Enter no more than ₦1,000,000';
+  }
+  return null;
+}
 
 String _formatNaira(int amount) {
   final value = amount.toString().replaceAllMapped(

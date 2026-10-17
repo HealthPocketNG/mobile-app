@@ -10,9 +10,11 @@ import 'package:healthpocket/features/activity/domain/activity_record.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
+import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
+import 'package:healthpocket/features/savings/domain/savings_schedule.dart';
 import 'package:healthpocket/features/wallet/domain/wallet_account.dart';
 
 class FirebaseAuthRepository implements AuthRepository {
@@ -382,7 +384,6 @@ class FirestoreSavingsRepository implements SavingsRepository {
     required String userId,
     required String personalHealthPocketId,
     required SavingsPlan plan,
-    DateTime? nextContributionDate,
     String? fundingSourceId,
   }) => _logger.trace<void>(
     repository: 'savings',
@@ -407,11 +408,19 @@ class FirestoreSavingsRepository implements SavingsRepository {
         }
       }
       final now = DateTime.now();
+      final effectiveNextContributionDate = switch (plan.status) {
+        SavingsPlanStatus.active => SavingsSchedule.nextContributionDate(
+          startDate: plan.startDate,
+          frequency: plan.frequency,
+          after: now,
+        ),
+        SavingsPlanStatus.paused || SavingsPlanStatus.cancelled => null,
+      };
       final document = SavingsPlanDocument(
         plan: plan,
         userId: userId,
         personalHealthPocketId: personalHealthPocketId,
-        nextContributionDate: nextContributionDate,
+        nextContributionDate: effectiveNextContributionDate,
         fundingSourceId: fundingSourceId,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
@@ -1139,6 +1148,57 @@ class FirestoreWalletRepository implements WalletRepository {
   }
 }
 
+class FirestoreFundingRepository implements FundingRepository {
+  FirestoreFundingRepository(this._firestore);
+
+  final FirebaseFirestore _firestore;
+
+  @override
+  Stream<List<FundingTransaction>> watchFundingTransactions({
+    required String userId,
+    int limit = 50,
+  }) {
+    final safeUserId = BackendIds.requireUserId(userId);
+    final safeLimit = _validatedFundingLimit(limit);
+    return FirestoreDocumentCollections.fundingTransactions(_firestore)
+        .where('userId', isEqualTo: safeUserId)
+        .orderBy('createdAt', descending: true)
+        .limit(safeLimit)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((document) => document.data().transaction)
+              .toList(growable: false),
+        );
+  }
+
+  @override
+  Future<FundingTransaction?> getFundingTransaction({
+    required String userId,
+    required String transactionId,
+  }) async {
+    final safeUserId = BackendIds.requireUserId(userId);
+    final safeTransactionId = BackendIds.requireSafe(transactionId);
+    final transaction = (
+      await FirestoreDocumentCollections.fundingTransactions(
+        _firestore,
+      ).doc(safeTransactionId).get()
+    ).data()?.transaction;
+    if (transaction == null) return null;
+    if (transaction.userId != safeUserId) {
+      throw StateError('Funding transaction owner mismatch.');
+    }
+    return transaction;
+  }
+
+  int _validatedFundingLimit(int value) {
+    if (value < 1 || value > 100) {
+      throw RangeError.range(value, 1, 100, 'limit');
+    }
+    return value;
+  }
+}
+
 class FirebaseRepositoryBundle {
   FirebaseRepositoryBundle({
     required this.auth,
@@ -1155,6 +1215,7 @@ class FirebaseRepositoryBundle {
          logger: logger,
        ),
        wallets = FirestoreWalletRepository(firestore),
+       funding = FirestoreFundingRepository(firestore),
        activities = FirestoreActivityRepository(firestore);
 
   final AuthRepository auth;
@@ -1163,5 +1224,6 @@ class FirebaseRepositoryBundle {
   final ContributionRepository contributions;
   final FamilyPocketRepository familyPockets;
   final WalletRepository wallets;
+  final FundingRepository funding;
   final ActivityRepository activities;
 }

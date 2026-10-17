@@ -82,48 +82,48 @@
 
 ## 5. Payment Provider Abstraction — No Real Payments Yet
 
-- [ ] Define a payment gateway interface independent of Anchor or any specific provider.
-- [ ] Define operations needed later: initialize funding, verify funding, resolve/validate beneficiary, initiate healthcare payment/transfer, verify transaction, query status, and process provider callbacks/webhooks.
-- [ ] Build a **mock payment adapter** for development/testing.
-- [ ] Make mock outcomes controllable: success, pending, failure, timeout, duplicate callback, reversal.
-- [ ] Define normalized internal payment statuses independent of provider-specific status names.
-- [ ] Create webhook/event processing architecture with signature-verification hooks ready for future implementation.
-- [ ] Ensure webhook processing is idempotent.
-- [ ] Persist external provider reference fields as nullable until integration exists.
-- [ ] Never mark a future real-money transaction successful merely because the client reports success.
-- [ ] Add clear TODO/integration boundaries for the future regulated payment provider.
-- [ ] Do **not** add Anchor credentials or production payment logic yet.
-- [ ] Do **not** implement real MCC verification yet.
+- [x] Define a payment gateway interface independent of Anchor or any specific provider.
+- [x] Define operations needed later: initialize funding, verify funding, resolve/validate beneficiary, initiate healthcare payment/transfer, verify transaction, query status, and process provider callbacks/webhooks.
+- [x] Build a **mock payment adapter** for development/testing.
+- [x] Make mock outcomes controllable: success, pending, failure, timeout, duplicate callback, reversal.
+- [x] Define normalized internal payment statuses independent of provider-specific status names.
+- [x] Create webhook/event processing architecture with signature-verification hooks ready for future implementation.
+- [x] Ensure webhook processing is idempotent.
+- [x] Persist external provider reference fields as nullable until integration exists.
+- [x] Never mark a future real-money transaction successful merely because the client reports success.
+- [x] Add clear TODO/integration boundaries for the future regulated payment provider.
+- [x] Do **not** add Anchor credentials or production payment logic yet.
+- [x] Do **not** implement real MCC verification yet.
 
 ## 6. Savings Plans
 
-- [ ] Create savings-plan model/repository.
-- [ ] Support daily, weekly, and monthly frequency.
-- [ ] Default contribution amount to ₦500.
-- [ ] Allow users to increase/change the contribution amount.
-- [ ] Support create, read, update, pause/resume, and appropriate cancellation state.
-- [ ] Enforce one clear active-plan policy per user unless the product explicitly requires otherwise.
-- [ ] Calculate/store next contribution date safely.
-- [ ] Keep scheduling logic separate from UI.
-- [ ] Model successful, pending, and failed scheduled contributions.
-- [ ] Prepare auto-contribution orchestration without attempting real debits yet.
-- [ ] Use the mock payment/funding adapter to test recurring contribution flows.
-- [ ] Ensure failed contributions never create completed ledger credits.
-- [ ] Make recurring jobs idempotent so the same scheduled contribution cannot execute twice.
-- [ ] Record savings-plan changes and contribution activity.
+- [x] Create savings-plan model/repository.
+- [x] Support daily, weekly, and monthly frequency.
+- [x] Default contribution amount to ₦500.
+- [x] Allow users to increase/change the contribution amount.
+- [x] Support create, read, update, pause/resume, and appropriate cancellation state.
+- [x] Enforce one clear active-plan policy per user unless the product explicitly requires otherwise.
+- [x] Calculate/store next contribution date safely.
+- [x] Keep scheduling logic separate from UI.
+- [x] Model successful, pending, and failed scheduled contributions.
+- [x] Prepare auto-contribution orchestration without attempting real debits yet.
+- [x] Use the mock payment/funding adapter to test recurring contribution flows.
+- [x] Ensure failed contributions never create completed ledger credits.
+- [x] Make recurring jobs idempotent so the same scheduled contribution cannot execute twice.
+- [x] Record savings-plan changes and contribution activity.
 
 ## 7. Add Money / Funding
 
-- [ ] Create funding transaction model.
-- [ ] Support preset and custom amounts.
-- [ ] Validate minimum/maximum/positive amount rules centrally.
-- [ ] Implement funding lifecycle: created → pending → completed/failed/cancelled as appropriate.
-- [ ] Use mock payment adapter for MVP backend testing until business/payment setup is ready.
-- [ ] Credit wallet only after trusted backend verification.
-- [ ] Generate ledger entry and activity event after completion.
-- [ ] Generate receipt-ready transaction metadata.
-- [ ] Generate notification event after completion/failure where appropriate.
-- [ ] Test retry, duplicate verification, delayed confirmation, failure, and timeout paths.
+- [x] Create funding transaction model.
+- [x] Support preset and custom amounts.
+- [x] Validate minimum/maximum/positive amount rules centrally.
+- [x] Implement funding lifecycle: created → pending → completed/failed/cancelled as appropriate.
+- [x] Use mock payment adapter for MVP backend testing until business/payment setup is ready.
+- [x] Credit wallet only after trusted backend verification.
+- [x] Generate ledger entry and activity event after completion.
+- [x] Generate receipt-ready transaction metadata.
+- [x] Generate notification event after completion/failure where appropriate.
+- [x] Test retry, duplicate verification, delayed confirmation, failure, and timeout paths.
 
 ## 8. Family Pocket
 

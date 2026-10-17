@@ -9,6 +9,7 @@ import {
   Timestamp,
   collection,
   collectionGroup,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -497,6 +498,139 @@ test('an owner can create and edit the default savings plan', async () => {
       updatedAt: serverTimestamp(),
     }),
   );
+  await assertSucceeds(
+    updateDoc(doc(ownerDb, 'savings_plans/personal-plan-owner'), {
+      status: 'active',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+});
+
+test('savings plan ownership, initial state, and terminal cancellation are enforced', async () => {
+  await seedPersonalSavings();
+  const ownerDb = verifiedContext('owner').firestore();
+  const strangerDb = verifiedContext('stranger').firestore();
+
+  await assertFails(getDoc(
+    doc(strangerDb, 'savings_plans/personal-plan-owner'),
+  ));
+  await assertFails(updateDoc(
+    doc(strangerDb, 'savings_plans/personal-plan-owner'),
+    { contributionAmountKobo: 1, updatedAt: serverTimestamp() },
+  ));
+  await assertFails(
+    setDoc(doc(strangerDb, 'savings_plans/personal-plan-stranger'), {
+      userId: 'owner',
+      personalHealthPocketId: 'personal-owner',
+      contributionAmountKobo: 500000,
+      frequency: 'weekly',
+      startDate: now,
+      nextContributionDate: null,
+      status: 'active',
+      fundingSourceId: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(
+      doc(context.firestore(), 'personal_health_pockets/personal-new-owner'),
+      {
+        userId: 'new-owner',
+        currency: 'NGN',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+    );
+  });
+  const newOwnerDb = verifiedContext('new-owner').firestore();
+  await assertFails(
+    setDoc(doc(newOwnerDb, 'savings_plans/personal-plan-new-owner'), {
+      userId: 'new-owner',
+      personalHealthPocketId: 'personal-new-owner',
+      contributionAmountKobo: 500000,
+      frequency: 'weekly',
+      startDate: now,
+      nextContributionDate: null,
+      status: 'paused',
+      fundingSourceId: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'savings_plans/personal-plan-owner'),
+      { status: 'cancelled', updatedAt: now },
+    );
+  });
+  await assertSucceeds(getDoc(
+    doc(ownerDb, 'savings_plans/personal-plan-owner'),
+  ));
+  await assertFails(updateDoc(
+    doc(ownerDb, 'savings_plans/personal-plan-owner'),
+    { status: 'active', updatedAt: serverTimestamp() },
+  ));
+  await assertFails(updateDoc(
+    doc(ownerDb, 'savings_plans/personal-plan-owner'),
+    { contributionAmountKobo: 750000, updatedAt: serverTimestamp() },
+  ));
+});
+
+test('scheduled contributions are owner-readable and server-write-only', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    for (const uid of ['owner', 'stranger']) {
+      await setDoc(doc(db, `scheduled_contributions/scheduled-${uid}`), {
+        userId: uid,
+        savingsPlanId: `personal-plan-${uid}`,
+        amountKobo: 500000,
+        currency: 'NGN',
+        status: 'pending',
+        scheduledFor: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  });
+
+  const ownerDb = verifiedContext('owner').firestore();
+  await assertSucceeds(getDoc(
+    doc(ownerDb, 'scheduled_contributions/scheduled-owner'),
+  ));
+  await assertFails(getDoc(
+    doc(ownerDb, 'scheduled_contributions/scheduled-stranger'),
+  ));
+  await assertSucceeds(getDocs(query(
+    collection(ownerDb, 'scheduled_contributions'),
+    where('userId', '==', 'owner'),
+  )));
+  await assertFails(getDocs(collection(ownerDb, 'scheduled_contributions')));
+  await assertFails(
+    setDoc(doc(ownerDb, 'scheduled_contributions/forged'), {
+      userId: 'owner',
+      savingsPlanId: 'personal-plan-owner',
+      amountKobo: 999999,
+      status: 'completed',
+    }),
+  );
+  await assertFails(updateDoc(
+    doc(ownerDb, 'scheduled_contributions/scheduled-owner'),
+    { status: 'completed' },
+  ));
+
+  await assertFails(
+    setDoc(doc(ownerDb, 'savings_plan_operations/forged'), {
+      userId: 'owner',
+      status: 'completed',
+    }),
+  );
+  await assertFails(getDoc(
+    doc(ownerDb, 'savings_plan_operations/server-record'),
+  ));
 });
 
 test('Family Pocket and founding admin are created atomically', async () => {
@@ -1106,6 +1240,120 @@ test('unknown collections remain denied', async () => {
   await assertFails(
     setDoc(doc(ownerDb, 'admin_roles/owner'), { role: 'admin' }),
   );
+});
+
+test('payment attempts and provider events remain server-only', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'payment_attempts/pay-server-owned'), {
+      userId: 'owner',
+      kind: 'funding',
+      amountKobo: 5000,
+      currency: 'NGN',
+      status: 'pending',
+      provider: 'mock',
+      providerReference: null,
+    });
+    await setDoc(doc(db, 'provider_events/event-server-owned'), {
+      provider: 'mock',
+      paymentAttemptId: 'pay-server-owned',
+      normalizedStatus: 'pending',
+      status: 'processed',
+    });
+  });
+
+  const ownerDb = verifiedContext('owner').firestore();
+  for (const path of [
+    'payment_attempts/pay-server-owned',
+    'provider_events/event-server-owned',
+  ]) {
+    await assertFails(getDoc(doc(ownerDb, path)));
+    await assertFails(updateDoc(doc(ownerDb, path), { status: 'succeeded' }));
+  }
+  await assertFails(
+    setDoc(doc(ownerDb, 'payment_attempts/pay-forged'), {
+      userId: 'owner',
+      status: 'succeeded',
+    }),
+  );
+  await assertFails(getDocs(collection(ownerDb, 'payment_attempts')));
+  await assertFails(getDocs(collection(ownerDb, 'provider_events')));
+});
+
+test('funding transactions and notification events are owner-readable and server-write-only', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    for (const uid of ['owner', 'stranger']) {
+      await setDoc(doc(db, `funding_transactions/funding-${uid}`), {
+        schemaVersion: 1,
+        userId: uid,
+        paymentAttemptId: `attempt-${uid}`,
+        amountKobo: 500000,
+        currency: 'NGN',
+        status: 'completed',
+        provider: 'mock',
+        providerReference: `mock-${uid}`,
+        ledgerOperationId: `operation-${uid}`,
+        failureCode: null,
+        transactionReference: `attempt-${uid}`,
+        receiptNumber: `HPF-${uid.toUpperCase()}`,
+        description: 'HealthPocket wallet funding',
+        channel: 'mock',
+        completedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await setDoc(doc(db, `notification_events/notification-${uid}`), {
+        userId: uid,
+        type: 'funding_completed',
+        title: 'Money added',
+        body: 'Your HealthPocket balance has been updated.',
+        status: 'queued',
+        relatedEntityType: 'funding_transaction',
+        relatedEntityId: `funding-${uid}`,
+        createdAt: now,
+      });
+    }
+  });
+
+  const ownerDb = verifiedContext('owner').firestore();
+  const strangerDb = verifiedContext('stranger').firestore();
+  const anonymousDb = environment.unauthenticatedContext().firestore();
+  for (const collectionName of [
+    'funding_transactions',
+    'notification_events',
+  ]) {
+    const singular = collectionName === 'funding_transactions'
+      ? 'funding'
+      : 'notification';
+    const ownerPath = `${collectionName}/${singular}-owner`;
+    const strangerPath = `${collectionName}/${singular}-stranger`;
+
+    await assertSucceeds(getDoc(doc(ownerDb, ownerPath)));
+    await assertFails(getDoc(doc(ownerDb, strangerPath)));
+    await assertFails(getDoc(doc(strangerDb, ownerPath)));
+    await assertFails(getDoc(doc(anonymousDb, ownerPath)));
+    await assertSucceeds(getDocs(query(
+      collection(ownerDb, collectionName),
+      where('userId', '==', 'owner'),
+      orderBy('createdAt', 'desc'),
+    )));
+    await assertFails(getDocs(collection(ownerDb, collectionName)));
+    await assertFails(getDocs(query(
+      collection(ownerDb, collectionName),
+      where('userId', '==', 'stranger'),
+    )));
+    await assertFails(setDoc(doc(ownerDb, `${collectionName}/forged`), {
+      userId: 'owner',
+      status: 'completed',
+      extraData: 'x'.repeat(10000),
+    }));
+    await assertFails(updateDoc(doc(ownerDb, ownerPath), {
+      userId: 'owner',
+      status: 'failed',
+    }));
+    await assertFails(deleteDoc(doc(ownerDb, ownerPath)));
+  }
 });
 
 test('wallet and financial history are owner-readable but client-immutable', async () => {

@@ -11,7 +11,12 @@ service cloud.firestore {
     // personal_health_pockets/{id}: userId, NGN currency, lifecycle status,
     // createdAt, updatedAt. It never stores a mutable balance.
     // savings_plans/{id}: owner/pocket IDs, recurring amount/frequency, schedule,
-    // optional funding reference, lifecycle status, and timestamps.
+    // optional funding reference, active/paused/cancelled lifecycle status, and
+    // timestamps. Clients create active plans and may edit only active/paused
+    // plans; cancelled is a terminal status written by the trusted backend.
+    // scheduled_contributions/{id}: server-created execution record with a
+    // userId owner field. Owners may read their records; all writes are trusted
+    // backend-only.
     // contributions/dev_{uid}_{key} or dev_family_{uid}_{key}: immutable
     // DEV-only personal/family record. amountKobo is integer kobo;
     // moneyMovement is always false; createdAt is a server timestamp.
@@ -27,6 +32,15 @@ service cloud.firestore {
     // the same ownership/amount/source fields, pending/completed/failed/
     // reversed/cancelled status, a request fingerprint, optional references,
     // and trusted timestamps. Flutter has read-only owner access.
+    // funding_transactions/{transactionId}: server-owned funding lifecycle
+    // record containing userId, positive integer amountKobo, NGN currency,
+    // normalized status, nullable provider/ledger references,
+    // receipt-ready metadata, and trusted timestamps. Clients have owner-only
+    // read access and cannot mutate funding history.
+    // notification_events/{eventId}: server-owned owner-scoped notification
+    // record containing userId, event type, title/body, delivery status,
+    // related entity references, and a trusted createdAt timestamp. Clients
+    // have owner-only read access and cannot mutate it.
     // family_pockets/{id}: private member-scoped pocket metadata and timestamps.
     // family_pockets/{id}/members/{uid}: non-PII membership display data,
     // authority role, contribution/beneficiary capabilities, lifecycle state,
@@ -388,10 +402,15 @@ service cloud.firestore {
         && data.frequency in ['daily', 'weekly', 'monthly']
         && data.startDate is timestamp
         && validOptionalTimestamp(data.nextContributionDate)
-        && data.status in ['active', 'paused']
+        && data.status in ['active', 'paused', 'cancelled']
         && validOptionalString(data.fundingSourceId, 128)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isClientEditableSavingsPlanTransition() {
+      return resource.data.status in ['active', 'paused']
+        && request.resource.data.status in ['active', 'paused'];
     }
 
     function isValidDevelopmentContribution(contributionId, data) {
@@ -625,6 +644,7 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid
         && isCanonicalSavingsPlanId(planId, request.auth.uid)
         && ownsPersonalPocket(request.resource.data.personalHealthPocketId)
+        && request.resource.data.status == 'active'
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && isValidSavingsPlan(request.resource.data);
@@ -637,8 +657,17 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
         && ownsPersonalPocket(request.resource.data.personalHealthPocketId)
+        && isClientEditableSavingsPlanTransition()
         && isValidSavingsPlan(request.resource.data);
       allow delete: if false;
+    }
+
+    match /scheduled_contributions/{scheduledContributionId} {
+      allow read: if hasVerifiedIdentity()
+        && resource.data.userId == request.auth.uid;
+      // Scheduling, execution state, retries, and cancellation are controlled
+      // only by the trusted backend. A client must not forge a due execution.
+      allow create, update, delete: if false;
     }
 
     match /contributions/{contributionId} {
@@ -689,6 +718,22 @@ service cloud.firestore {
       allow read: if hasVerifiedIdentity()
         && resource.data.userId == request.auth.uid;
       // Only verified backend workflows may progress operation state.
+      allow create, update, delete: if false;
+    }
+
+    match /funding_transactions/{transactionId} {
+      allow read: if hasVerifiedIdentity()
+        && resource.data.userId == request.auth.uid;
+      // Lifecycle transitions, provider verification, receipt metadata, and
+      // wallet-credit linkage are written only by the trusted backend.
+      allow create, update, delete: if false;
+    }
+
+    match /notification_events/{eventId} {
+      allow read: if hasVerifiedIdentity()
+        && resource.data.userId == request.auth.uid;
+      // Notification generation and delivery state are authoritative backend
+      // records. Clients cannot manufacture, acknowledge, or delete events.
       allow create, update, delete: if false;
     }
 
