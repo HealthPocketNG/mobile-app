@@ -97,3 +97,31 @@ Failed mock funding creates no completed ledger posting.
 future scheduler. It is intentionally not exported as a deployed scheduled
 function yet: the current tests wire it only to the local mock payment adapter,
 and it performs no real bank debit or production payment call.
+
+## Family Pocket
+
+`src/family/family-pocket-service.js` is the trusted boundary for Family Pocket
+creation, settings, membership, invitations, ownership, closure, and funding.
+Pocket records support a name, optional description/image path, daily/weekly/
+monthly frequency, default contribution amount, explicit owner, timestamps,
+status, and a transactionally maintained cached balance.
+
+Membership roles are `owner`, `admin`, and `member`. Invite links contain a
+high-entropy bearer code; only its SHA-256 hash is stored. Acceptance requires
+a verified authentication email matching the normalized invite email. A
+deterministic uniqueness record prevents two pending invitations to the same
+email. Owners cannot leave or be removed: ownership must first be transferred,
+or the pocket must be closed.
+
+Family funding uses the same provider-neutral payment gateway contract as Add
+Money. Initialization never changes a balance. Trusted provider verification
+creates exactly one immutable `family_ledger_entries` posting and atomically
+increments both the pocket balance and that member's lifetime contribution.
+It also creates deterministic activity and notification records. Failed,
+pending, and timed-out attempts never credit the pocket; delayed verification
+can safely complete later. Reconciliation derives the expected balance from
+completed ledger postings.
+
+No production Family Pocket callable or real-money payment endpoint is
+exported yet. `imagePath` is ready in the model, but actual Family Pocket image
+upload remains deferred with the broader Cloud Storage billing work.

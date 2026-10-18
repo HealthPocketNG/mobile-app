@@ -432,6 +432,25 @@ class FamilyPocketDocument {
         beneficiaryLimit: data['beneficiaryLimit'] is int
             ? data['beneficiaryLimit'] as int
             : 2,
+        description: firestoreNullableString(data, 'description'),
+        imagePath: firestoreNullableString(data, 'imagePath'),
+        frequency: data['frequency'] == null
+            ? FamilyContributionFrequency.monthly
+            : firestoreEnum(
+                data,
+                'frequency',
+                FamilyContributionFrequency.values,
+              ),
+        defaultContributionAmountKobo:
+            data['defaultContributionAmountKobo'] as int? ?? 50000,
+        ownerId:
+            firestoreNullableString(data, 'ownerId') ??
+            firestoreNullableString(data, 'createdBy'),
+        currency: data['currency'] as String? ?? 'NGN',
+        status: firestoreEnum(data, 'status', FamilyPocketStatus.values),
+        balanceKobo: data['balanceKobo'] as int? ?? 0,
+        createdAt: firestoreNullableDateTime(data, 'createdAt'),
+        updatedAt: firestoreNullableDateTime(data, 'updatedAt'),
       ),
       createdBy: firestoreString(data, 'createdBy'),
       currency: firestoreString(data, 'currency'),
@@ -446,10 +465,16 @@ class FamilyPocketDocument {
     Object? updatedAtOverride,
   }) => {
     'name': pocket.name,
+    'description': pocket.description,
+    'imagePath': pocket.imagePath,
+    'frequency': pocket.frequency.name,
+    'defaultContributionAmountKobo': pocket.defaultContributionAmountKobo,
+    'ownerId': pocket.ownerId ?? createdBy,
     'beneficiaryLimit': pocket.beneficiaryLimit,
     'createdBy': createdBy,
     'currency': currency,
     'status': status.name,
+    'balanceKobo': pocket.balanceKobo,
     'createdAt': createdAtOverride ?? firestoreTimestamp(createdAt),
     'updatedAt': updatedAtOverride ?? firestoreTimestamp(updatedAt),
   };
@@ -465,7 +490,11 @@ class FamilyMembershipDocument {
     Map<String, dynamic> data,
   ) {
     final encodedRole = firestoreString(data, 'role');
-    final role = encodedRole == 'admin' ? FamilyRole.admin : FamilyRole.member;
+    final role = switch (encodedRole) {
+      'owner' => FamilyRole.owner,
+      'admin' => FamilyRole.admin,
+      _ => FamilyRole.member,
+    };
     final encodedStatus = data['status'] ?? data['invitationStatus'];
     final status = FamilyMembershipStatus.values.firstWhere(
       (value) => value.name == encodedStatus,
@@ -481,8 +510,12 @@ class FamilyMembershipDocument {
         name: firestoreString(data, 'name'),
         role: role,
         canContribute:
+            (data['permissions'] as Map<String, dynamic>?)?['canContribute']
+                as bool? ??
             data['canContribute'] as bool? ??
-            (encodedRole == 'admin' || encodedRole == 'contributor'),
+            (encodedRole == 'owner' ||
+                encodedRole == 'admin' ||
+                encodedRole == 'contributor'),
         isBeneficiary:
             data['isBeneficiary'] as bool? ?? encodedRole == 'beneficiary',
         status: status,

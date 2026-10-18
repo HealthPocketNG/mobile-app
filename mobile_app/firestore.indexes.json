@@ -107,6 +107,30 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "family_contribution_attempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contributorUserId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "family_contribution_attempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pocketId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "family_ledger_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyPocketId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

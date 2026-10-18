@@ -645,11 +645,14 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
 
   @override
   Future<List<FamilyPocket>> getPocketsForUser(String userId) async {
-    Query<FamilyMembershipDocument> membershipQuery(String statusField) =>
+    Query<FamilyMembershipDocument> membershipQuery(
+      String statusField,
+      String status,
+    ) =>
         _firestore
             .collectionGroup('members')
             .where('userId', isEqualTo: userId)
-            .where(statusField, isEqualTo: 'accepted')
+            .where(statusField, isEqualTo: status)
             .orderBy('joinedAt', descending: true)
             .withConverter<FamilyMembershipDocument>(
               fromFirestore: (snapshot, _) => FamilyMembershipDocument.fromMap(
@@ -659,8 +662,9 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
               toFirestore: (document, _) => document.toMap(),
             );
     final membershipSnapshots = await Future.wait([
-      membershipQuery('status').get(),
-      membershipQuery('invitationStatus').get(),
+      membershipQuery('status', 'active').get(),
+      membershipQuery('status', 'accepted').get(),
+      membershipQuery('invitationStatus', 'accepted').get(),
     ]);
     final membershipDocuments = {
       for (final snapshot in membershipSnapshots)
@@ -684,7 +688,8 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
             .map((document) => document.data().membership)
             .where(
               (membership) =>
-                  membership.status != FamilyMembershipStatus.removed,
+                  membership.status == FamilyMembershipStatus.active ||
+                  membership.status == FamilyMembershipStatus.accepted,
             )
             .map(
               (membership) => FamilyMember(
@@ -699,7 +704,8 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
             .toList();
 
         var invitations = const <FamilyInvitation>[];
-        if (ownMembership.role == FamilyRole.admin) {
+        if (ownMembership.role == FamilyRole.owner ||
+            ownMembership.role == FamilyRole.admin) {
           final inviteSnapshot =
               await FirestoreDocumentCollections.familyInvitations(
                 _firestore,
@@ -751,7 +757,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
   @override
   Stream<List<FamilyMembership>> watchMembers(String pocketId) =>
       FirestoreDocumentCollections.familyMembers(_firestore, pocketId)
-          .where('status', isEqualTo: 'accepted')
+          .where('status', whereIn: const ['active', 'accepted'])
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -764,7 +770,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
       _firestore
           .collectionGroup('members')
           .where('userId', isEqualTo: userId)
-          .where('status', isEqualTo: 'accepted')
+          .where('status', whereIn: const ['active', 'accepted'])
           .orderBy('joinedAt', descending: true)
           .withConverter<FamilyMembershipDocument>(
             fromFirestore: (snapshot, _) =>
@@ -798,7 +804,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
       if (adminMembership.id != createdBy ||
           adminMembership.userId != createdBy ||
           adminMembership.pocketId != pocket.id ||
-          adminMembership.role != FamilyRole.admin ||
+          adminMembership.role != FamilyRole.owner ||
           adminMembership.status != FamilyMembershipStatus.accepted ||
           !adminMembership.canContribute ||
           adminMembership.isBeneficiary) {

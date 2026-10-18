@@ -531,6 +531,8 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
                                   canRemove:
                                       store.canManageMembers &&
                                       pocket.members[index].role !=
+                                          FamilyRole.owner &&
+                                      pocket.members[index].role !=
                                           FamilyRole.admin,
                                   onRemove: () => _removeMember(
                                     context,
@@ -1094,7 +1096,7 @@ class _MemberTile extends StatelessWidget {
       ),
       title: Text(member.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(_memberCapabilities(member)),
-      trailing: member.role == FamilyRole.admin
+      trailing: member.role == FamilyRole.owner || member.role == FamilyRole.admin
           ? const Icon(Icons.shield_outlined, color: AppColors.accent)
           : canRemove
           ? IconButton(
@@ -1526,6 +1528,7 @@ String? _amountValidator(String? value) =>
     : null;
 
 String _memberCapabilities(FamilyMember member) {
+  if (member.role == FamilyRole.owner) return 'Owner • Can contribute';
   if (member.role == FamilyRole.admin) return 'Admin • Can contribute';
   if (member.canContribute && member.isBeneficiary) {
     return 'Contributor • Beneficiary';

@@ -75,7 +75,9 @@ class FamilyPocketStore extends ChangeNotifier {
   bool get canManageMembers =>
       selectedPocket?.members.any(
         (member) =>
-            member.id == _currentUserId && member.role == FamilyRole.admin,
+            member.id == _currentUserId &&
+            (member.role == FamilyRole.owner ||
+                member.role == FamilyRole.admin),
       ) ??
       false;
 
@@ -163,7 +165,7 @@ class FamilyPocketStore extends ChangeNotifier {
           FamilyMember(
             id: _currentUserId,
             name: _currentUserName,
-            role: FamilyRole.admin,
+            role: FamilyRole.owner,
             canContribute: true,
             isBeneficiary: false,
           ),
@@ -222,7 +224,7 @@ class FamilyPocketStore extends ChangeNotifier {
         .firstOrNull;
     if (member == null ||
         member.id == _currentUserId ||
-        member.role == FamilyRole.admin) {
+        member.role == FamilyRole.owner) {
       return false;
     }
     final index = _pockets.indexWhere((item) => item.id == pocket.id);

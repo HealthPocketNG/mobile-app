@@ -127,26 +127,26 @@
 
 ## 8. Family Pocket
 
-- [ ] Create Family Pocket model and repository.
-- [ ] Support pocket name, optional description, image, frequency, default contribution amount, owner, timestamps, and status.
+- [x] Create Family Pocket model and repository.
+- [x] Support pocket name, optional description, image, frequency, default contribution amount, owner, timestamps, and status.
 - [ ] Support Family Pocket image upload/storage.
-- [ ] Create membership model with explicit roles/permissions.
-- [ ] Support owner/admin/member rules required by the MVP.
-- [ ] Create invite model.
-- [ ] Support invite creation, acceptance, decline/expiry where appropriate, and duplicate-invite prevention.
-- [ ] Support invite links/codes without exposing unauthorized pocket data.
-- [ ] Allow members to leave subject to ownership rules.
-- [ ] Allow authorized owner/admin actions to remove members.
-- [ ] Prevent unauthorized membership manipulation.
-- [ ] Define ownership-transfer or pocket-close behavior before allowing an owner to leave.
-- [ ] Track each member's contribution independently.
-- [ ] Maintain Family Pocket balance through ledger-backed contribution records.
-- [ ] Never permit the client to directly alter Family Pocket balances.
-- [ ] Implement Family Pocket activity history.
-- [ ] Implement contribution frequency/default amount behavior.
-- [ ] Prepare Family Pocket funding through the same payment abstraction.
-- [ ] Test concurrent member contributions.
-- [ ] Test permissions extensively with Emulator Suite.
+- [x] Create membership model with explicit roles/permissions.
+- [x] Support owner/admin/member rules required by the MVP.
+- [x] Create invite model.
+- [x] Support invite creation, acceptance, decline/expiry where appropriate, and duplicate-invite prevention.
+- [x] Support invite links/codes without exposing unauthorized pocket data.
+- [x] Allow members to leave subject to ownership rules.
+- [x] Allow authorized owner/admin actions to remove members.
+- [x] Prevent unauthorized membership manipulation.
+- [x] Define ownership-transfer or pocket-close behavior before allowing an owner to leave.
+- [x] Track each member's contribution independently.
+- [x] Maintain Family Pocket balance through ledger-backed contribution records.
+- [x] Never permit the client to directly alter Family Pocket balances.
+- [x] Implement Family Pocket activity history.
+- [x] Implement contribution frequency/default amount behavior.
+- [x] Prepare Family Pocket funding through the same payment abstraction.
+- [x] Test concurrent member contributions.
+- [x] Test permissions extensively with Emulator Suite.
 
 ## 9. Healthcare Provider Directory / Find Care
 

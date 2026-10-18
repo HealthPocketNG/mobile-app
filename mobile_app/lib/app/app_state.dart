@@ -621,7 +621,7 @@ class AppState extends ChangeNotifier {
         pocketId: pocketId,
         userId: userId,
         name: profileStore.profile.fullName,
-        role: FamilyRole.admin,
+        role: FamilyRole.owner,
         canContribute: true,
         isBeneficiary: false,
         status: FamilyMembershipStatus.accepted,

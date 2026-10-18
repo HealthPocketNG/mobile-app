@@ -88,8 +88,11 @@ current personal and family histories derive directly from contribution records.
 - `ledger_entries/{entryId}` stores immutable completed credit/debit postings in
   integer kobo. A reversal creates a separate compensating entry linked to the
   original entry; completed history is never rewritten or deleted.
-- `family_pockets/{pocketId}` stores the pocket name, fixed beneficiary limit
-  of two, creator, currency, status, and timestamps.
+- `family_pockets/{pocketId}` stores the pocket name, optional description and
+  image path, daily/weekly/monthly contribution frequency, default contribution
+  amount, explicit owner, currency, status, transactionally cached balance,
+  version, and timestamps. The image path is nullable while Cloud Storage
+  upload remains deferred.
 - `family_pockets/{pocketId}/members/{memberId}` stores non-PII membership
   display data, authority role, contribution/beneficiary capabilities, and
   lifecycle state. An accepted user's membership ID is their Auth UID. Removing
@@ -106,6 +109,12 @@ current personal and family histories derive directly from contribution records.
   membership, and slot atomically.
 - `activities/{activityId}` is an append-only user-visible audit feed linked to
   the affected entity and, when applicable, a Family Pocket.
+- `family_invite_keys/{hash}` enforces one pending invite per pocket/email and
+  stores only an email hash. `family_invite_codes/{codeHash}` maps a hashed,
+  high-entropy bearer code to an invitation; raw link codes are never stored.
+- `family_contribution_attempts/{attemptId}` stores mock/provider funding state.
+  `family_ledger_entries/{entryId}` is the immutable authoritative Family
+  Pocket credit history used for reconciliation and balance derivation.
 
 ## Data decisions
 
@@ -143,6 +152,15 @@ current personal and family histories derive directly from contribution records.
   value. The dashboard activity feed reads this same ordered record list.
 - A Family Pocket development balance follows the same rule and is derived from
   immutable family-scoped records visible only to active members.
+- The trusted Family Pocket balance is changed only in the same transaction
+  that creates an immutable completed Family Pocket ledger entry. The member's
+  lifetime contribution total is updated in that transaction, keeping member
+  attribution, pocket totals, activity, and notifications idempotent under
+  concurrent contributions.
+- Family Pocket membership authority is explicit: one `owner`, optional
+  `admin` members, and ordinary `member` records. Owners must transfer ownership
+  before leaving; alternatively they may close the pocket. Admins cannot remove
+  owners or other admins, and members cannot manipulate membership.
 - DEV simulation contributions remain explicitly non-monetary and are not
   migrated into the authoritative wallet. The trusted ledger is a separate
   boundary used only by server-side funding/payment services.

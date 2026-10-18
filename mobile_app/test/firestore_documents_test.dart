@@ -134,6 +134,31 @@ void main() {
     expect(decoded.plan.contributionAmountKobo, 500000);
   });
 
+  test('Family Pocket decodes authoritative settings and cached balance', () {
+    final timestamp = Timestamp.fromDate(DateTime.utc(2026, 4, 5, 8));
+    final decoded = FamilyPocketDocument.fromMap('family-1', {
+      'name': 'Bello Family',
+      'description': 'Shared care savings',
+      'imagePath': null,
+      'frequency': 'weekly',
+      'defaultContributionAmountKobo': 75000,
+      'ownerId': 'owner-1',
+      'createdBy': 'owner-1',
+      'beneficiaryLimit': 2,
+      'currency': 'NGN',
+      'status': 'active',
+      'balanceKobo': 425000,
+      'createdAt': timestamp,
+      'updatedAt': timestamp,
+    });
+
+    expect(decoded.pocket.description, 'Shared care savings');
+    expect(decoded.pocket.frequency, FamilyContributionFrequency.weekly);
+    expect(decoded.pocket.defaultContributionAmountKobo, 75000);
+    expect(decoded.pocket.ownerId, 'owner-1');
+    expect(decoded.pocket.balanceKobo, 425000);
+  });
+
   test('removed Family Pocket membership preserves its audit timestamp', () {
     final removedAt = DateTime.utc(2026, 4, 5, 8);
     final document = FamilyMembershipDocument(
