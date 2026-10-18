@@ -125,3 +125,66 @@ completed ledger postings.
 No production Family Pocket callable or real-money payment endpoint is
 exported yet. `imagePath` is ready in the model, but actual Family Pocket image
 upload remains deferred with the broader Cloud Storage billing work.
+
+## Healthcare provider directory
+
+`src/providers/provider-directory-service.js` is the trusted maintenance
+boundary for `healthcare_providers`. Its upsert, seed, activate, and deactivate
+operations require an explicit admin custom claim and validate the complete
+non-PII provider schema before the Admin SDK writes it. No client-callable
+directory mutation or provider dashboard is exported.
+
+The seed operation accepts at most 400 records per batch. With
+`deactivateMissing: true`, active records absent from the seed are marked
+inactive and timestamped rather than deleted. This preserves stable provider
+IDs for transaction history. Run the service tests through the standard
+Firestore emulator command above; no live deployment or production data is
+required.
+
+## Healthcare payments
+
+`src/healthcare/healthcare-payment-service.js` orchestrates partner and
+non-partner healthcare payments on top of the existing provider-neutral payment
+service and ledger. It validates the active provider, correct directory flow,
+integer-kobo amount, wallet state, and available balance before creating a
+pending transaction. Trusted payment verification performs the authoritative
+ledger debit; the client cannot report success or mutate the resulting record.
+
+Completed mock settlement creates deterministic receipt metadata, activity,
+notification, payment-attempt, financial-operation, and ledger records. Retries
+reuse the same IDs and cannot debit twice. Pending, failed, cancelled, and
+reversed states remain explicit and retained for history.
+
+`healthcare-verification.js` defines replaceable account-resolution and
+healthcare-eligibility contracts. The local implementations in
+`mock-healthcare-verification.js` are test-only: they never perform or claim
+production MCC verification. Non-partner persistence contains only safe bank
+display fields (last four digits, bank identity/name, and an opaque beneficiary
+reference); the raw account number is not stored.
+
+No healthcare callable, QR payment, production settlement endpoint, provider
+credential, or real MCC service is exported or deployed in this phase.
+
+## Activity and transaction history
+
+`src/activity/activity-history-service.js` is the trusted read boundary for the
+append-only `activities` feed. It exposes cursor-paginated personal or permitted
+Family Pocket history, exact activity-type and inclusive date-range filters,
+transaction detail, an explicit empty state, and bounded statement generation
+with CSV output. Cursors are bound to their original scope and filters.
+
+The service resolves each known activity against its authoritative funding,
+healthcare, savings, Family Pocket, or plan record. Amount, currency, ownership,
+Family Pocket linkage, status, provider snapshot, and receipt metadata therefore
+cannot be silently replaced by stale client-facing activity metadata. Missing or
+mismatched sources fail closed as integrity errors. Funding and healthcare
+terminal failures now create non-financial activity records; only completed or
+reversed events are marked as money movement.
+
+Personal exports contain only records whose `userId` is the authenticated actor.
+Family Pocket exports require a current active/accepted membership and exclude
+removed or departed members. Export windows are limited to 366 days and 5,000
+records. Spreadsheet-formula prefixes are neutralized in generated CSV cells.
+Clients retain read-only access under Firestore Security Rules; every activity
+create, update, and delete remains trusted-backend-only. No public history
+callable or live deployment is included in this phase.

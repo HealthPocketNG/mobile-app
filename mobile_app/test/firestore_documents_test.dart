@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/core/data/firestore/firestore_documents.dart';
+import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
@@ -330,4 +331,45 @@ void main() {
     expect(transaction.hasReceipt, isTrue);
     expect(transaction.receiptNumber, 'HPF-ABCDEF123456');
   });
+
+  test(
+    'provider directory document decodes its canonical discovery fields',
+    () {
+      final timestamp = Timestamp.fromDate(DateTime.utc(2026, 10, 18));
+      final provider = CareProviderDocument.fromMap('clinic-1', {
+        'schemaVersion': 1,
+        'name': 'Community Clinic',
+        'normalizedName': 'community clinic',
+        'category': 'clinic',
+        'partnerStatus': 'non_partner',
+        'address': '10 Care Road',
+        'state': 'Lagos',
+        'city': 'Ikeja',
+        'coordinates': {'latitude': 6.6018, 'longitude': 3.3515},
+        'locationCell': ['g_386_733'],
+        'contact': {
+          'phone': '+2348000000000',
+          'email': 'care@example.test',
+          'website': 'https://example.test',
+        },
+        'openingInformation': 'Open daily',
+        'logoUrl': 'https://example.test/logo.png',
+        'imageUrls': ['https://example.test/provider.png'],
+        'services': ['Consultation'],
+        'searchPrefixes': ['c', 'cl'],
+        'active': true,
+        'createdAt': timestamp,
+        'updatedAt': timestamp,
+        'deactivatedAt': null,
+      }).provider;
+
+      expect(provider.type, CareProviderType.clinic);
+      expect(provider.partnerStatus, CarePartnerStatus.nonPartner);
+      expect(provider.locationCells, ['g_386_733']);
+      expect(provider.coordinates?.isValid, isTrue);
+      expect(provider.directionsUri.toString(), contains('maps/dir'));
+      expect(provider.logoUrl?.scheme, 'https');
+      expect(provider.isDemo, isFalse);
+    },
+  );
 }

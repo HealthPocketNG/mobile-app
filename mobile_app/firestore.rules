@@ -37,6 +37,19 @@ service cloud.firestore {
     // normalized status, nullable provider/ledger references,
     // receipt-ready metadata, and trusted timestamps. Clients have owner-only
     // read access and cannot mutate funding history.
+    // healthcare_payments/{paymentId}: server-owned owner history projection.
+    // Required fields: schemaVersion (integer), userId, flowType (partner or
+    // non_partner), providerId/name/category/city/state, positive integer
+    // amountKobo, NGN currency, status (created/pending/completed/failed/
+    // cancelled/reversed), verificationStatus (not_required/pending/verified/
+    // rejected/unavailable), paymentProvider, transactionReference,
+    // description, channel (mock/provider), requestFingerprint, createdAt, and
+    // updatedAt. Nullable fields: paymentAttemptId, verificationSource,
+    // verificationReference, failureCode, providerReference, ledgerOperationId,
+    // ledgerEntryId, receiptNumber, completedAt, and beneficiary. Beneficiary is
+    // a non-partner safe-display map containing only accountNumberLast4,
+    // bankCode, bankName, accountName, and beneficiaryReference; raw account
+    // numbers are never stored. Clients have verified-owner read-only access.
     // notification_events/{eventId}: server-owned owner-scoped notification
     // record containing userId, event type, title/body, delivery status,
     // related entity references, and a trusted createdAt timestamp. Clients
@@ -56,6 +69,18 @@ service cloud.firestore {
     // readable only by its contributor or an active pocket owner/admin.
     // family_ledger_entries/{id}: immutable server-owned Family Pocket posting;
     // readable only by active members of the referenced familyPocketId.
+    // healthcare_providers/{providerId}: server/admin-owned directory containing
+    // no patient/user PII. All fields are required: schemaVersion (integer),
+    // name and normalizedName (strings, max 160), category (hospital/clinic/
+    // pharmacy/diagnostics/other), partnerStatus (partner/non_partner), address
+    // (string, max 500), state and city (strings, max 100), coordinates map with
+    // numeric latitude/longitude, locationCell (string list, max 20), contact map
+    // with nullable bounded phone/email/website, openingInformation (nullable
+    // string, max 1,000), logoUrl (nullable URL, max 2,048), imageUrls (URL list,
+    // max 10), services (string list, max 40), searchPrefixes (normalized string
+    // list, max 50), active (boolean), createdAt/updatedAt (timestamps), and
+    // deactivatedAt (nullable timestamp). Verified Google clients may read only
+    // active records; all create/update/delete operations are backend-only.
     // activities/{id}: append-only, narrowly typed audit event and small metadata.
 
     // ===============================================================
@@ -584,11 +609,32 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /healthcare_payments/{paymentId} {
+      // Owner-scoped list queries must constrain userId to request.auth.uid;
+      // ordering by createdAt and pagination limits do not widen this predicate.
+      allow read: if hasVerifiedIdentity()
+        && resource.data.userId == request.auth.uid;
+      // Initialization, verification, debit finalization, failure transitions,
+      // ledger linkage, and receipt creation are trusted-backend-only.
+      allow create, update, delete: if false;
+    }
+
     match /notification_events/{eventId} {
       allow read: if hasVerifiedIdentity()
         && resource.data.userId == request.auth.uid;
       // Notification generation and delivery state are authoritative backend
       // records. Clients cannot manufacture, acknowledge, or delete events.
+      allow create, update, delete: if false;
+    }
+
+    match /healthcare_providers/{providerId} {
+      // Queries must include active == true. Optional category, partnerStatus,
+      // state/city, searchPrefixes, locationCell, ordering, and limit clauses do
+      // not widen this predicate, so the same rule supports filtered discovery.
+      allow read: if hasVerifiedIdentity()
+        && resource.data.active == true;
+      // Directory seeding, correction, activation, and deactivation are trusted
+      // Admin SDK operations. Ordinary clients cannot publish or alter listings.
       allow create, update, delete: if false;
     }
 

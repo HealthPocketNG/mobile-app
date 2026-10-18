@@ -8,6 +8,7 @@ import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/core/logging/backend_logger.dart';
 import 'package:healthpocket/features/activity/domain/activity_record.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
+import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
@@ -648,19 +649,16 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
     Query<FamilyMembershipDocument> membershipQuery(
       String statusField,
       String status,
-    ) =>
-        _firestore
-            .collectionGroup('members')
-            .where('userId', isEqualTo: userId)
-            .where(statusField, isEqualTo: status)
-            .orderBy('joinedAt', descending: true)
-            .withConverter<FamilyMembershipDocument>(
-              fromFirestore: (snapshot, _) => FamilyMembershipDocument.fromMap(
-                snapshot.id,
-                snapshot.data()!,
-              ),
-              toFirestore: (document, _) => document.toMap(),
-            );
+    ) => _firestore
+        .collectionGroup('members')
+        .where('userId', isEqualTo: userId)
+        .where(statusField, isEqualTo: status)
+        .orderBy('joinedAt', descending: true)
+        .withConverter<FamilyMembershipDocument>(
+          fromFirestore: (snapshot, _) =>
+              FamilyMembershipDocument.fromMap(snapshot.id, snapshot.data()!),
+          toFirestore: (document, _) => document.toMap(),
+        );
     final membershipSnapshots = await Future.wait([
       membershipQuery('status', 'active').get(),
       membershipQuery('status', 'accepted').get(),
@@ -1185,11 +1183,9 @@ class FirestoreFundingRepository implements FundingRepository {
   }) async {
     final safeUserId = BackendIds.requireUserId(userId);
     final safeTransactionId = BackendIds.requireSafe(transactionId);
-    final transaction = (
-      await FirestoreDocumentCollections.fundingTransactions(
-        _firestore,
-      ).doc(safeTransactionId).get()
-    ).data()?.transaction;
+    final transaction = (await FirestoreDocumentCollections.fundingTransactions(
+      _firestore,
+    ).doc(safeTransactionId).get()).data()?.transaction;
     if (transaction == null) return null;
     if (transaction.userId != safeUserId) {
       throw StateError('Funding transaction owner mismatch.');
@@ -1202,6 +1198,95 @@ class FirestoreFundingRepository implements FundingRepository {
       throw RangeError.range(value, 1, 100, 'limit');
     }
     return value;
+  }
+}
+
+class FirestoreCareDirectoryRepository
+    implements QueryableCareDirectoryRepository {
+  FirestoreCareDirectoryRepository(this._firestore);
+
+  final FirebaseFirestore _firestore;
+
+  @override
+  Future<List<CareProvider>> getProviders() =>
+      searchProviders(const CareProviderQuery());
+
+  @override
+  Future<List<CareProvider>> searchProviders(CareProviderQuery query) async {
+    if (query.limit < 1 || query.limit > 100) {
+      throw RangeError.range(query.limit, 1, 100, 'query.limit');
+    }
+    if (query.origin != null &&
+        (!query.origin!.isValid ||
+            !query.radiusKm.isFinite ||
+            query.radiusKm <= 0 ||
+            query.radiusKm > 25)) {
+      throw ArgumentError('Invalid provider location query.');
+    }
+    Query<CareProviderDocument> providerQuery =
+        FirestoreDocumentCollections.careProviders(_firestore)
+            .where('active', isEqualTo: true);
+    final searchPrefix = _providerSearchPrefix(query.search);
+    if (query.origin != null) {
+      providerQuery = providerQuery.where(
+        'locationCell',
+        arrayContainsAny: neighboringCareLocationCells(query.origin!),
+      );
+    } else if (searchPrefix != null) {
+      providerQuery = providerQuery.where(
+        'searchPrefixes',
+        arrayContains: searchPrefix,
+      );
+    } else if (query.city != null) {
+      providerQuery = providerQuery.where(
+        'city',
+        isEqualTo: query.city!.trim(),
+      );
+    } else if (query.state != null) {
+      providerQuery = providerQuery.where(
+        'state',
+        isEqualTo: query.state!.trim(),
+      );
+    } else if (query.type != null) {
+      providerQuery = providerQuery.where(
+        'category',
+        isEqualTo: query.type!.name,
+      );
+    } else if (query.partnerStatus != null) {
+      providerQuery = providerQuery.where(
+        'partnerStatus',
+        isEqualTo: query.partnerStatus == CarePartnerStatus.partner
+            ? 'partner'
+            : 'non_partner',
+      );
+    }
+    final snapshot = await providerQuery
+        .orderBy('normalizedName')
+        .limit(query.limit)
+        .get();
+    return filterCareProviders(
+      snapshot.docs.map((document) => document.data().provider).toList(),
+      query: query.search,
+      state: query.state,
+      city: query.city,
+      type: query.type,
+      partnerStatus: query.partnerStatus,
+      origin: query.origin,
+      radiusKm: query.origin == null ? null : query.radiusKm,
+    );
+  }
+
+  String? _providerSearchPrefix(String value) {
+    final tokens = value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .split(' ')
+        .where((token) => token.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) return null;
+    final token = tokens.first;
+    return token.substring(0, token.length > 30 ? 30 : token.length);
   }
 }
 
@@ -1222,6 +1307,7 @@ class FirebaseRepositoryBundle {
        ),
        wallets = FirestoreWalletRepository(firestore),
        funding = FirestoreFundingRepository(firestore),
+       careDirectory = FirestoreCareDirectoryRepository(firestore),
        activities = FirestoreActivityRepository(firestore);
 
   final AuthRepository auth;
@@ -1231,5 +1317,6 @@ class FirebaseRepositoryBundle {
   final FamilyPocketRepository familyPockets;
   final WalletRepository wallets;
   final FundingRepository funding;
+  final CareDirectoryRepository careDirectory;
   final ActivityRepository activities;
 }

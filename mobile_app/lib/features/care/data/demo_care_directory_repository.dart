@@ -11,6 +11,7 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       name: 'Demo Community Clinic',
       state: 'Lagos',
       type: CareProviderType.clinic,
+      coordinates: CareCoordinates(latitude: 6.6018, longitude: 3.3515),
       address: 'Abraka Road, Delta State',
       closingTime: '8:00 PM',
       description:
@@ -24,6 +25,7 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       name: 'Demo Neighbourhood Pharmacy',
       state: 'Lagos',
       type: CareProviderType.pharmacy,
+      coordinates: CareCoordinates(latitude: 6.5158, longitude: 3.3899),
       address: 'Oghaire Street, Abraka, Delta State',
       closingTime: '8:00 PM',
       description:
@@ -37,6 +39,7 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       name: 'Demo Health Hospital',
       state: 'Rivers',
       type: CareProviderType.hospital,
+      coordinates: CareCoordinates(latitude: 4.8156, longitude: 7.0498),
       isPartner: false,
       services: ['Example outpatient care'],
     ),
@@ -48,6 +51,7 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       name: 'Demo Capital Clinic',
       state: 'Abuja (FCT)',
       type: CareProviderType.clinic,
+      coordinates: CareCoordinates(latitude: 9.0765, longitude: 7.3986),
       services: ['Example consultations'],
     ),
   ];

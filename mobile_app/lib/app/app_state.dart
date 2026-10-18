@@ -7,6 +7,7 @@ import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
 import 'package:healthpocket/features/auth/domain/app_pin.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
+import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
@@ -26,6 +27,7 @@ class AppState extends ChangeNotifier {
     this.savingsRepository,
     this.contributionRepository,
     this.familyPocketRepository,
+    this.careDirectoryRepository,
     this.developmentContributionsEnabled = false,
   }) : authRepository = authRepository ?? InMemoryAuthRepository(),
        pinRepository =
@@ -39,6 +41,7 @@ class AppState extends ChangeNotifier {
   final SavingsRepository? savingsRepository;
   final ContributionRepository? contributionRepository;
   final FamilyPocketRepository? familyPocketRepository;
+  final CareDirectoryRepository? careDirectoryRepository;
   final bool developmentContributionsEnabled;
   final FamilyPocketStore familyPocketStore = FamilyPocketStore();
   final ProfileStore profileStore = ProfileStore();

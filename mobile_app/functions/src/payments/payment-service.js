@@ -366,14 +366,20 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
         if (!activitySnapshot.exists) {
           transaction.create(activityRef, {
             userId: attempt.userId,
-            activityType: "funding_completed",
+            activityType: terminalEvent.type,
             metadata: {
               amountKobo: attempt.amountKobo,
               currency: attempt.currency,
-              receiptNumber: receiptNumberFor(attemptId),
+              receiptNumber: attempt.status === PAYMENT_STATUS.SUCCEEDED
+                ? receiptNumberFor(attemptId)
+                : null,
             },
             relatedEntityType: "funding_transaction",
             relatedEntityId: attemptId,
+            status: fundingTransactionStatus(attempt.status),
+            moneyMovement: attempt.status === PAYMENT_STATUS.SUCCEEDED,
+            amountKobo: attempt.amountKobo,
+            currency: attempt.currency,
             createdAt: now,
           });
         }
@@ -560,7 +566,7 @@ function fundingTerminalEvent(paymentStatus) {
       type: "funding_failed",
       title: "Add Money unsuccessful",
       body: "No money was added. You can safely try again.",
-      activity: false,
+      activity: true,
     };
   }
   if (paymentStatus === PAYMENT_STATUS.CANCELLED) {
@@ -568,7 +574,7 @@ function fundingTerminalEvent(paymentStatus) {
       type: "funding_cancelled",
       title: "Add Money cancelled",
       body: "The funding attempt was cancelled and no money was added.",
-      activity: false,
+      activity: true,
     };
   }
   return null;

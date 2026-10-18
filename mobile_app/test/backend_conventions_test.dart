@@ -11,8 +11,9 @@ void main() {
       FirestoreContributionRepository,
       FirestoreFamilyPocketRepository,
       FirestoreFundingRepository,
+      FirestoreCareDirectoryRepository,
     ];
-    expect(repositoryTypes, hasLength(5));
+    expect(repositoryTypes, hasLength(6));
   });
 
   group('BackendIds', () {

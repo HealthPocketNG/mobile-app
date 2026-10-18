@@ -54,6 +54,13 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.textContaining('No providers match'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Clear filters'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -120));
+    await tester.pump();
     await tester.tap(find.text('Clear filters'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Community');
@@ -106,7 +113,7 @@ void main() {
     );
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
-    expect(find.text('4 providers'), findsOneWidget);
+    expect(find.text('3 providers'), findsOneWidget);
   });
   testWidgets('empty directory explains that no partners are available', (
     tester,
@@ -116,10 +123,29 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.textContaining('No demo partner centres'),
+      find.textContaining('No active healthcare providers'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.textContaining('No demo partner centres'), findsOneWidget);
+    expect(
+      find.textContaining('No active healthcare providers'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('partner status filter separates partner and non-partner care', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: FindCareScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Non-partners'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Demo Health Hospital'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Demo Health Hospital'), findsOneWidget);
+    expect(find.text('Demo Community Clinic'), findsNothing);
   });
 }

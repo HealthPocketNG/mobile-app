@@ -13,11 +13,13 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  startAfter,
   updateDoc,
   where,
   writeBatch,
@@ -177,6 +179,221 @@ const seedAuthoritativeFamilyPocket = async () => {
         removedAt: null,
       });
     }
+  });
+};
+
+const healthcareProvider = ({
+  name,
+  category,
+  partnerStatus,
+  state,
+  city,
+  active = true,
+  locationCell,
+}) => ({
+  schemaVersion: 1,
+  name,
+  normalizedName: name.toLowerCase(),
+  category,
+  partnerStatus,
+  address: `${city}, ${state}`,
+  state,
+  city,
+  coordinates: { latitude: 6.6018, longitude: 3.3515 },
+  locationCell,
+  contact: {
+    phone: null,
+    email: null,
+    website: null,
+  },
+  openingInformation: null,
+  logoUrl: null,
+  imageUrls: [],
+  services: ['Consultation'],
+  searchPrefixes: [name[0].toLowerCase(), name.slice(0, 4).toLowerCase()],
+  active,
+  createdAt: now,
+  updatedAt: now,
+  deactivatedAt: active ? null : now,
+});
+
+const seedHealthcareProviders = async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(
+      doc(db, 'healthcare_providers/evercare-ikeja'),
+      healthcareProvider({
+        name: 'Evercare Hospital',
+        category: 'hospital',
+        partnerStatus: 'partner',
+        state: 'Lagos',
+        city: 'Ikeja',
+        locationCell: ['lagos', 'lagos-ikeja'],
+      }),
+    );
+    await setDoc(
+      doc(db, 'healthcare_providers/central-pharmacy-yaba'),
+      healthcareProvider({
+        name: 'Central Pharmacy',
+        category: 'pharmacy',
+        partnerStatus: 'non_partner',
+        state: 'Lagos',
+        city: 'Yaba',
+        locationCell: ['lagos', 'lagos-yaba'],
+      }),
+    );
+    await setDoc(
+      doc(db, 'healthcare_providers/retired-clinic'),
+      healthcareProvider({
+        name: 'Retired Clinic',
+        category: 'clinic',
+        partnerStatus: 'partner',
+        state: 'Lagos',
+        city: 'Ikeja',
+        active: false,
+        locationCell: ['lagos', 'lagos-ikeja'],
+      }),
+    );
+  });
+};
+
+const healthcarePayment = (uid, flowType, overrides = {}) => ({
+  schemaVersion: 1,
+  userId: uid,
+  paymentAttemptId: `attempt-${uid}-${flowType}`,
+  flowType,
+  providerId: flowType === 'partner' ? 'evercare-ikeja' : 'community-chemist',
+  providerName: flowType === 'partner'
+    ? 'Evercare Hospital'
+    : 'Community Chemist',
+  providerCategory: flowType === 'partner' ? 'hospital' : 'pharmacy',
+  providerCity: 'Ikeja',
+  providerState: 'Lagos',
+  amountKobo: 250000,
+  currency: 'NGN',
+  status: 'completed',
+  verificationStatus: flowType === 'partner' ? 'not_required' : 'verified',
+  verificationSource: flowType === 'partner' ? null : 'beta_mock',
+  verificationReference: flowType === 'partner'
+    ? null
+    : `verification-${uid}`,
+  failureCode: null,
+  paymentProvider: 'mock',
+  providerReference: `provider-${uid}-${flowType}`,
+  ledgerOperationId: `operation-${uid}-${flowType}`,
+  ledgerEntryId: `entry-${uid}-${flowType}`,
+  transactionReference: `healthcare-${uid}-${flowType}`,
+  receiptNumber: `HPC-${uid.toUpperCase()}-${flowType.toUpperCase()}`,
+  description: 'Healthcare payment',
+  channel: 'mock',
+  beneficiary: flowType === 'partner'
+    ? null
+    : {
+        accountNumberLast4: '1234',
+        bankCode: '999',
+        bankName: 'Mock Bank',
+        accountName: 'Community Chemist',
+        beneficiaryReference: `beneficiary-${uid}`,
+      },
+  requestFingerprint: 'c'.repeat(64),
+  createdAt: now,
+  updatedAt: now,
+  completedAt: now,
+  ...overrides,
+});
+
+const seedHealthcarePayments = async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(
+      doc(db, 'healthcare_payments/payment-owner-partner'),
+      healthcarePayment('owner', 'partner'),
+    );
+    await setDoc(
+      doc(db, 'healthcare_payments/payment-owner-non-partner'),
+      healthcarePayment('owner', 'non_partner'),
+    );
+    await setDoc(
+      doc(db, 'healthcare_payments/payment-stranger-partner'),
+      healthcarePayment('stranger', 'partner'),
+    );
+  });
+};
+
+const seedActivityHistory = async () => {
+  await seedAuthoritativeFamilyPocket();
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const activity = ({
+      userId,
+      activityType,
+      relatedEntityId,
+      createdAt,
+      familyPocketId,
+    }) => ({
+      userId,
+      activityType,
+      metadata: { amountKobo: 250000, currency: 'NGN' },
+      relatedEntityType: activityType.includes('healthcare')
+        ? 'healthcare_payment'
+        : 'family_contribution',
+      relatedEntityId,
+      ...(familyPocketId ? { familyPocketId } : {}),
+      createdAt,
+    });
+
+    await setDoc(doc(db, 'activities/personal-owner-healthcare'), activity({
+      userId: 'owner',
+      activityType: 'healthcare_payment_completed',
+      relatedEntityId: 'payment-owner-partner',
+      createdAt: Timestamp.fromDate(new Date('2026-01-05T12:00:00Z')),
+    }));
+    await setDoc(doc(db, 'activities/personal-owner-funding'), activity({
+      userId: 'owner',
+      activityType: 'funding_completed',
+      relatedEntityId: 'funding-owner',
+      createdAt: Timestamp.fromDate(new Date('2026-01-03T12:00:00Z')),
+    }));
+    await setDoc(doc(db, 'activities/personal-stranger-healthcare'), activity({
+      userId: 'stranger',
+      activityType: 'healthcare_payment_completed',
+      relatedEntityId: 'payment-stranger-partner',
+      createdAt: Timestamp.fromDate(new Date('2026-01-04T12:00:00Z')),
+    }));
+    await setDoc(doc(db, 'activities/family-modern-contribution'), activity({
+      userId: 'modern-member',
+      activityType: 'family_contribution_completed',
+      relatedEntityId: 'family-contribution-modern',
+      familyPocketId: 'family-modern',
+      createdAt: Timestamp.fromDate(new Date('2026-01-04T12:00:00Z')),
+    }));
+    await setDoc(doc(db, 'activities/family-modern-payment'), activity({
+      userId: 'modern-owner',
+      activityType: 'family_healthcare_payment_completed',
+      relatedEntityId: 'family-payment-modern',
+      familyPocketId: 'family-modern',
+      createdAt: Timestamp.fromDate(new Date('2026-01-02T12:00:00Z')),
+    }));
+    await setDoc(doc(db, 'family_pockets/family-other'), {
+      ownerId: 'other-owner',
+      createdBy: 'other-owner',
+      status: 'active',
+    });
+    await setDoc(doc(db, 'family_pockets/family-other/members/other-owner'), {
+      pocketId: 'family-other',
+      userId: 'other-owner',
+      role: 'owner',
+      status: 'active',
+      removedAt: null,
+      leftAt: null,
+    });
+    await setDoc(doc(db, 'activities/family-other-contribution'), activity({
+      userId: 'other-owner',
+      activityType: 'family_contribution_completed',
+      relatedEntityId: 'family-contribution-other',
+      familyPocketId: 'family-other',
+      createdAt: Timestamp.fromDate(new Date('2026-01-03T12:00:00Z')),
+    }));
   });
 };
 
@@ -1336,6 +1553,128 @@ test('DEV contribution validation rejects money-like and malformed records', asy
   );
 });
 
+test('owner activity queries support type, date and cursor pagination', async () => {
+  await seedActivityHistory();
+  const ownerDb = verifiedContext('owner').firestore();
+  const activities = collection(ownerDb, 'activities');
+
+  await assertSucceeds(
+    getDoc(doc(ownerDb, 'activities/personal-owner-healthcare')),
+  );
+  const page = await assertSucceeds(getDocs(query(
+    activities,
+    where('userId', '==', 'owner'),
+    where('activityType', '==', 'healthcare_payment_completed'),
+    where(
+      'createdAt',
+      '>=',
+      Timestamp.fromDate(new Date('2026-01-01T00:00:00Z')),
+    ),
+    where(
+      'createdAt',
+      '<=',
+      Timestamp.fromDate(new Date('2026-01-31T23:59:59Z')),
+    ),
+    orderBy('createdAt', 'desc'),
+    startAfter(Timestamp.fromDate(new Date('2026-01-06T00:00:00Z'))),
+    limit(1),
+  )));
+  if (page.size !== 1) {
+    throw new Error(`Expected one owner activity, got ${page.size}.`);
+  }
+});
+
+test('active members can page only their Family Pocket activity', async () => {
+  await seedActivityHistory();
+  const memberDb = verifiedContext('modern-member').firestore();
+  const activities = collection(memberDb, 'activities');
+
+  await assertSucceeds(
+    getDoc(doc(memberDb, 'activities/family-modern-contribution')),
+  );
+  const page = await assertSucceeds(getDocs(query(
+    activities,
+    where('familyPocketId', '==', 'family-modern'),
+    where('activityType', '==', 'family_contribution_completed'),
+    where(
+      'createdAt',
+      '>=',
+      Timestamp.fromDate(new Date('2026-01-01T00:00:00Z')),
+    ),
+    where(
+      'createdAt',
+      '<=',
+      Timestamp.fromDate(new Date('2026-01-31T23:59:59Z')),
+    ),
+    orderBy('createdAt', 'desc'),
+    startAfter(Timestamp.fromDate(new Date('2026-01-06T00:00:00Z'))),
+    limit(1),
+  )));
+  if (page.size !== 1) {
+    throw new Error(`Expected one Family activity, got ${page.size}.`);
+  }
+});
+
+test('activity history denies query-scope attacks and every client write', async () => {
+  await seedActivityHistory();
+  const ownerDb = verifiedContext('owner').firestore();
+  const memberDb = verifiedContext('modern-member').firestore();
+  const strangerDb = verifiedContext('stranger').firestore();
+  const anonymousDb = environment.unauthenticatedContext().firestore();
+
+  await assertFails(
+    getDoc(doc(ownerDb, 'activities/personal-stranger-healthcare')),
+  );
+  await assertFails(
+    getDoc(doc(ownerDb, 'activities/family-modern-contribution')),
+  );
+  await assertFails(
+    getDoc(doc(memberDb, 'activities/family-other-contribution')),
+  );
+  await assertFails(getDocs(collection(ownerDb, 'activities')));
+  await assertFails(getDocs(query(
+    collection(ownerDb, 'activities'),
+    where('activityType', '==', 'healthcare_payment_completed'),
+    orderBy('createdAt', 'desc'),
+  )));
+  await assertFails(getDocs(query(
+    collection(ownerDb, 'activities'),
+    where('userId', '==', 'stranger'),
+    orderBy('createdAt', 'desc'),
+  )));
+  await assertFails(getDocs(query(
+    collection(memberDb, 'activities'),
+    where('familyPocketId', '==', 'family-other'),
+    orderBy('createdAt', 'desc'),
+  )));
+  await assertFails(getDocs(query(
+    collection(strangerDb, 'activities'),
+    where('familyPocketId', '==', 'family-modern'),
+    orderBy('createdAt', 'desc'),
+  )));
+  await assertFails(getDocs(query(
+    collection(anonymousDb, 'activities'),
+    where('userId', '==', 'owner'),
+    orderBy('createdAt', 'desc'),
+  )));
+
+  await assertFails(setDoc(doc(ownerDb, 'activities/client-forged'), {
+    userId: 'owner',
+    activityType: 'healthcare_payment_completed',
+    metadata: { amountKobo: 99999999, currency: 'NGN' },
+    relatedEntityType: 'healthcare_payment',
+    relatedEntityId: 'forged-payment',
+    createdAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(
+    doc(ownerDb, 'activities/personal-owner-healthcare'),
+    { activityType: 'healthcare_payment_reversed' },
+  ));
+  await assertFails(deleteDoc(
+    doc(ownerDb, 'activities/personal-owner-healthcare'),
+  ));
+});
+
 test('a non-member cannot write into a Family Pocket activity feed', async () => {
   await environment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'family_pockets/family-1'), {
@@ -1377,6 +1716,117 @@ test('even active members cannot manufacture audit activity', async () => {
       createdAt: serverTimestamp(),
     }),
   );
+});
+
+test('verified Google users can read active healthcare providers', async () => {
+  await seedHealthcareProviders();
+  const userDb = verifiedContext('directory-user').firestore();
+
+  await assertSucceeds(
+    getDoc(doc(userDb, 'healthcare_providers/evercare-ikeja')),
+  );
+  await assertFails(
+    getDoc(doc(userDb, 'healthcare_providers/retired-clinic')),
+  );
+  await assertFails(
+    getDoc(doc(userDb, 'healthcare_providers/guessed-inactive-provider')),
+  );
+});
+
+test('healthcare provider list queries must be constrained to active records', async () => {
+  await seedHealthcareProviders();
+  const userDb = verifiedContext('directory-user').firestore();
+  const providers = collection(userDb, 'healthcare_providers');
+
+  const allActive = await assertSucceeds(getDocs(query(
+    providers,
+    where('active', '==', true),
+    orderBy('normalizedName'),
+    limit(20),
+  )));
+  if (allActive.size !== 2) {
+    throw new Error(`Expected two active providers, got ${allActive.size}.`);
+  }
+
+  const filtered = await assertSucceeds(getDocs(query(
+    providers,
+    where('active', '==', true),
+    where('category', '==', 'hospital'),
+    where('partnerStatus', '==', 'partner'),
+    where('state', '==', 'Lagos'),
+    where('city', '==', 'Ikeja'),
+    orderBy('normalizedName'),
+    limit(10),
+  )));
+  if (filtered.size !== 1) {
+    throw new Error(`Expected one filtered provider, got ${filtered.size}.`);
+  }
+
+  await assertSucceeds(getDocs(query(
+    providers,
+    where('active', '==', true),
+    where('searchPrefixes', 'array-contains', 'ever'),
+    orderBy('normalizedName'),
+    limit(10),
+  )));
+  await assertSucceeds(getDocs(query(
+    providers,
+    where('active', '==', true),
+    where('locationCell', 'array-contains-any', ['lagos-ikeja', 'abuja']),
+    orderBy('normalizedName'),
+    limit(10),
+  )));
+
+  await assertFails(getDocs(providers));
+  await assertFails(getDocs(query(
+    providers,
+    where('category', '==', 'hospital'),
+  )));
+  await assertFails(getDocs(query(
+    providers,
+    where('active', '==', false),
+  )));
+});
+
+test('healthcare directory rejects weak identities and every client write', async () => {
+  await seedHealthcareProviders();
+  const activePath = 'healthcare_providers/evercare-ikeja';
+  const anonymousDb = environment.unauthenticatedContext().firestore();
+  const unverifiedDb = environment.authenticatedContext('unverified-user', {
+    email: 'unverified@example.com',
+    email_verified: false,
+    firebase: { sign_in_provider: 'google.com' },
+  }).firestore();
+  const phoneDb = environment.authenticatedContext('phone-directory-user', {
+    phone_number: '+2348012345678',
+    firebase: { sign_in_provider: 'phone' },
+  }).firestore();
+
+  for (const db of [anonymousDb, unverifiedDb, phoneDb]) {
+    await assertFails(getDoc(doc(db, activePath)));
+    await assertFails(getDocs(query(
+      collection(db, 'healthcare_providers'),
+      where('active', '==', true),
+    )));
+  }
+
+  const userDb = verifiedContext('directory-user').firestore();
+  await assertFails(setDoc(
+    doc(userDb, 'healthcare_providers/forged-provider'),
+    healthcareProvider({
+      name: 'Forged Hospital',
+      category: 'hospital',
+      partnerStatus: 'partner',
+      state: 'Lagos',
+      city: 'Ikeja',
+      locationCell: ['lagos', 'lagos-ikeja'],
+    }),
+  ));
+  await assertFails(updateDoc(doc(userDb, activePath), { active: false }));
+  await assertFails(updateDoc(doc(userDb, activePath), {
+    extraData: 'schema pollution',
+  }));
+  await assertFails(deleteDoc(doc(userDb, activePath)));
 });
 
 test('phone identity cannot access Google-only MVP data', async () => {
@@ -1445,6 +1895,108 @@ test('payment attempts and provider events remain server-only', async () => {
   );
   await assertFails(getDocs(collection(ownerDb, 'payment_attempts')));
   await assertFails(getDocs(collection(ownerDb, 'provider_events')));
+});
+
+test('healthcare payments are readable only by their verified owner', async () => {
+  await seedHealthcarePayments();
+  const ownerDb = verifiedContext('owner').firestore();
+  const strangerDb = verifiedContext('stranger').firestore();
+  const ownerPartnerPath = 'healthcare_payments/payment-owner-partner';
+  const ownerNonPartnerPath =
+    'healthcare_payments/payment-owner-non-partner';
+
+  await assertSucceeds(getDoc(doc(ownerDb, ownerPartnerPath)));
+  await assertSucceeds(getDoc(doc(ownerDb, ownerNonPartnerPath)));
+  await assertFails(getDoc(doc(strangerDb, ownerPartnerPath)));
+  await assertFails(
+    getDoc(doc(ownerDb, 'healthcare_payments/payment-stranger-partner')),
+  );
+  await assertFails(
+    getDoc(doc(ownerDb, 'healthcare_payments/guessed-payment-id')),
+  );
+
+  const owned = await assertSucceeds(getDocs(query(
+    collection(ownerDb, 'healthcare_payments'),
+    where('userId', '==', 'owner'),
+    orderBy('createdAt', 'desc'),
+    limit(20),
+  )));
+  if (owned.size !== 2) {
+    throw new Error(`Expected two healthcare payments, got ${owned.size}.`);
+  }
+  await assertFails(getDocs(collection(ownerDb, 'healthcare_payments')));
+  await assertFails(getDocs(query(
+    collection(ownerDb, 'healthcare_payments'),
+    where('userId', '==', 'stranger'),
+    orderBy('createdAt', 'desc'),
+  )));
+});
+
+test('healthcare payment history rejects anonymous and weak identities', async () => {
+  await seedHealthcarePayments();
+  const path = 'healthcare_payments/payment-owner-partner';
+  const anonymousDb = environment.unauthenticatedContext().firestore();
+  const unverifiedDb = environment.authenticatedContext('owner', {
+    email: 'owner@example.com',
+    email_verified: false,
+    firebase: { sign_in_provider: 'google.com' },
+  }).firestore();
+  const phoneDb = environment.authenticatedContext('owner', {
+    phone_number: '+2348012345678',
+    firebase: { sign_in_provider: 'phone' },
+  }).firestore();
+
+  for (const db of [anonymousDb, unverifiedDb, phoneDb]) {
+    await assertFails(getDoc(doc(db, path)));
+    await assertFails(getDocs(query(
+      collection(db, 'healthcare_payments'),
+      where('userId', '==', 'owner'),
+      orderBy('createdAt', 'desc'),
+    )));
+  }
+});
+
+test('clients cannot forge or mutate healthcare payment outcomes', async () => {
+  await seedHealthcarePayments();
+  const ownerDb = verifiedContext('owner').firestore();
+  const payment = doc(
+    ownerDb,
+    'healthcare_payments/payment-owner-partner',
+  );
+
+  await assertFails(setDoc(
+    doc(ownerDb, 'healthcare_payments/forged-success'),
+    healthcarePayment('owner', 'non_partner', {
+      status: 'completed',
+      verificationStatus: 'verified',
+      receiptNumber: 'FORGED-RECEIPT',
+      beneficiary: {
+        accountNumberLast4: '1234',
+        bankCode: '999',
+        bankName: 'Mock Bank',
+        accountName: 'Attacker',
+        beneficiaryReference: 'forged-beneficiary',
+        accountNumber: '0000001234',
+      },
+    }),
+  ));
+
+  for (const mutation of [
+    { status: 'completed' },
+    { status: 'reversed' },
+    { receiptNumber: 'FORGED-RECEIPT' },
+    { verificationStatus: 'verified' },
+    { verificationReference: 'forged-verification' },
+    { amountKobo: -1 },
+    { amountKobo: 100000000001 },
+    { amountKobo: '250000' },
+    { userId: 'stranger' },
+    { ledgerEntryId: 'forged-ledger-entry' },
+    { extraData: 'x'.repeat(10000) },
+  ]) {
+    await assertFails(updateDoc(payment, mutation));
+  }
+  await assertFails(deleteDoc(payment));
 });
 
 test('funding transactions and notification events are owner-readable and server-write-only', async () => {

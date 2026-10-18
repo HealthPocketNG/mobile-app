@@ -293,14 +293,99 @@ numbers, PINs, tokens, request bodies, Firestore payloads, and exception
 messages are never logged. The default sink writes JSON to `dart:developer`;
 it does not create another Firestore collection or transmit logs externally.
 
+## Healthcare provider directory
+
+- `healthcare_providers/{providerId}` is the canonical, non-PII directory. IDs
+  are stable lowercase slugs. Each document stores schema version, name and
+  normalized name, category, partner status, address, state/city, coordinates,
+  coarse geo cells, contacts, opening information, optional HTTPS logo/images,
+  services, bounded search prefixes, active state, and lifecycle timestamps.
+- Approved categories are `hospital`, `clinic`, `pharmacy`, `diagnostics`, and
+  `other`; partnership is explicitly `partner` or `non_partner`.
+- Verified Google users can discover only documents where `active == true`.
+  Flutter's converter is read-only and Security Rules deny every client create,
+  update, activation/deactivation, and delete operation.
+- Firestore performs a bounded active-provider query using one selective
+  dimension (geo cells, search prefix, city, state, category, or partnership),
+  orders by normalized name, and caps results at 100. The repository applies
+  any remaining filters and exact radius calculation locally. Composite indexes
+  for those query shapes are declared in `firestore.indexes.json`.
+- Coordinates use numeric latitude/longitude. A 0.25-degree coarse-cell query
+  reads the origin cell and its eight neighbors, then the app uses Haversine
+  distance for the exact radius and builds a Google Maps directions URL from
+  the stored coordinates. Search and filters remain usable when location is
+  denied or unavailable.
+- `functions/src/providers/provider-directory-service.js` is the trusted admin
+  and seeding boundary. It validates the full schema, URLs, coordinates,
+  categories, IDs, and admin claim. Seeding can deactivate missing providers;
+  deactivation retains the document and timestamps so future historical
+  transactions do not lose their provider reference. It is not exported as a
+  public callable and no provider dashboard is included.
+
+## Healthcare payment foundation
+
+- `healthcare_payments/{paymentId}` is the owner-readable, server-owned history
+  projection for partner and non-partner payments. It stores integer kobo,
+  normalized lifecycle and verification states, a stable transaction reference,
+  provider snapshot, nullable gateway/ledger links, receipt metadata, and trusted
+  timestamps. The provider snapshot preserves historical display information if
+  the directory record is later changed or deactivated.
+- A deterministic payment ID and request fingerprint make retries idempotent.
+  The service validates the active provider, its partner/non-partner classification,
+  the wallet state, amount, and available balance before creating the pending
+  transaction. The ledger still repeats the balance check atomically when the
+  trusted result attempts to debit, protecting concurrent payments.
+- Partner and non-partner workflows share the provider-neutral payment service
+  and ledger. Only trusted verification can complete a debit. Completed payments
+  create one immutable ledger posting, one activity event, receipt-ready metadata,
+  and one queued notification; failed or pending attempts remain stored without
+  pretending that settlement succeeded.
+- Non-partner payments additionally use replaceable account-resolution and
+  healthcare-eligibility contracts. The local adapters are explicit mocks and
+  never claim production MCC verification. Firestore stores only the account
+  number's last four digits and an opaque beneficiary reference—not the raw bank
+  account number.
+- Clients may query only their own history by `userId` ordered by `createdAt`.
+  All healthcare-payment creates, updates, deletes, verification transitions,
+  ledger links, and receipt writes are denied to Flutter by Security Rules.
+
+## Activity and transaction history
+
+- `activities/{activityId}` is the normalized, append-only read feed. Each event
+  identifies its owner, type, authoritative related entity, timestamp, optional
+  Family Pocket context, and bounded display metadata. Trusted writers also add
+  canonical status, amount, currency, and money-movement hints where relevant.
+- `functions/src/activity/activity-history-service.js` provides newest-first
+  cursor pagination, exact activity-type filtering, inclusive date filtering,
+  transaction detail, clean empty results, and bounded JSON/CSV statement data.
+  Opaque cursors are tied to the original owner/family scope and filters.
+- Known events are resolved against `funding_transactions`,
+  `healthcare_payments`, `scheduled_contributions`,
+  `family_contribution_attempts`, or `savings_plans`. The returned amount,
+  currency, ownership, Family Pocket linkage, provider, receipt, and lifecycle
+  state are derived or validated against that authoritative source. Missing or
+  mismatched sources fail closed instead of displaying unverified history.
+- The feed covers direct funding, scheduled savings outcomes, healthcare
+  completion/reversal/failure, Family Pocket contributions, and non-financial
+  savings-plan changes. Failed and cancelled terminal events explicitly report
+  no money movement.
+- Personal history and exports use `userId == authenticated user`. Family Pocket
+  history and exports require current active/accepted membership and stop working
+  after removal or departure. Statement generation requires a bounded date range,
+  caps record count, and produces spreadsheet-safe CSV cells.
+- Composite indexes support owner or Family Pocket history ordered by newest
+  first, with additional indexes for activity-type filters. Security Rules allow
+  only verified scoped reads and deny every client activity create, update, or
+  delete.
+
 ## Rules hardening notes
 
 - New owner records must use canonical document IDs, and relationship IDs must
   agree with their document paths.
 - Family Pocket creation must atomically include its accepted founding admin.
 - Membership identity is bound to the membership document ID.
-- Client-created activity/audit events are denied. A future trusted backend is
-  responsible for creating authoritative audit events.
+- Client-created activity/audit events are denied. Trusted payment, savings,
+  healthcare, and Family Pocket services create authoritative audit events.
 - Existing legacy personal/savings records can still be read through
   owner-scoped queries, but cannot be duplicated or rewritten onto a
   non-canonical path.

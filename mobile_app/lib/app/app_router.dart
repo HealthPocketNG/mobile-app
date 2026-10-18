@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:healthpocket/features/care/data/demo_care_directory_repository.dart';
 import 'package:healthpocket/features/care/presentation/find_care_screen.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/app/app_state.dart';
@@ -139,6 +140,9 @@ class AppRouter {
                 appState.updateNotificationPreferences,
           ),
           AppRoute.findCare => FindCareScreen(
+            repository:
+                appState.careDirectoryRepository ??
+                const DemoCareDirectoryRepository(),
             demoRequestsEnabled: appState.developmentContributionsEnabled,
             savingsStore: appState.savingsStore,
           ),

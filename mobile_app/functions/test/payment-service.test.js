@@ -124,6 +124,9 @@ test("provider timeout remains non-financial with a nullable external reference"
   assert.equal(attempt.status, PAYMENT_STATUS.TIMED_OUT);
   assert.equal(attempt.providerReference, null);
   assert.equal((await db.collection("ledger_entries").get()).size, 0);
+  const activity = (await db.collection("activities").get()).docs[0].data();
+  assert.equal(activity.activityType, "funding_failed");
+  assert.equal(activity.moneyMovement, false);
 });
 
 test("verification timeout records failure without credit and can be retried", async () => {

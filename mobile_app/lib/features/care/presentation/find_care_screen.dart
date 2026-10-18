@@ -10,6 +10,7 @@ import 'package:healthpocket/features/care/presentation/demo_care_journey_screen
 import 'package:healthpocket/features/care/presentation/non_partner_payment_screen.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 enum DemoLocationStatus { notRequested, granted, denied, unavailable }
 
@@ -31,6 +32,7 @@ class _FindCareScreenState extends State<FindCareScreen> {
   final _search = TextEditingController();
   List<CareProvider> _providers = [];
   CareProviderType? _type;
+  CarePartnerStatus? _partnerStatus;
   bool _loading = true;
   bool _failed = false;
   DemoLocationStatus _locationStatus = DemoLocationStatus.notRequested;
@@ -64,6 +66,7 @@ class _FindCareScreenState extends State<FindCareScreen> {
   void _clearFilters() => setState(() {
     _search.clear();
     _type = null;
+    _partnerStatus = null;
   });
   void _open(CareProvider provider) => Navigator.push(
     context,
@@ -82,9 +85,12 @@ class _FindCareScreenState extends State<FindCareScreen> {
       _providers,
       query: _search.text,
       type: _type,
+      partnerStatus: _partnerStatus,
     );
     if (_locationStatus == DemoLocationStatus.granted) {
-      results.sort((a, b) => a.mockDistanceKm.compareTo(b.mockDistanceKm));
+      results.sort(
+        (a, b) => a.displayDistanceKm.compareTo(b.displayDistanceKm),
+      );
     }
     final partners = results.where((item) => item.isPartner).toList();
     final other = results.where((item) => !item.isPartner).toList();
@@ -131,6 +137,11 @@ class _FindCareScreenState extends State<FindCareScreen> {
                 selected: _type,
                 onSelected: (value) => setState(() => _type = value),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              _PartnerFilter(
+                selected: _partnerStatus,
+                onSelected: (value) => setState(() => _partnerStatus = value),
+              ),
               const SizedBox(height: AppSpacing.lg),
               if (_loading)
                 const HealthPocketStateView(
@@ -154,7 +165,7 @@ class _FindCareScreenState extends State<FindCareScreen> {
                       ? 'No partners nearby'
                       : 'No providers found',
                   message: _providers.isEmpty
-                      ? 'No demo partner centres are available right now.'
+                      ? 'No active healthcare providers are available in this area right now.'
                       : 'No providers match your search. Try another filter.',
                   primaryActionLabel: _providers.isEmpty
                       ? 'Try a different location'
@@ -348,7 +359,38 @@ class _FilterChips extends StatelessWidget {
           active: selected == CareProviderType.diagnostics,
           onTap: () => onSelected(CareProviderType.diagnostics),
         ),
+        _Filter(
+          label: 'Other',
+          active: selected == CareProviderType.other,
+          onTap: () => onSelected(CareProviderType.other),
+        ),
       ],
+    ),
+  );
+}
+
+class _PartnerFilter extends StatelessWidget {
+  const _PartnerFilter({required this.selected, required this.onSelected});
+
+  final CarePartnerStatus? selected;
+  final ValueChanged<CarePartnerStatus?> onSelected;
+
+  @override
+  Widget build(BuildContext context) => SegmentedButton<CarePartnerStatus?>(
+    segments: const [
+      ButtonSegment(value: null, label: Text('All providers')),
+      ButtonSegment(value: CarePartnerStatus.partner, label: Text('Partners')),
+      ButtonSegment(
+        value: CarePartnerStatus.nonPartner,
+        label: Text('Non-partners'),
+      ),
+    ],
+    selected: {selected},
+    onSelectionChanged: (selection) => onSelected(selection.first),
+    showSelectedIcon: false,
+    style: const ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
     ),
   );
 }
@@ -428,7 +470,7 @@ class _ProviderTile extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${_typeName(provider.type)}${showDistance ? ' · ${provider.mockDistanceKm.toStringAsFixed(1)} km' : ''}',
+                      '${_typeName(provider.type)}${showDistance ? ' · ${provider.displayDistanceKm.toStringAsFixed(1)} km' : ''}',
                       style: const TextStyle(
                         color: AppColors.inkMuted,
                         fontSize: 12,
@@ -471,6 +513,7 @@ class _Logo extends StatelessWidget {
       CareProviderType.hospital => LucideIcons.building2,
       CareProviderType.clinic => LucideIcons.stethoscope,
       CareProviderType.diagnostics => LucideIcons.flaskConical,
+      CareProviderType.other => LucideIcons.cross,
     };
     return Container(
       width: large ? 66 : 48,
@@ -651,20 +694,37 @@ class _ProviderDetails extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                const Row(
+                Row(
                   children: [
                     Expanded(
-                      child: _Action(icon: LucideIcons.phone, label: 'Call'),
+                      child: _Action(
+                        icon: LucideIcons.phone,
+                        label: 'Call',
+                        onTap: provider.effectivePhone == null
+                            ? null
+                            : () => launchUrl(
+                                Uri(
+                                  scheme: 'tel',
+                                  path: provider.effectivePhone,
+                                ),
+                              ),
+                      ),
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: _Action(
                         icon: LucideIcons.navigation,
                         label: 'Directions',
+                        onTap: provider.directionsUri == null
+                            ? null
+                            : () => launchUrl(
+                                provider.directionsUri!,
+                                mode: LaunchMode.externalApplication,
+                              ),
                       ),
                     ),
-                    SizedBox(width: 8),
-                    Expanded(
+                    const SizedBox(width: 8),
+                    const Expanded(
                       child: _Action(icon: LucideIcons.heart, label: 'Save'),
                     ),
                   ],
@@ -775,30 +835,39 @@ class _RoundButton extends StatelessWidget {
 }
 
 class _Action extends StatelessWidget {
-  const _Action({required this.icon, required this.label});
+  const _Action({required this.icon, required this.label, this.onTap});
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    decoration: BoxDecoration(
-      color: AppColors.primarySoft,
+  Widget build(BuildContext context) => Material(
+    color: onTap == null ? AppColors.surfaceMuted : AppColors.primarySoft,
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
+      onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: AppColors.primary, size: 20),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-          ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: onTap == null ? AppColors.inkMuted : AppColors.primary,
+              size: 20,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: onTap == null ? AppColors.inkMuted : AppColors.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     ),
   );
 }
@@ -808,4 +877,5 @@ String _typeName(CareProviderType type) => switch (type) {
   CareProviderType.hospital => 'Hospital',
   CareProviderType.pharmacy => 'Pharmacy',
   CareProviderType.diagnostics => 'Diagnostics',
+  CareProviderType.other => 'Healthcare provider',
 };

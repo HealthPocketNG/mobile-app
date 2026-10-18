@@ -113,6 +113,7 @@ Future<void> bootstrapFirebase({
       savingsRepository: repositories.savings,
       contributionRepository: repositories.contributions,
       familyPocketRepository: repositories.familyPockets,
+      careDirectoryRepository: repositories.careDirectory,
       developmentContributionsEnabled:
           environment == AppEnvironment.development,
     ),

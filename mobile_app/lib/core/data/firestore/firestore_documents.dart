@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:healthpocket/core/data/firestore/firestore_serialization.dart';
 import 'package:healthpocket/features/activity/domain/activity_record.dart';
+import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
@@ -386,11 +387,7 @@ class FundingTransactionDocument {
       paymentAttemptId: firestoreString(data, 'paymentAttemptId'),
       amountKobo: firestoreInt(data, 'amountKobo'),
       currency: firestoreString(data, 'currency'),
-      status: firestoreEnum(
-        data,
-        'status',
-        FundingTransactionStatus.values,
-      ),
+      status: firestoreEnum(data, 'status', FundingTransactionStatus.values),
       provider: firestoreString(data, 'provider'),
       providerReference: firestoreNullableString(data, 'providerReference'),
       ledgerOperationId: firestoreNullableString(data, 'ledgerOperationId'),
@@ -646,6 +643,102 @@ class ActivityRecordDocument {
   };
 }
 
+class CareProviderDocument {
+  const CareProviderDocument(this.provider);
+
+  final CareProvider provider;
+
+  factory CareProviderDocument.fromMap(String id, Map<String, dynamic> data) {
+    final coordinates = firestoreObjectMap(data, 'coordinates');
+    final latitude = coordinates['latitude'];
+    final longitude = coordinates['longitude'];
+    if (latitude is! num || longitude is! num) {
+      throw const FormatException('Provider coordinates must be numeric.');
+    }
+    final contact = firestoreObjectMap(data, 'contact');
+    final rawServices = data['services'];
+    final rawImages = data['imageUrls'];
+    final rawLocationCells = data['locationCell'];
+    if (rawServices is! List ||
+        rawImages is! List ||
+        rawLocationCells is! List) {
+      throw const FormatException(
+        'Provider services, images and location cells must be lists.',
+      );
+    }
+    final partnerStatus = firestoreString(data, 'partnerStatus');
+    return CareProviderDocument(
+      CareProvider(
+        id: id,
+        name: firestoreString(data, 'name'),
+        state: firestoreString(data, 'state'),
+        city: firestoreString(data, 'city'),
+        type: firestoreEnum(data, 'category', CareProviderType.values),
+        services: rawServices
+            .map((value) {
+              if (value is! String) {
+                throw const FormatException(
+                  'Provider services must be strings.',
+                );
+              }
+              return value;
+            })
+            .toList(growable: false),
+        address: firestoreNullableString(data, 'address'),
+        openingHours: firestoreNullableString(data, 'openingInformation'),
+        active: firestoreBool(data, 'active'),
+        isPartner: switch (partnerStatus) {
+          'partner' => true,
+          'non_partner' => false,
+          _ => throw FormatException(
+            'Unknown provider partnerStatus "$partnerStatus".',
+          ),
+        },
+        isDemo: false,
+        coordinates: CareCoordinates(
+          latitude: latitude.toDouble(),
+          longitude: longitude.toDouble(),
+        ),
+        contact: CareProviderContact(
+          phone: contact['phone'] as String?,
+          email: contact['email'] as String?,
+          website: _providerUri(contact['website']),
+        ),
+        logoUrl: _providerUri(data['logoUrl']),
+        imageUrls: rawImages
+            .map(_providerUri)
+            .whereType<Uri>()
+            .toList(growable: false),
+        locationCells: rawLocationCells
+            .map((value) {
+              if (value is! String) {
+                throw const FormatException(
+                  'Provider location cells must be strings.',
+                );
+              }
+              return value;
+            })
+            .toList(growable: false),
+        description: firestoreNullableString(data, 'description'),
+        createdAt: firestoreNullableDateTime(data, 'createdAt'),
+        updatedAt: firestoreNullableDateTime(data, 'updatedAt'),
+      ),
+    );
+  }
+}
+
+Uri? _providerUri(Object? value) {
+  if (value == null) return null;
+  if (value is! String) {
+    throw const FormatException('Provider URL must be a string or null.');
+  }
+  final uri = Uri.tryParse(value);
+  if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+    throw FormatException('Invalid provider URL "$value".');
+  }
+  return uri;
+}
+
 abstract final class FirestoreDocumentCollections {
   static CollectionReference<UserProfileDocument> users(
     FirebaseFirestore firestore,
@@ -728,10 +821,8 @@ abstract final class FirestoreDocumentCollections {
   ) => firestore
       .collection('funding_transactions')
       .withConverter(
-        fromFirestore: (snapshot, _) => FundingTransactionDocument.fromMap(
-          snapshot.id,
-          snapshot.data()!,
-        ),
+        fromFirestore: (snapshot, _) =>
+            FundingTransactionDocument.fromMap(snapshot.id, snapshot.data()!),
         toFirestore: (_, _) => throw UnsupportedError(
           'Funding transactions are server-owned records.',
         ),
@@ -781,5 +872,17 @@ abstract final class FirestoreDocumentCollections {
         fromFirestore: (snapshot, _) =>
             ActivityRecordDocument.fromMap(snapshot.id, snapshot.data()!),
         toFirestore: (document, _) => document.toMap(),
+      );
+
+  static CollectionReference<CareProviderDocument> careProviders(
+    FirebaseFirestore firestore,
+  ) => firestore
+      .collection('healthcare_providers')
+      .withConverter(
+        fromFirestore: (snapshot, _) =>
+            CareProviderDocument.fromMap(snapshot.id, snapshot.data()!),
+        toFirestore: (_, _) => throw UnsupportedError(
+          'Healthcare providers are maintained by trusted admin tooling.',
+        ),
       );
 }

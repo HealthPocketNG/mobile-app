@@ -150,62 +150,62 @@
 
 ## 9. Healthcare Provider Directory / Find Care
 
-- [ ] Create canonical healthcare provider model.
-- [ ] Support partner and non-partner provider status.
-- [ ] Store provider name, category/type, address, state/city, coordinates, contact details, opening information where available, logo/image references, and active status.
-- [ ] Support hospitals, clinics, pharmacies, diagnostics and other approved healthcare categories.
-- [ ] Implement provider search.
-- [ ] Implement category filters.
-- [ ] Implement partner/non-partner filtering.
-- [ ] Implement location-aware querying appropriate for the current Firebase architecture.
-- [ ] Store latitude/longitude required for map/directions integration.
-- [ ] Return data needed for the app to open Google Maps directions.
-- [ ] Handle no-location-permission and no-nearby-provider states cleanly.
-- [ ] Ensure provider records cannot be edited by ordinary users.
-- [ ] Create an admin/seeding mechanism for maintaining provider records without building a provider dashboard.
-- [ ] Add provider activation/deactivation so closed/invalid providers can be removed from discovery without destroying historical transactions.
+- [x] Create canonical healthcare provider model.
+- [x] Support partner and non-partner provider status.
+- [x] Store provider name, category/type, address, state/city, coordinates, contact details, opening information where available, logo/image references, and active status.
+- [x] Support hospitals, clinics, pharmacies, diagnostics and other approved healthcare categories.
+- [x] Implement provider search.
+- [x] Implement category filters.
+- [x] Implement partner/non-partner filtering.
+- [x] Implement location-aware querying appropriate for the current Firebase architecture.
+- [x] Store latitude/longitude required for map/directions integration.
+- [x] Return data needed for the app to open Google Maps directions.
+- [x] Handle no-location-permission and no-nearby-provider states cleanly.
+- [x] Ensure provider records cannot be edited by ordinary users.
+- [x] Create an admin/seeding mechanism for maintaining provider records without building a provider dashboard.
+- [x] Add provider activation/deactivation so closed/invalid providers can be removed from discovery without destroying historical transactions.
 
 ## 10. Healthcare Payment Flow — Prepared, Mocked
 
 ### HealthPocket Partners
 
-- [ ] Create healthcare-payment transaction model.
-- [ ] Allow user to select an active HP partner and enter an amount.
-- [ ] Validate amount and available HealthPocket balance.
-- [ ] Validate provider exists and is active.
-- [ ] Create pending transaction before processing.
-- [ ] Use mock payment/settlement adapter for now.
-- [ ] Finalize debit only through trusted backend logic.
-- [ ] Create ledger debit, activity event, receipt metadata, and notification after successful mock settlement.
-- [ ] Preserve failed/pending transaction records for debugging and user history.
-- [ ] Do not implement QR payment for MVP.
+- [x] Create healthcare-payment transaction model.
+- [x] Allow user to select an active HP partner and enter an amount.
+- [x] Validate amount and available HealthPocket balance.
+- [x] Validate provider exists and is active.
+- [x] Create pending transaction before processing.
+- [x] Use mock payment/settlement adapter for now.
+- [x] Finalize debit only through trusted backend logic.
+- [x] Create ledger debit, activity event, receipt metadata, and notification after successful mock settlement.
+- [x] Preserve failed/pending transaction records for debugging and user history.
+- [x] Do not implement QR payment for MVP.
 
 ### Non-Partners
 
-- [ ] Build the non-partner transaction data model and workflow now.
-- [ ] Support beneficiary/provider bank-detail fields required by the future integration.
-- [ ] Create account-resolution/beneficiary-verification interface.
-- [ ] Create healthcare-provider/MCC-verification interface but leave the real implementation unconnected.
-- [ ] Use explicit mock verification states for development.
-- [ ] Do not fake production MCC verification.
-- [ ] Require a verified/allowed state before the mock payment flow can proceed.
-- [ ] Build failure state for provider verification rejection.
-- [ ] Keep partner and non-partner flows distinguishable in transaction records.
-- [ ] Make the future provider/MCC service replaceable without rewriting transaction/business logic.
+- [x] Build the non-partner transaction data model and workflow now.
+- [x] Support beneficiary/provider bank-detail fields required by the future integration.
+- [x] Create account-resolution/beneficiary-verification interface.
+- [x] Create healthcare-provider/MCC-verification interface but leave the real implementation unconnected.
+- [x] Use explicit mock verification states for development.
+- [x] Do not fake production MCC verification.
+- [x] Require a verified/allowed state before the mock payment flow can proceed.
+- [x] Build failure state for provider verification rejection.
+- [x] Keep partner and non-partner flows distinguishable in transaction records.
+- [x] Make the future provider/MCC service replaceable without rewriting transaction/business logic.
 
 ## 11. Activity & Transaction History
 
-- [ ] Create one normalized activity/read model sourced from authoritative backend events.
-- [ ] Include savings contributions, direct top-ups, healthcare payments, Family Pocket contributions, reversals/failures where appropriate.
-- [ ] Support pagination.
-- [ ] Support filters by transaction/activity type.
-- [ ] Support date-range filters.
-- [ ] Ensure activity amounts/statuses match authoritative transaction/ledger data.
-- [ ] Provide transaction-detail endpoint/repository method.
-- [ ] Do not allow users to edit financial history.
-- [ ] Implement empty state cleanly.
-- [ ] Prepare statement/export data generation for MVP.
-- [ ] Ensure export only contains records belonging to the authenticated user and permitted Family Pocket context.
+- [x] Create one normalized activity/read model sourced from authoritative backend events.
+- [x] Include savings contributions, direct top-ups, healthcare payments, Family Pocket contributions, reversals/failures where appropriate.
+- [x] Support pagination.
+- [x] Support filters by transaction/activity type.
+- [x] Support date-range filters.
+- [x] Ensure activity amounts/statuses match authoritative transaction/ledger data.
+- [x] Provide transaction-detail endpoint/repository method.
+- [x] Do not allow users to edit financial history.
+- [x] Implement empty state cleanly.
+- [x] Prepare statement/export data generation for MVP.
+- [x] Ensure export only contains records belonging to the authenticated user and permitted Family Pocket context.
 
 ## 12. Receipts
 
