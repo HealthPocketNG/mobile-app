@@ -50,6 +50,7 @@ beforeEach(async () => {
     "provider_events",
     "activities",
     "notification_events",
+    "receipts",
   ].map((collection) => db.recursiveDelete(db.collection(collection))));
   ledger = buildLedgerService({ db, logger: silentLogger });
   gateway = new MockPaymentGateway();
@@ -144,7 +145,14 @@ test("partner payment completes one debit with receipt, activity and notificatio
   assert.ok(document.ledgerEntryId);
   assert.equal(document.providerName, "Partner Clinic");
   assert.equal((await db.collection("activities").get()).size, 1);
-  assert.equal((await db.collection("notification_events").get()).size, 1);
+  const notifications = await db.collection("notification_events").get();
+  assert.equal(notifications.size, 1);
+  assert.equal(notifications.docs[0].data().category, "payment");
+  assert.equal(notifications.docs[0].data().readState, "unread");
+  const receipt = (await db.collection("receipts").doc(completed.receiptNumber).get()).data();
+  assert.equal(receipt.transactionId, pending.paymentId);
+  assert.equal(receipt.provider.name, "Partner Clinic");
+  assert.equal(receipt.status, "completed");
 });
 
 test("insufficient balance is rejected before any payment record or attempt", async () => {
@@ -192,6 +200,7 @@ test("pending and failed partner outcomes never debit the wallet", async () => {
   const activity = (await db.collection("activities").get()).docs[0].data();
   assert.equal(activity.activityType, "healthcare_payment_failed");
   assert.equal(activity.moneyMovement, false);
+  assert.equal((await db.collection("receipts").get()).empty, true);
 });
 
 test("non-partner payment requires both mock verifications before settlement", async () => {
@@ -211,6 +220,7 @@ test("non-partner payment requires both mock verifications before settlement", a
   });
   assert.equal(completed.status, "completed");
   assert.equal(completed.flowType, "non_partner");
+  assert.equal((await db.collection("receipts").get()).size, 1);
 });
 
 test("non-partner eligibility rejection blocks payment and preserves failure", async () => {
@@ -228,6 +238,7 @@ test("non-partner eligibility rejection blocks payment and preserves failure", a
     (await db.collection("activities").get()).docs[0].data().activityType,
     "healthcare_payment_failed",
   );
+  assert.equal((await db.collection("receipts").get()).empty, true);
 });
 
 test("mock verification never claims production MCC verification", async () => {

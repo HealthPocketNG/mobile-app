@@ -209,29 +209,29 @@
 
 ## 12. Receipts
 
-- [ ] Define canonical receipt data model.
-- [ ] Include HealthPocket reference ID, transaction ID, amount, date/time, provider/recipient, payment type/method, status, and relevant user-facing metadata.
-- [ ] Generate receipts from authoritative completed transaction data rather than client input.
-- [ ] Ensure receipt/reference IDs are unique.
-- [ ] Prevent receipt tampering.
-- [ ] Build backend data/export contract needed for download/share.
-- [ ] Ensure failed/pending transactions cannot masquerade as completed receipts.
-- [ ] Preserve historical receipt data even if provider profile details later change.
+- [x] Define canonical receipt data model.
+- [x] Include HealthPocket reference ID, transaction ID, amount, date/time, provider/recipient, payment type/method, status, and relevant user-facing metadata.
+- [x] Generate receipts from authoritative completed transaction data rather than client input.
+- [x] Ensure receipt/reference IDs are unique.
+- [x] Prevent receipt tampering.
+- [x] Build backend data/export contract needed for download/share.
+- [x] Ensure failed/pending transactions cannot masquerade as completed receipts.
+- [x] Preserve historical receipt data even if provider profile details later change.
 
 ## 13. Notifications
 
-- [ ] Create in-app notification model.
-- [ ] Support read/unread state.
-- [ ] Support notification types: savings, funding, payment, Family Pocket, security/system.
-- [ ] Generate notifications from backend events rather than UI assumptions.
-- [ ] Add pagination/query strategy.
-- [ ] Implement mark-read / mark-all-read securely.
-- [ ] Prepare Firebase Cloud Messaging device-token model.
-- [ ] Support token registration/removal/refresh.
-- [ ] Build push-notification service abstraction.
-- [ ] Ensure notification failure never changes the underlying transaction outcome.
-- [ ] Avoid placing sensitive financial/account data unnecessarily in lock-screen push payloads.
-- [ ] Test multiple devices and stale token handling.
+- [x] Create in-app notification model.
+- [x] Support read/unread state.
+- [x] Support notification types: savings, funding, payment, Family Pocket, security/system.
+- [x] Generate notifications from backend events rather than UI assumptions.
+- [x] Add pagination/query strategy.
+- [x] Implement mark-read / mark-all-read securely.
+- [x] Prepare Firebase Cloud Messaging device-token model.
+- [x] Support token registration/removal/refresh.
+- [x] Build push-notification service abstraction.
+- [x] Ensure notification failure never changes the underlying transaction outcome.
+- [x] Avoid placing sensitive financial/account data unnecessarily in lock-screen push payloads.
+- [x] Test multiple devices and stale token handling.
 
 ## 14. “What Can My Balance Cover?”
 

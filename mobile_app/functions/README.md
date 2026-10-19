@@ -188,3 +188,59 @@ records. Spreadsheet-formula prefixes are neutralized in generated CSV cells.
 Clients retain read-only access under Firestore Security Rules; every activity
 create, update, and delete remains trusted-backend-only. No public history
 callable or live deployment is included in this phase.
+
+## Receipts
+
+`src/receipts/receipt-service.js` defines the canonical immutable
+`receipts/{receiptNumber}` model for completed wallet funding and healthcare
+payments. The document ID is the HealthPocket receipt number (`HPF-...` or
+`HPC-...`), making receipt-number uniqueness enforceable by Firestore. Every
+receipt includes the owner, source transaction ID/reference, integer-kobo
+amount, currency, issued time, completed status, payment type/method, provider
+and recipient snapshots, description, and authoritative ledger links.
+
+Receipt creation runs inside the same trusted transaction that projects a
+successful payment outcome. Pending, failed, timed-out, and cancelled attempts
+cannot call the receipt builders. Idempotent settlement retries validate the
+existing receipt fingerprint instead of overwriting it. Healthcare provider
+details are copied from the payment's historical provider snapshot, so later
+directory edits or deactivation do not change an issued receipt.
+
+The receipt read service supports owner-only lookup by receipt number or source
+transaction and returns JSON or plain-text download/share contracts. Stored
+receipts are checked against a deterministic source fingerprint and fail closed
+if corrupted. Clients may read only their own receipts and cannot create,
+update, or delete them. No PDF renderer, frontend share sheet, public callable,
+or deployment is included in this backend phase.
+
+## Notifications
+
+`src/notifications/notification-service.js` is the trusted notification
+boundary. It stores a durable, owner-scoped `notification_events` inbox with
+canonical categories, unread/read state, newest-first cursor pagination,
+single-read and bounded mark-all-read operations. Funding, savings,
+healthcare-payment, verification-failure, and Family Pocket outcomes create
+deterministic inbox events from trusted backend flows; Flutter does not
+manufacture financial notifications.
+
+`notification_devices` stores deterministic device IDs, raw provider tokens,
+platform, lifecycle status, and delivery metadata. Registration, revocation,
+refresh, delivery updates, and stale-token retirement are backend-only. The
+push provider is isolated behind `PushNotificationService`; the controllable
+mock adapter exercises multiple devices, stale tokens, partial delivery, and
+provider failure without requiring FCM credentials. A real FCM adapter can
+replace it without changing transaction services or the inbox model.
+
+Push dispatch is downstream of the source transaction. Delivery failure
+updates only notification/device metadata and never changes a funding, savings,
+Family Pocket, or healthcare outcome. Lock-screen payloads contain only generic
+title/body plus notification ID, category, and type. Amounts, balances,
+bank/account data, receipts, and provider references remain inside authenticated
+app views.
+
+The open-app experience should query or subscribe to the durable inbox. The
+background/closed-app experience should use FCM after a production adapter and
+trusted invocation boundary are connected. Flutter foreground listeners,
+permission prompts, system-tray behavior, deep links, and physical-device
+lifecycle testing remain frontend/integration work. No FCM credential or live
+deployment is included here.

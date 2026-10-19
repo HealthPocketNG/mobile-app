@@ -12,6 +12,12 @@ const {
   MAX_FUNDING_AMOUNT_KOBO,
   isValidFundingAmount,
 } = require("./funding-policy");
+const {
+  fundingReceiptDocument,
+  receiptNumberForFunding,
+  assertReceiptCompatible,
+} = require("../receipts/receipt-service");
+const { notificationDocument } = require("../notifications/notification-model");
 
 const CURRENCY = "NGN";
 const MAX_AMOUNT_KOBO = 100000000000;
@@ -42,6 +48,7 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
   const attempts = db.collection("payment_attempts");
   const events = db.collection("provider_events");
   const fundingTransactions = db.collection("funding_transactions");
+  const receipts = db.collection("receipts");
   const activities = db.collection("activities");
   const notificationEvents = db.collection("notification_events");
 
@@ -339,6 +346,13 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
     if (!isWalletFunding(attempt)) return;
     const now = Timestamp.now();
     const fundingRef = fundingTransactions.doc(attemptId);
+    const fundingDocument = fundingTransactionDocument(attemptId, attempt);
+    const receiptDocument = attempt.status === PAYMENT_STATUS.SUCCEEDED
+      ? fundingReceiptDocument(attemptId, fundingDocument)
+      : null;
+    const receiptRef = receiptDocument
+      ? receipts.doc(receiptDocument.receiptNumber)
+      : null;
     const terminalEvent = fundingTerminalEvent(attempt.status);
     const activityRef = terminalEvent?.activity
       ? activities.doc(`activity_${hash({ attemptId, event: terminalEvent.type }).slice(0, 48)}`)
@@ -351,18 +365,34 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
 
     await db.runTransaction(async (transaction) => {
       const references = [fundingRef];
+      if (receiptRef) references.push(receiptRef);
       if (activityRef) references.push(activityRef);
       if (notificationRef) references.push(notificationRef);
       const snapshots = await Promise.all(
         references.map((reference) => transaction.get(reference)),
       );
+      const snapshotsByPath = new Map(
+        references.map((reference, index) => [reference.path, snapshots[index]]),
+      );
+      const previousFunding = snapshotsByPath.get(fundingRef.path).data();
+      if (!fundingDocument.receiptNumber && previousFunding?.receiptNumber) {
+        fundingDocument.receiptNumber = previousFunding.receiptNumber;
+        fundingDocument.completedAt = previousFunding.completedAt;
+      }
       transaction.set(
         fundingRef,
-        fundingTransactionDocument(attemptId, attempt),
+        fundingDocument,
       );
-      let snapshotIndex = 1;
+      if (receiptRef) {
+        const receiptSnapshot = snapshotsByPath.get(receiptRef.path);
+        if (receiptSnapshot.exists) {
+          assertReceiptCompatible(receiptSnapshot.data(), receiptDocument);
+        } else {
+          transaction.create(receiptRef, receiptDocument);
+        }
+      }
       if (activityRef) {
-        const activitySnapshot = snapshots[snapshotIndex++];
+        const activitySnapshot = snapshotsByPath.get(activityRef.path);
         if (!activitySnapshot.exists) {
           transaction.create(activityRef, {
             userId: attempt.userId,
@@ -371,7 +401,7 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
               amountKobo: attempt.amountKobo,
               currency: attempt.currency,
               receiptNumber: attempt.status === PAYMENT_STATUS.SUCCEEDED
-                ? receiptNumberFor(attemptId)
+                ? receiptNumberForFunding(attemptId)
                 : null,
             },
             relatedEntityType: "funding_transaction",
@@ -385,18 +415,18 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
         }
       }
       if (notificationRef) {
-        const notificationSnapshot = snapshots[snapshotIndex];
+        const notificationSnapshot = snapshotsByPath.get(notificationRef.path);
         if (!notificationSnapshot.exists) {
-          transaction.create(notificationRef, {
+          transaction.create(notificationRef, notificationDocument({
             userId: attempt.userId,
             type: terminalEvent.type,
+            category: "funding",
             title: terminalEvent.title,
             body: terminalEvent.body,
-            status: "queued",
             relatedEntityType: "funding_transaction",
             relatedEntityId: attemptId,
-            createdAt: now,
-          });
+            now,
+          }));
         }
       }
     });
@@ -531,7 +561,7 @@ function fundingTransactionDocument(attemptId, attempt) {
     ledgerOperationId: attempt.ledgerOperationId ?? null,
     failureCode: attempt.failureCode ?? null,
     transactionReference: attemptId,
-    receiptNumber: completed ? receiptNumberFor(attemptId) : null,
+    receiptNumber: completed ? receiptNumberForFunding(attemptId) : null,
     description: "HealthPocket wallet funding",
     channel: attempt.provider === "mock" ? "mock" : "provider",
     completedAt: completed ? attempt.verifiedAt ?? attempt.updatedAt : null,
@@ -578,10 +608,6 @@ function fundingTerminalEvent(paymentStatus) {
     };
   }
   return null;
-}
-
-function receiptNumberFor(attemptId) {
-  return `HPF-${hash({ attemptId }).slice(0, 12).toUpperCase()}`;
 }
 
 function assertSameAttempt(attempt, fingerprint) {

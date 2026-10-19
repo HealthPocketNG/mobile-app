@@ -35,6 +35,7 @@ beforeEach(async () => {
     "activities",
     "financial_operations",
     "ledger_entries",
+    "notification_events",
     "payment_attempts",
     "personal_health_pockets",
     "provider_events",
@@ -231,6 +232,10 @@ test("trusted mock success posts one savings credit across recurring-job retries
       .availableBalanceKobo,
     90000,
   );
+  const notifications = await db.collection("notification_events").get();
+  assert.equal(notifications.size, 1);
+  assert.equal(notifications.docs[0].data().category, "savings");
+  assert.equal(notifications.docs[0].data().readState, "unread");
 });
 
 test("failed mock funding never creates a completed ledger credit", async () => {
@@ -251,6 +256,9 @@ test("failed mock funding never creates a completed ledger credit", async () => 
       .availableBalanceKobo,
     0,
   );
+  const notifications = await db.collection("notification_events").get();
+  assert.equal(notifications.size, 1);
+  assert.equal(notifications.docs[0].data().type, "scheduled_savings_contribution_failed");
 });
 
 test("a pending contribution can be verified later without duplication", async () => {

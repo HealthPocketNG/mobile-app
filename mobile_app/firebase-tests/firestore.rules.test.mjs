@@ -11,6 +11,7 @@ import {
   collectionGroup,
   deleteDoc,
   doc,
+  documentId,
   getDoc,
   getDocs,
   limit,
@@ -316,6 +317,76 @@ const seedHealthcarePayments = async () => {
     await setDoc(
       doc(db, 'healthcare_payments/payment-stranger-partner'),
       healthcarePayment('stranger', 'partner'),
+    );
+  });
+};
+
+const receiptRecord = (
+  uid,
+  receiptNumber,
+  transactionType,
+  overrides = {},
+) => ({
+  schemaVersion: 1,
+  receiptNumber,
+  healthPocketReferenceId: receiptNumber,
+  userId: uid,
+  transactionId: `transaction-${uid}-${transactionType}`,
+  transactionType,
+  transactionReference: `reference-${uid}-${transactionType}`,
+  status: 'completed',
+  amountKobo: 250000,
+  currency: 'NGN',
+  provider: transactionType === 'healthcare_payment'
+    ? {
+        id: 'evercare-ikeja',
+        name: 'Evercare Hospital',
+        category: 'hospital',
+        city: 'Ikeja',
+        state: 'Lagos',
+      }
+    : { id: 'mock', name: 'HealthPocket mock payment provider' },
+  recipient: transactionType === 'healthcare_payment'
+    ? { id: 'evercare-ikeja', name: 'Evercare Hospital' }
+    : { id: 'healthpocket_wallet', name: 'HealthPocket Wallet' },
+  paymentMethod: {
+    type: transactionType === 'healthcare_payment'
+      ? 'healthpocket_partner'
+      : 'payment_gateway',
+    provider: 'mock',
+    channel: 'mock',
+    externalReference: `provider-${uid}-${transactionType}`,
+  },
+  ...(transactionType === 'healthcare_payment'
+    ? { flowType: 'partner' }
+    : {}),
+  description: transactionType === 'healthcare_payment'
+    ? 'Healthcare payment'
+    : 'HealthPocket wallet funding',
+  ledgerOperationId: `operation-${uid}-${transactionType}`,
+  ledgerEntryId: transactionType === 'healthcare_payment'
+    ? `entry-${uid}-${transactionType}`
+    : null,
+  issuedAt: now,
+  createdAt: now,
+  sourceFingerprint: 'd'.repeat(64),
+  ...overrides,
+});
+
+const seedReceipts = async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(
+      doc(db, 'receipts/HPF-A1B2C3D4E5F6'),
+      receiptRecord('owner', 'HPF-A1B2C3D4E5F6', 'wallet_funding'),
+    );
+    await setDoc(
+      doc(db, 'receipts/HPC-1234ABCDEF56'),
+      receiptRecord('owner', 'HPC-1234ABCDEF56', 'healthcare_payment'),
+    );
+    await setDoc(
+      doc(db, 'receipts/HPC-ABCDEF123456'),
+      receiptRecord('stranger', 'HPC-ABCDEF123456', 'healthcare_payment'),
     );
   });
 };
@@ -1999,6 +2070,98 @@ test('clients cannot forge or mutate healthcare payment outcomes', async () => {
   await assertFails(deleteDoc(payment));
 });
 
+test('receipts are readable only by their verified owner', async () => {
+  await seedReceipts();
+  const ownerDb = verifiedContext('owner').firestore();
+  const strangerDb = verifiedContext('stranger').firestore();
+  const ownerReceiptPath = 'receipts/HPF-A1B2C3D4E5F6';
+
+  await assertSucceeds(getDoc(doc(ownerDb, ownerReceiptPath)));
+  await assertFails(getDoc(doc(strangerDb, ownerReceiptPath)));
+  await assertFails(
+    getDoc(doc(ownerDb, 'receipts/HPC-ABCDEF123456')),
+  );
+  await assertFails(
+    getDoc(doc(ownerDb, 'receipts/HPC-000000000000')),
+  );
+
+  const owned = await assertSucceeds(getDocs(query(
+    collection(ownerDb, 'receipts'),
+    where('userId', '==', 'owner'),
+    orderBy('issuedAt', 'desc'),
+    limit(20),
+  )));
+  if (owned.size !== 2) {
+    throw new Error(`Expected two owner receipts, got ${owned.size}.`);
+  }
+  await assertFails(getDocs(collection(ownerDb, 'receipts')));
+  await assertFails(getDocs(query(
+    collection(ownerDb, 'receipts'),
+    where('userId', '==', 'stranger'),
+    orderBy('issuedAt', 'desc'),
+  )));
+});
+
+test('receipt reads reject anonymous and unverified identities', async () => {
+  await seedReceipts();
+  const path = 'receipts/HPF-A1B2C3D4E5F6';
+  const anonymousDb = environment.unauthenticatedContext().firestore();
+  const unverifiedDb = environment.authenticatedContext('owner', {
+    email: 'owner@example.com',
+    email_verified: false,
+    firebase: { sign_in_provider: 'google.com' },
+  }).firestore();
+
+  for (const db of [anonymousDb, unverifiedDb]) {
+    await assertFails(getDoc(doc(db, path)));
+    await assertFails(getDocs(query(
+      collection(db, 'receipts'),
+      where('userId', '==', 'owner'),
+      orderBy('issuedAt', 'desc'),
+    )));
+  }
+});
+
+test('clients cannot forge or tamper with receipt evidence', async () => {
+  await seedReceipts();
+  const ownerDb = verifiedContext('owner').firestore();
+  const receipt = doc(ownerDb, 'receipts/HPF-A1B2C3D4E5F6');
+
+  await assertFails(setDoc(
+    doc(ownerDb, 'receipts/HPC-FFFFFFFFFFFF'),
+    receiptRecord(
+      'owner',
+      'HPC-FFFFFFFFFFFF',
+      'healthcare_payment',
+      {
+        amountKobo: 99999999,
+        status: 'completed',
+        provider: { id: 'attacker', name: 'Forged Provider' },
+        transactionReference: 'forged-reference',
+      },
+    ),
+  ));
+
+  for (const mutation of [
+    { amountKobo: 1 },
+    { amountKobo: '250000' },
+    { status: 'pending' },
+    { status: 'failed' },
+    { provider: { id: 'attacker', name: 'Forged Provider' } },
+    { recipient: { id: 'attacker', name: 'Forged Recipient' } },
+    { healthPocketReferenceId: 'HPF-FFFFFFFFFFFF' },
+    { transactionReference: 'forged-reference' },
+    { receiptNumber: 'HPF-FFFFFFFFFFFF' },
+    { ledgerEntryId: 'forged-ledger-entry' },
+    { sourceFingerprint: '0'.repeat(64) },
+    { issuedAt: Timestamp.fromDate(new Date('2099-01-01T00:00:00Z')) },
+    { extraData: 'x'.repeat(10000) },
+  ]) {
+    await assertFails(updateDoc(receipt, mutation));
+  }
+  await assertFails(deleteDoc(receipt));
+});
+
 test('funding transactions and notification events are owner-readable and server-write-only', async () => {
   await environment.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -2073,6 +2236,192 @@ test('funding transactions and notification events are owner-readable and server
     }));
     await assertFails(deleteDoc(doc(ownerDb, ownerPath)));
   }
+});
+
+test('notification events support verified-owner unread cursor queries only', async () => {
+  const firstCreatedAt = Timestamp.fromDate(new Date('2026-01-03T12:00:00Z'));
+  const secondCreatedAt = Timestamp.fromDate(new Date('2026-01-02T12:00:00Z'));
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const notification = (userId, readState, createdAt) => ({
+      schemaVersion: 1,
+      userId,
+      type: 'funding_completed',
+      category: 'funding',
+      title: 'Money added',
+      body: 'Your HealthPocket balance has been updated.',
+      readState,
+      readAt: readState === 'read' ? createdAt : null,
+      deliveryStatus: 'queued',
+      deliveryAttemptCount: 0,
+      lastDeliveryErrorCode: null,
+      deliveredAt: null,
+      relatedEntityType: 'funding_transaction',
+      relatedEntityId: `funding-${userId}`,
+      familyPocketId: null,
+      createdAt,
+      updatedAt: createdAt,
+    });
+    await setDoc(
+      doc(db, 'notification_events/notice-owner-new'),
+      notification('owner', 'unread', firstCreatedAt),
+    );
+    await setDoc(
+      doc(db, 'notification_events/notice-owner-old'),
+      notification('owner', 'unread', secondCreatedAt),
+    );
+    await setDoc(
+      doc(db, 'notification_events/notice-owner-read'),
+      notification('owner', 'read', secondCreatedAt),
+    );
+    await setDoc(
+      doc(db, 'notification_events/notice-stranger'),
+      notification('stranger', 'unread', firstCreatedAt),
+    );
+  });
+
+  const ownerDb = verifiedContext('owner').firestore();
+  const notifications = collection(ownerDb, 'notification_events');
+  await assertSucceeds(
+    getDoc(doc(ownerDb, 'notification_events/notice-owner-new')),
+  );
+  const unreadPage = await assertSucceeds(getDocs(query(
+    notifications,
+    where('userId', '==', 'owner'),
+    where('readState', '==', 'unread'),
+    orderBy('createdAt', 'desc'),
+    orderBy(documentId(), 'desc'),
+    startAfter(firstCreatedAt, 'notice-owner-new'),
+    limit(1),
+  )));
+  if (unreadPage.size !== 1) {
+    throw new Error(`Expected one unread notification, got ${unreadPage.size}.`);
+  }
+
+  await assertFails(getDoc(
+    doc(ownerDb, 'notification_events/notice-stranger'),
+  ));
+  await assertFails(getDocs(notifications));
+  await assertFails(getDocs(query(
+    notifications,
+    where('readState', '==', 'unread'),
+    orderBy('createdAt', 'desc'),
+  )));
+  await assertFails(getDocs(query(
+    notifications,
+    where('userId', '==', 'stranger'),
+    where('readState', '==', 'unread'),
+    orderBy('createdAt', 'desc'),
+  )));
+});
+
+test('notification events reject unverified access and every client mutation', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(
+      doc(context.firestore(), 'notification_events/notice-owner-secure'),
+      {
+        schemaVersion: 1,
+        userId: 'owner',
+        type: 'security_alert',
+        category: 'security',
+        title: 'Security notice',
+        body: 'A security event needs your attention.',
+        readState: 'unread',
+        readAt: null,
+        deliveryStatus: 'queued',
+        deliveryAttemptCount: 0,
+        lastDeliveryErrorCode: null,
+        deliveredAt: null,
+        relatedEntityType: null,
+        relatedEntityId: null,
+        familyPocketId: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    );
+  });
+
+  const ownerDb = verifiedContext('owner').firestore();
+  const unverifiedDb = environment.authenticatedContext('owner', {
+    email: 'owner@example.com',
+    email_verified: false,
+    firebase: { sign_in_provider: 'google.com' },
+  }).firestore();
+  const phoneDb = environment.authenticatedContext('owner', {
+    phone_number: '+2348000000000',
+    firebase: { sign_in_provider: 'phone' },
+  }).firestore();
+  const notification = doc(
+    ownerDb,
+    'notification_events/notice-owner-secure',
+  );
+
+  await assertFails(getDoc(doc(
+    unverifiedDb,
+    'notification_events/notice-owner-secure',
+  )));
+  await assertFails(getDoc(doc(
+    phoneDb,
+    'notification_events/notice-owner-secure',
+  )));
+  await assertFails(setDoc(
+    doc(ownerDb, 'notification_events/notice-forged'),
+    { userId: 'owner', readState: 'unread', title: 'Forged' },
+  ));
+  for (const mutation of [
+    { readState: 'read', readAt: now, updatedAt: now },
+    { title: 'Tampered notification' },
+    { userId: 'stranger' },
+    { deliveryStatus: 'delivered' },
+    { extraData: 'x'.repeat(10000) },
+  ]) {
+    await assertFails(updateDoc(notification, mutation));
+  }
+  await assertFails(deleteDoc(notification));
+});
+
+test('notification devices are completely inaccessible to clients', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'notification_devices/device-seeded'), {
+      schemaVersion: 1,
+      userId: 'owner',
+      token: 'private-fcm-device-token-that-must-not-leak',
+      platform: 'android',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+      lastSeenAt: now,
+      lastDeliveryAt: null,
+      lastErrorCode: null,
+    });
+  });
+
+  const ownerDb = verifiedContext('owner').firestore();
+  const strangerDb = verifiedContext('stranger').firestore();
+  const anonymousDb = environment.unauthenticatedContext().firestore();
+  for (const db of [ownerDb, strangerDb, anonymousDb]) {
+    await assertFails(getDoc(
+      doc(db, 'notification_devices/device-seeded'),
+    ));
+    await assertFails(getDocs(collection(db, 'notification_devices')));
+  }
+  await assertFails(setDoc(
+    doc(ownerDb, 'notification_devices/device-forged'),
+    {
+      schemaVersion: 1,
+      userId: 'owner',
+      token: 'attacker-controlled-fcm-token-value',
+      platform: 'android',
+      status: 'active',
+    },
+  ));
+  await assertFails(updateDoc(
+    doc(ownerDb, 'notification_devices/device-seeded'),
+    { token: 'replacement-attacker-token-value' },
+  ));
+  await assertFails(deleteDoc(
+    doc(ownerDb, 'notification_devices/device-seeded'),
+  ));
 });
 
 test('wallet and financial history are owner-readable but client-immutable', async () => {

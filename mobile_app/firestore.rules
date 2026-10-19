@@ -50,10 +50,26 @@ service cloud.firestore {
     // a non-partner safe-display map containing only accountNumberLast4,
     // bankCode, bankName, accountName, and beneficiaryReference; raw account
     // numbers are never stored. Clients have verified-owner read-only access.
+    // receipts/{receiptNumber}: immutable completed-only receipt projection.
+    // Document ID equals receiptNumber (HPF-/HPC- plus 12 hexadecimal chars).
+    // Required fields: schemaVersion, receiptNumber, healthPocketReferenceId,
+    // userId, transactionId, transactionType (wallet_funding or
+    // healthcare_payment), transactionReference, status (completed), positive
+    // integer amountKobo, NGN currency, bounded provider/recipient/paymentMethod
+    // snapshot maps, description, ledgerOperationId, issuedAt, createdAt, and
+    // sourceFingerprint. flowType is optional; ledgerEntryId is nullable. The
+    // trusted backend snapshots display data so later provider changes do not
+    // rewrite history. Verified owners may read; all writes are backend-only.
     // notification_events/{eventId}: server-owned owner-scoped notification
-    // record containing userId, event type, title/body, delivery status,
-    // related entity references, and a trusted createdAt timestamp. Clients
-    // have owner-only read access and cannot mutate it.
+    // record containing schemaVersion, userId, type/category, bounded
+    // title/body, readState (unread/read), nullable readAt, delivery state,
+    // nullable related entity/Family Pocket references, and trusted createdAt/
+    // updatedAt timestamps. Verified owners may read; read-state and delivery
+    // mutations are trusted-backend-only.
+    // notification_devices/{deviceId}: private backend-only FCM registration
+    // containing schemaVersion, userId, raw push token, platform, lifecycle
+    // status, delivery diagnostics, and trusted timestamps. No client reads or
+    // writes are permitted because possession of a token enables push delivery.
     // family_pockets/{id}: private active-member-scoped pocket with immutable
     // ownerId (or legacy createdBy), bounded name/optional description and
     // imagePath, contribution frequency/default amount, NGN currency, status,
@@ -619,12 +635,30 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /receipts/{receiptId} {
+      // Owner-scoped list queries must constrain userId to request.auth.uid;
+      // ordering by issuedAt (or createdAt) and limits preserve this predicate.
+      allow read: if hasVerifiedIdentity()
+        && resource.data.userId == request.auth.uid;
+      // Receipt identity, completed status, amounts, provider/recipient
+      // snapshots, ledger references, and issue timestamps are immutable and
+      // generated only from authoritative completed transactions.
+      allow create, update, delete: if false;
+    }
+
     match /notification_events/{eventId} {
       allow read: if hasVerifiedIdentity()
         && resource.data.userId == request.auth.uid;
       // Notification generation and delivery state are authoritative backend
       // records. Clients cannot manufacture, acknowledge, or delete events.
       allow create, update, delete: if false;
+    }
+
+    match /notification_devices/{deviceId} {
+      // Push tokens and delivery diagnostics never cross the client Firestore
+      // boundary. Registration, refresh, revocation, and dispatch use the
+      // authenticated trusted backend instead.
+      allow read, create, update, delete: if false;
     }
 
     match /healthcare_providers/{providerId} {

@@ -7,6 +7,14 @@ const {
   VERIFICATION_STATUS,
   assertVerificationStatus,
 } = require("./healthcare-verification");
+const {
+  healthcareReceiptDocument,
+  receiptNumberForHealthcare,
+  assertReceiptCompatible,
+} = require("../receipts/receipt-service");
+const {
+  notificationDocument: canonicalNotificationDocument,
+} = require("../notifications/notification-model");
 
 const CURRENCY = "NGN";
 const MAX_AMOUNT_KOBO = 100000000;
@@ -48,6 +56,7 @@ function buildHealthcarePaymentService({
   const providers = db.collection("healthcare_providers");
   const wallets = db.collection("wallets");
   const operations = db.collection("financial_operations");
+  const receipts = db.collection("receipts");
   const activities = db.collection("activities");
   const notifications = db.collection("notification_events");
 
@@ -290,6 +299,9 @@ function buildHealthcarePaymentService({
           : status === "failed"
             ? "healthcare_payment_failed"
             : null;
+    const receiptRef = completed
+      ? receipts.doc(receiptNumberForHealthcare(paymentId))
+      : null;
     const activityRef = terminal
       ? activities.doc(`activity_${hash({ paymentId, eventName }).slice(0, 48)}`)
       : null;
@@ -299,6 +311,7 @@ function buildHealthcarePaymentService({
       )
       : null;
     const references = [reference];
+    if (receiptRef) references.push(receiptRef);
     if (activityRef) references.push(activityRef);
     if (notificationRef) references.push(notificationRef);
     const now = Timestamp.now();
@@ -306,8 +319,11 @@ function buildHealthcarePaymentService({
       const snapshots = await Promise.all(
         references.map((item) => transaction.get(item)),
       );
-      const latest = snapshots[0].data();
-      transaction.update(reference, {
+      const snapshotsByPath = new Map(
+        references.map((item, index) => [item.path, snapshots[index]]),
+      );
+      const latest = snapshotsByPath.get(reference.path).data();
+      const update = {
         paymentAttemptId: attempt.attemptId,
         status,
         paymentProvider: attempt.provider,
@@ -316,14 +332,26 @@ function buildHealthcarePaymentService({
         ledgerEntryId,
         failureCode: attempt.failureCode,
         receiptNumber: completed
-          ? latest.receiptNumber || receiptNumberFor(paymentId)
+          ? latest.receiptNumber || receiptNumberForHealthcare(paymentId)
           : latest.receiptNumber,
         completedAt: completed ? latest.completedAt || now : latest.completedAt,
         updatedAt: now,
-      });
-      let index = 1;
+      };
+      transaction.update(reference, update);
+      if (receiptRef) {
+        const receiptDocument = healthcareReceiptDocument(
+          paymentId,
+          { ...latest, ...update },
+        );
+        const receiptSnapshot = snapshotsByPath.get(receiptRef.path);
+        if (receiptSnapshot.exists) {
+          assertReceiptCompatible(receiptSnapshot.data(), receiptDocument);
+        } else {
+          transaction.create(receiptRef, receiptDocument);
+        }
+      }
       if (activityRef) {
-        if (!snapshots[index++].exists) {
+        if (!snapshotsByPath.get(activityRef.path).exists) {
           transaction.create(activityRef, {
             userId: latest.userId,
             activityType: eventName,
@@ -333,7 +361,7 @@ function buildHealthcarePaymentService({
               providerId: latest.providerId,
               providerName: latest.providerName,
               flowType: latest.flowType,
-              receiptNumber: completed ? receiptNumberFor(paymentId) : null,
+              receiptNumber: completed ? receiptNumberForHealthcare(paymentId) : null,
             },
             relatedEntityType: "healthcare_payment",
             relatedEntityId: paymentId,
@@ -345,7 +373,7 @@ function buildHealthcarePaymentService({
           });
         }
       }
-      if (notificationRef && !snapshots[index].exists) {
+      if (notificationRef && !snapshotsByPath.get(notificationRef.path).exists) {
         transaction.create(notificationRef, notificationDocument(
           latest,
           paymentId,
@@ -409,16 +437,16 @@ function buildHealthcarePaymentService({
         });
       }
       if (!notification.exists) {
-        transaction.create(notificationRef, {
+        transaction.create(notificationRef, canonicalNotificationDocument({
           userId: payment.data().userId,
           type: "healthcare_verification_failed",
+          category: "payment",
           title: "Provider verification unsuccessful",
           body: "No payment was made. Check the provider details before trying again.",
-          status: "queued",
           relatedEntityType: "healthcare_payment",
           relatedEntityId: paymentId,
-          createdAt: now,
-        });
+          now,
+        }));
       }
     });
     return result(paymentId, (await reference.get()).data());
@@ -566,16 +594,16 @@ function notificationDocument(payment, paymentId, eventName, now) {
       body: "The healthcare payment was cancelled and no debit was completed.",
     },
   }[eventName];
-  return {
+  return canonicalNotificationDocument({
     userId: payment.userId,
     type: eventName,
+    category: "payment",
     title: content.title,
     body: content.body,
-    status: "queued",
     relatedEntityType: "healthcare_payment",
     relatedEntityId: paymentId,
-    createdAt: now,
-  };
+    now,
+  });
 }
 
 function result(paymentId, payment) {
@@ -592,10 +620,6 @@ function result(paymentId, payment) {
 
 function paymentIdFor(userId, idempotencyKey) {
   return `health_${hash({ userId, idempotencyKey }).slice(0, 48)}`;
-}
-
-function receiptNumberFor(paymentId) {
-  return `HPC-${hash({ paymentId }).slice(0, 12).toUpperCase()}`;
 }
 
 function assertSameRequest(payment, requestFingerprint) {

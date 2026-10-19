@@ -311,7 +311,10 @@ test("credits a Family Pocket only after trusted verification and only once", as
   assert.equal((await db.collection("family_pockets").doc(pocketId).get()).data().balanceKobo, 250000);
   assert.equal((await db.collection("family_ledger_entries").get()).size, 1);
   assert.equal((await db.collection("activities").get()).size, 1);
-  assert.equal((await db.collection("notification_events").get()).size, 1);
+  const notifications = await db.collection("notification_events").get();
+  assert.equal(notifications.size, 1);
+  assert.equal(notifications.docs[0].data().category, "family_pocket");
+  assert.equal(notifications.docs[0].data().readState, "unread");
 });
 
 test("keeps concurrent member contributions independent and ledger-backed", async () => {

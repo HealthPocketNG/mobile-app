@@ -378,6 +378,59 @@ it does not create another Firestore collection or transmit logs externally.
   only verified scoped reads and deny every client activity create, update, or
   delete.
 
+## Receipts
+
+- `receipts/{receiptNumber}` is the canonical server-owned receipt projection.
+  Its document ID equals the deterministic HealthPocket reference (`HPF-...`
+  for wallet funding or `HPC-...` for healthcare), so Firestore enforces unique
+  receipt numbers.
+- Each receipt stores schema version, owner, HealthPocket reference, source
+  transaction ID/reference and type, completed status, integer-kobo amount,
+  currency, issued/created timestamps, payment method, provider and recipient
+  snapshots, description, authoritative ledger links, and a deterministic
+  source fingerprint.
+- Trusted settlement creates the receipt in the same Firestore transaction as
+  the completed funding or healthcare projection. Pending, failed, timed-out,
+  and cancelled sources are rejected by the receipt builders. Repeated provider
+  callbacks validate the same receipt instead of creating or overwriting one.
+- Provider/recipient display fields are copied from the historical completed
+  transaction, not re-read from the live provider directory. Renaming,
+  deactivating, or otherwise changing a provider therefore cannot rewrite an
+  issued receipt.
+- The trusted receipt service supports lookup by receipt number or source
+  transaction and produces JSON/plain-text download and share payloads. It
+  validates the stored fingerprint before returning data and uses a not-found
+  response for cross-owner lookup attempts.
+- Verified users may read only receipts whose `userId` matches their identity.
+  Every client create, update, and delete is denied; receipt issuance and all
+  authoritative fields remain backend-only.
+
+## Notifications
+
+- `notification_events/{notificationId}` is the durable in-app inbox. Canonical
+  documents include schema version, owner, type, category, generic display copy,
+  unread/read state and `readAt`, delivery state/attempt metadata, related entity
+  links, and trusted timestamps.
+- Supported categories are `savings`, `funding`, `payment`, `family_pocket`,
+  `security`, and `system`. Financial producers use deterministic IDs so retries
+  cannot create duplicate notifications.
+- Personal pages query `userId`, optionally filter `readState`, and order by
+  `createdAt DESC` plus document ID as a stable tie-breaker. Opaque cursors are
+  bound to the authenticated owner and filter.
+- `notification_devices/{deviceId}` stores a SHA-256-derived document ID, owner,
+  raw provider token, platform, active/stale/revoked status, and delivery
+  metadata. This collection is completely inaccessible to client SDKs; trusted
+  methods perform registration, removal, refresh, and stale-token retirement.
+- Lock-screen push data is minimized to notification ID, category, and type,
+  with generic title/body. Amounts, balances, account/bank data, receipts, and
+  provider references are excluded.
+- A Firestore inbox event is authoritative for the open-app experience. Push is
+  best-effort for background/closed-app awareness. Push failure changes only
+  delivery metadata and never the underlying transaction outcome.
+- Verified owners can read only their own inbox documents. All client inbox
+  mutations and all client access to device-token documents are denied; read
+  state changes pass through the trusted service.
+
 ## Rules hardening notes
 
 - New owner records must use canonical document IDs, and relationship IDs must

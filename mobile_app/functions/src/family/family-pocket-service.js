@@ -3,6 +3,7 @@
 const { createHash, randomBytes } = require("node:crypto");
 const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { PaymentGatewayError, PAYMENT_STATUS } = require("../payments/payment-gateway");
+const { notificationDocument } = require("../notifications/notification-model");
 
 const CURRENCY = "NGN";
 const SAFE_ID = /^[A-Za-z0-9_-]{1,256}$/;
@@ -519,15 +520,17 @@ function buildFamilyPocketService({ db, gateway, logger = console }) {
         metadata: { amountKobo: data.amountKobo, currency: CURRENCY },
         createdAt: now,
       });
-      transaction.create(notificationRef, {
+      transaction.create(notificationRef, notificationDocument({
         userId: data.contributorUserId,
         familyPocketId: data.pocketId,
         type: "family_contribution_completed",
+        category: "family_pocket",
         title: "Family Pocket contribution received",
         body: "Your Family Pocket balance has been updated.",
+        relatedEntityType: "family_contribution",
         relatedEntityId: attemptId,
-        createdAt: now,
-      });
+        now,
+      }));
       result = { ...contributionResult(attemptId, data), status: "completed", ledgerEntryId: ledgerRef.id };
     });
     log(logger, "complete_contribution", "success");

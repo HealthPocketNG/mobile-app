@@ -3,6 +3,7 @@
 const { createHash } = require("node:crypto");
 const { Timestamp } = require("firebase-admin/firestore");
 const { PAYMENT_STATUS } = require("../payments/payment-gateway");
+const { notificationDocument } = require("../notifications/notification-model");
 
 const CURRENCY = "NGN";
 const DEFAULT_CONTRIBUTION_AMOUNT_KOBO = 50000;
@@ -41,6 +42,7 @@ function buildSavingsPlanService({
   const operations = db.collection("savings_plan_operations");
   const scheduledContributions = db.collection("scheduled_contributions");
   const activities = db.collection("activities");
+  const notifications = db.collection("notification_events");
 
   async function createPlan(input) {
     const now = nowFrom(clock);
@@ -443,8 +445,16 @@ function buildSavingsPlanService({
   async function recordContributionActivity(contributionId, contribution, status) {
     const activityId = `activity_${hash({ contributionId, status }).slice(0, 48)}`;
     const reference = activities.doc(activityId);
+    const notificationRef = notifications.doc(
+      `notification_${hash({ contributionId, status }).slice(0, 48)}`,
+    );
     await db.runTransaction(async (transaction) => {
-      if ((await transaction.get(reference)).exists) return;
+      const [activity, notification] = await Promise.all([
+        transaction.get(reference), transaction.get(notificationRef),
+      ]);
+      if (activity.exists && notification.exists) return;
+      const now = Timestamp.fromDate(nowFrom(clock));
+      if (!activity.exists) {
       transaction.create(reference, {
         userId: contribution.userId,
         activityType: "scheduled_savings_contribution",
@@ -459,8 +469,26 @@ function buildSavingsPlanService({
         moneyMovement: status === "succeeded",
         amountKobo: contribution.amountKobo,
         currency: CURRENCY,
-        createdAt: Timestamp.fromDate(nowFrom(clock)),
+        createdAt: now,
       });
+      }
+      if (!notification.exists && status !== "pending") {
+        const succeeded = status === "succeeded";
+        transaction.create(notificationRef, notificationDocument({
+          userId: contribution.userId,
+          type: succeeded
+            ? "scheduled_savings_contribution_succeeded"
+            : "scheduled_savings_contribution_failed",
+          category: "savings",
+          title: succeeded ? "Savings contribution completed" : "Savings contribution unsuccessful",
+          body: succeeded
+            ? "Your scheduled savings contribution was completed."
+            : "Your scheduled savings contribution was not completed. You can review and retry.",
+          relatedEntityType: "scheduled_contribution",
+          relatedEntityId: contributionId,
+          now,
+        }));
+      }
     });
   }
 

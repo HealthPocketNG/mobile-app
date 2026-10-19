@@ -40,6 +40,7 @@ beforeEach(async () => {
     db.recursiveDelete(db.collection("payment_attempts")),
     db.recursiveDelete(db.collection("provider_events")),
     db.recursiveDelete(db.collection("funding_transactions")),
+    db.recursiveDelete(db.collection("receipts")),
     db.recursiveDelete(db.collection("activities")),
     db.recursiveDelete(db.collection("notification_events")),
   ]);
@@ -361,7 +362,15 @@ test("completed funding creates a receipt, activity and one notification", async
   assert.ok(transaction.completedAt);
   assert.equal((await db.collection("ledger_entries").get()).size, 1);
   assert.equal((await db.collection("activities").get()).size, 1);
-  assert.equal((await db.collection("notification_events").get()).size, 1);
+  const notifications = await db.collection("notification_events").get();
+  assert.equal(notifications.size, 1);
+  assert.equal(notifications.docs[0].data().category, "funding");
+  assert.equal(notifications.docs[0].data().readState, "unread");
+  const receipts = await db.collection("receipts").get();
+  assert.equal(receipts.size, 1);
+  assert.equal(receipts.docs[0].id, transaction.receiptNumber);
+  assert.equal(receipts.docs[0].data().status, "completed");
+  assert.equal(receipts.docs[0].data().transactionId, attempt.attemptId);
 });
 
 test("delayed success, failure, timeout and cancellation retain safe funding records", async () => {
@@ -421,4 +430,5 @@ test("delayed success, failure, timeout and cancellation retain safe funding rec
   );
   assert.equal((await db.collection("ledger_entries").get()).size, 1);
   assert.equal((await db.collection("notification_events").get()).size, 4);
+  assert.equal((await db.collection("receipts").get()).size, 1);
 });
