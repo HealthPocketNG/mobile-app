@@ -338,82 +338,104 @@ legal/compliance and regulated-provider requirements are approved.*
 
 ## 20. Abuse & Reliability Protection
 
-- [ ] Rate-limit sensitive operations where appropriate.
-- [ ] Protect verification-code endpoints.
-- [ ] Protect invite creation.
-- [ ] Protect payment/funding initialization.
-- [ ] Validate all amounts and IDs server-side.
-- [ ] Reject malformed/negative/zero financial requests.
-- [ ] Prevent replay of completed requests.
-- [ ] Prevent duplicate scheduled savings execution.
-- [ ] Add reasonable transaction limits/config placeholders for future payment compliance requirements.
-- [ ] Design for provider API downtime without corrupting transaction state.
-- [ ] Ensure a timeout is not automatically treated as payment failure when final status is unknown.
-- [ ] Provide reconciliation path for ambiguous/pending transactions.
+- [x] Rate-limit sensitive operations where appropriate.
+- [x] Protect verification-code endpoints.
+- [x] Protect invite creation.
+- [x] Protect payment/funding initialization.
+- [x] Validate all amounts and IDs server-side.
+- [x] Reject malformed/negative/zero financial requests.
+- [x] Prevent replay of completed requests.
+- [x] Prevent duplicate scheduled savings execution.
+- [x] Add reasonable transaction limits/config placeholders for future payment compliance requirements.
+- [x] Design for provider API downtime without corrupting transaction state.
+- [x] Ensure a timeout is not automatically treated as payment failure when final status is unknown.
+- [x] Provide reconciliation path for ambiguous/pending transactions.
+
+*Verified locally with Firestore Standard: atomic hashed-subject rate limits,
+idempotent retries, duplicate-worker protection, validation/transaction caps,
+and pending/timeout reconciliation are covered by the backend suite. The suite
+passes 123/123 tests, and Functions export discovery still exposes only
+`createWalletForNewProfile`, `ensureMyWallet`, and `trustedBackend`. The
+rate-limit TTL configuration is declared locally but was not deployed in this
+phase.*
 
 ## 21. Emulator & Automated Tests
 
-- [ ] Run Firebase Emulator Suite for backend development.
-- [ ] Unit-test repositories/services.
-- [ ] Test Firestore security rules.
-- [ ] Test Storage rules.
-- [ ] Test Cloud Functions.
-- [ ] Test wallet/ledger invariants.
-- [ ] Test concurrent balance operations.
-- [ ] Test idempotency.
-- [ ] Test funding success/failure/pending/retry.
-- [ ] Test healthcare payment success/failure/pending/retry.
-- [ ] Test non-partner mock verification approval/rejection.
-- [ ] Test savings scheduling.
-- [ ] Test Family Pocket permissions and concurrent contributions.
-- [ ] Test notification generation.
-- [ ] Test receipt generation.
-- [ ] Test cross-user unauthorized access.
-- [ ] Build end-to-end backend test scenarios representing realistic user journeys.
+- [x] Run Firebase Emulator Suite for backend development.
+- [x] Unit-test repositories/services.
+- [x] Test Firestore security rules.
+- [x] Test Storage rules.
+- [x] Test Cloud Functions.
+- [x] Test wallet/ledger invariants.
+- [x] Test concurrent balance operations.
+- [x] Test idempotency.
+- [x] Test funding success/failure/pending/retry.
+- [x] Test healthcare payment success/failure/pending/retry.
+- [x] Test non-partner mock verification approval/rejection.
+- [x] Test savings scheduling.
+- [x] Test Family Pocket permissions and concurrent contributions.
+- [x] Test notification generation.
+- [x] Test receipt generation.
+- [x] Test cross-user unauthorized access.
+- [x] Build end-to-end backend test scenarios representing realistic user journeys.
+
+*Verified locally on 2026-10-20 using the Firestore Standard, Storage, and
+Functions emulators. Functions/services pass 126/126 tests, Firestore rules
+pass 48/48, Storage rules pass 6/6, and Flutter passes 93/93. Three realistic
+funding, healthcare, and Family Pocket journeys now run through the trusted
+callable boundary, including idempotent retries and cross-user denials. The
+actual Functions runtime discovered only `createWalletForNewProfile`,
+`ensureMyWallet`, and `trustedBackend`; its callable-protocol smoke test passed.
+Commands and coverage are documented in `docs/backend-testing.md`. No live
+Firebase resources were changed in this phase.*
 
 ## 22. MVP End-to-End Backend Journeys
 
 All of these must work with mock payment infrastructure before real payment integration begins.
 
-- [ ] New user → Google auth → onboarding → profile → PIN → dashboard-ready state.
-- [ ] Returning authenticated user → PIN → session restored.
-- [ ] Logout → PIN no longer sufficient → Google authentication required.
-- [ ] User creates/edits/pauses savings plan.
-- [ ] Scheduled contribution → mock success → ledger credit → balance/activity/notification updated once.
-- [ ] Scheduled contribution → mock failure → no credit → failure state recorded.
-- [ ] User manually adds money → mock success → wallet/ledger/activity/receipt/notification consistent.
+- [x] New user → Google auth → onboarding → profile → PIN → dashboard-ready state.
+- [x] Returning authenticated user → PIN → session restored.
+- [x] Logout → PIN no longer sufficient → Google authentication required.
+- [x] User creates/edits/pauses savings plan.
+- [x] Scheduled contribution → mock success → ledger credit → balance/activity/notification updated once.
+- [x] Scheduled contribution → mock failure → no credit → failure state recorded.
+- [x] User manually adds money → mock success → wallet/ledger/activity/receipt/notification consistent.
 - [ ] User creates Family Pocket → uploads image → invites member → member joins.
-- [ ] Multiple members contribute → Family Pocket totals remain consistent.
-- [ ] Unauthorized user cannot read/write another Family Pocket.
-- [ ] User discovers nearby partner/non-partner providers.
-- [ ] User opens provider details and receives valid coordinates for Google Maps directions.
-- [ ] User initiates partner healthcare payment → mock settlement → debit → receipt/activity/notification.
-- [ ] Insufficient balance blocks healthcare payment without creating an incorrect debit.
-- [ ] Non-partner provider → mock account/provider verification → mock payment.
-- [ ] Non-partner verification failure → payment blocked safely.
-- [ ] Duplicate/retried payment request cannot debit twice.
-- [ ] User views/filter/searches transaction activity.
-- [ ] User accesses completed transaction receipt/export data.
-- [ ] Coverage engine reacts correctly to ₦0, low, sufficient, and high balances.
-- [ ] Backend remains internally consistent after simulated failures and retries.
+- [x] Multiple members contribute → Family Pocket totals remain consistent.
+- [x] Unauthorized user cannot read/write another Family Pocket.
+- [x] User discovers nearby partner/non-partner providers.
+- [x] User opens provider details and receives valid coordinates for Google Maps directions.
+- [x] User initiates partner healthcare payment → mock settlement → debit → receipt/activity/notification.
+- [x] Insufficient balance blocks healthcare payment without creating an incorrect debit.
+- [x] Non-partner provider → mock account/provider verification → mock payment.
+- [x] Non-partner verification failure → payment blocked safely.
+- [x] Duplicate/retried payment request cannot debit twice.
+- [x] User views/filter/searches transaction activity.
+- [x] User accesses completed transaction receipt/export data.
+- [x] Coverage engine reacts correctly to ₦0, low, sufficient, and high balances.
+- [x] Backend remains internally consistent after simulated failures and retries.
+
+_Verified locally on 2026-10-21: Functions/services 128/128, Firestore and Storage rules 54/54, Flutter 94/94, and trusted-backend journeys 5/5. The Family Pocket create/invite/join flow and Storage permissions are covered, but the combined image-upload journey remains unchecked because live uploads are intentionally disabled until billing is resolved. No live Firebase resources were changed._
 
 ## 23. Real-Payment Integration Readiness Gate
 
 Do **not** begin real payment integration until this section passes.
 
-- [ ] No client can directly manipulate authoritative wallet balances.
-- [ ] Ledger is authoritative/auditable.
-- [ ] Financial operations are idempotent.
-- [ ] Payment gateway abstraction is provider-independent.
-- [ ] Mock gateway exercises success, pending, failure, timeout, reversal, and duplicate-event paths.
-- [ ] Webhook/event architecture exists.
-- [ ] Provider/beneficiary verification interfaces exist.
-- [ ] Non-partner healthcare verification/MCC interface exists but is clearly mocked/unimplemented.
-- [ ] Secrets are server-side only.
-- [ ] Security rules pass adversarial tests.
-- [ ] Critical Cloud Functions/services have automated tests.
-- [ ] Pending/ambiguous transaction reconciliation is designed.
-- [ ] Provider/payment integration can be added without changing the Flutter domain models or rewriting wallet/ledger logic.
+- [x] No client can directly manipulate authoritative wallet balances.
+- [x] Ledger is authoritative/auditable.
+- [x] Financial operations are idempotent.
+- [x] Payment gateway abstraction is provider-independent.
+- [x] Mock gateway exercises success, pending, failure, timeout, reversal, and duplicate-event paths.
+- [x] Webhook/event architecture exists.
+- [x] Provider/beneficiary verification interfaces exist.
+- [x] Non-partner healthcare verification/MCC interface exists but is clearly mocked/unimplemented.
+- [x] Secrets are server-side only.
+- [x] Security rules pass adversarial tests.
+- [x] Critical Cloud Functions/services have automated tests.
+- [x] Pending/ambiguous transaction reconciliation is designed.
+- [x] Provider/payment integration can be added without changing the Flutter domain models or rewriting wallet/ledger logic.
+
+_Verified locally on 2026-10-21 against Firestore Standard and mock infrastructure: Functions/services 130/130, Firestore and Storage rules 54/54, Flutter 94/94. Production payment commands remain fail-closed; no provider, credential, live webhook, real settlement, or live Firebase resource was enabled. The full audit and cutover conditions are in `docs/real-payment-readiness.md`._
 
 ---
 

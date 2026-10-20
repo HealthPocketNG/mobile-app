@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.js",
+    "test:emulator-smoke": "node scripts/smoke-functions-emulator.js",
     "seed:catalogs": "node scripts/seed-catalogs.js"
   },
   "dependencies": {

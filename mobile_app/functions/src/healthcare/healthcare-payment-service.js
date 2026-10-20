@@ -15,9 +15,11 @@ const {
 const {
   notificationDocument: canonicalNotificationDocument,
 } = require("../notifications/notification-model");
+const { TRANSACTION_POLICY } = require("../config/transaction-policy");
 
 const CURRENCY = "NGN";
-const MAX_AMOUNT_KOBO = 100000000;
+const MIN_AMOUNT_KOBO = TRANSACTION_POLICY.healthcarePayment.minimumKobo;
+const MAX_AMOUNT_KOBO = TRANSACTION_POLICY.healthcarePayment.maximumSingleKobo;
 const SAFE_ID = /^[A-Za-z0-9_-]{1,256}$/;
 const REQUEST_KEY = /^[A-Za-z0-9_-]{16,80}$/;
 const FLOW_TYPES = new Set(["partner", "non_partner"]);
@@ -63,7 +65,9 @@ function buildHealthcarePaymentService({
   async function initiatePartnerPayment(input) {
     const request = normalizeRequest(input, "partner");
     const created = await createTransaction(request);
-    if (created.document.paymentAttemptId || created.document.status !== "created") {
+    if (["completed", "failed", "cancelled", "reversed"].includes(
+      created.document.status,
+    )) {
       return result(created.paymentId, created.document);
     }
     return initiateTrustedPayment(created.paymentId, created.document);
@@ -74,7 +78,9 @@ function buildHealthcarePaymentService({
     request.bankAccount = normalizeBankAccount(input?.bankAccount);
     request.requestFingerprint = fingerprint(request);
     const created = await createTransaction(request);
-    if (created.document.paymentAttemptId || created.document.status !== "created") {
+    if (["completed", "failed", "cancelled", "reversed"].includes(
+      created.document.status,
+    )) {
       return result(created.paymentId, created.document);
     }
 
@@ -394,6 +400,17 @@ function buildHealthcarePaymentService({
   ) {
     const now = Timestamp.now();
     const reference = transactions.doc(paymentId);
+    if (verificationStatus === "unavailable") {
+      await reference.update({
+        status: "created",
+        verificationStatus,
+        verificationSource,
+        beneficiary,
+        failureCode,
+        updatedAt: now,
+      });
+      return result(paymentId, (await reference.get()).data());
+    }
     const activityRef = activities.doc(
       `activity_${hash({ paymentId, eventName: "healthcare_payment_failed" }).slice(0, 48)}`,
     );
@@ -469,7 +486,7 @@ function normalizeRequest(input, flowType) {
       !REQUEST_KEY.test(input.idempotencyKey)) {
     invalid("idempotencyKey is invalid.");
   }
-  if (!Number.isSafeInteger(input.amountKobo) || input.amountKobo < 1 ||
+  if (!Number.isSafeInteger(input.amountKobo) || input.amountKobo < MIN_AMOUNT_KOBO ||
       input.amountKobo > MAX_AMOUNT_KOBO) {
     throw new HealthcarePaymentError(
       "invalid-amount",
@@ -562,7 +579,7 @@ function projectionStatus(status) {
     pending: "pending",
     succeeded: "completed",
     failed: "failed",
-    timed_out: "failed",
+    timed_out: "pending",
     cancelled: "cancelled",
     reversed: "reversed",
   }[status];

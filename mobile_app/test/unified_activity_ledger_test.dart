@@ -38,6 +38,24 @@ void main() {
       ).map((item) => item.record.id),
       ['family', 'savings'],
     );
+    expect(
+      filterUnifiedActivityLedger(
+        ledger,
+        searchQuery: 'adebayo',
+      ).single.record.id,
+      'family',
+    );
+    expect(
+      filterUnifiedActivityLedger(
+        ledger,
+        searchQuery: 'personal healthpocket',
+      ).single.record.id,
+      'savings',
+    );
+    expect(
+      filterUnifiedActivityLedger(ledger, searchQuery: 'missing'),
+      isEmpty,
+    );
   });
 }
 

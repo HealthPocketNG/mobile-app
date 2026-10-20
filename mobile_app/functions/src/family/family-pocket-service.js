@@ -4,6 +4,7 @@ const { createHash, randomBytes } = require("node:crypto");
 const { FieldPath, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { PaymentGatewayError, PAYMENT_STATUS } = require("../payments/payment-gateway");
 const { notificationDocument } = require("../notifications/notification-model");
+const { TRANSACTION_POLICY } = require("../config/transaction-policy");
 
 const CURRENCY = "NGN";
 const SAFE_ID = /^[A-Za-z0-9_-]{1,256}$/;
@@ -12,8 +13,8 @@ const IMAGE_OBJECT_NAME = /^[A-Fa-f0-9]{32}\.(?:jpg|png|webp)$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FREQUENCIES = new Set(["daily", "weekly", "monthly"]);
 const ROLES = new Set(["owner", "admin", "member"]);
-const MIN_CONTRIBUTION_KOBO = 50000;
-const MAX_CONTRIBUTION_KOBO = 100000000;
+const MIN_CONTRIBUTION_KOBO = TRANSACTION_POLICY.familyContribution.minimumKobo;
+const MAX_CONTRIBUTION_KOBO = TRANSACTION_POLICY.familyContribution.maximumSingleKobo;
 const INVITE_LIFETIME_DAYS = 7;
 
 class FamilyPocketError extends Error {
@@ -398,7 +399,11 @@ function buildFamilyPocketService({ db, gateway, logger = console }) {
       });
       return null;
     });
-    if (existing && existing.status !== "created") return contributionResult(attemptId, existing);
+    const retryAmbiguousInitialization = existing && existing.status === "timed_out" &&
+      !existing.providerReference;
+    if (existing && existing.status !== "created" && !retryAmbiguousInitialization) {
+      return contributionResult(attemptId, existing);
+    }
 
     let provider;
     try {

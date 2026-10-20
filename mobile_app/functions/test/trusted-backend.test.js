@@ -17,7 +17,7 @@ const verifiedAuth = (uid = "user-1") => ({
   },
 });
 
-function harness({ moneyEnabled = true, records = {} } = {}) {
+function harness({ moneyEnabled = true, records = {}, rateLimiter } = {}) {
   const calls = [];
   const method = (name) => async (input) => {
     calls.push({ name, input });
@@ -81,7 +81,7 @@ function harness({ moneyEnabled = true, records = {} } = {}) {
     error(event, fields) { logs.push({ level: "error", event, fields }); },
   };
   return {
-    backend: buildTrustedBackend({ db, services, logger, moneyEnabled }),
+    backend: buildTrustedBackend({ db, services, logger, moneyEnabled, rateLimiter }),
     calls,
     logs,
   };
@@ -102,6 +102,33 @@ test("requires a verified Google identity", async () => {
     (error) => error.code === "permission-denied",
   );
   assert.equal(assertVerifiedGoogleIdentity(verifiedAuth()).userId, "user-1");
+});
+
+test("rate-limits sensitive commands after authentication and validation", async () => {
+  const consumed = [];
+  const rateLimiter = {
+    async consume(input) {
+      consumed.push(input);
+      const error = new Error("limited");
+      error.code = "rate-limited";
+      throw error;
+    },
+  };
+  const { backend, calls } = harness({ rateLimiter });
+  await assert.rejects(
+    backend.callable({
+      auth: verifiedAuth("limited-user"),
+      data: {
+        action: "funding.initialize",
+        payload: { amountKobo: 50000, idempotencyKey: "limitedfunding01" },
+      },
+    }),
+    (error) => error.code === "resource-exhausted" &&
+      error.details.code === "rate-limited",
+  );
+  assert.equal(consumed[0].subjectId, "limited-user");
+  assert.equal(consumed[0].operation, "funding.initialize");
+  assert.equal(calls.length, 0);
 });
 
 test("rejects unknown commands, outer pollution and payload mass assignment", async () => {
@@ -200,6 +227,7 @@ test("exposes only user-safe actions and writes privacy-safe lifecycle logs", as
   assert.ok(backend.actions.length >= 25);
   assert.equal(backend.actions.some((action) =>
     /finalize|reconcile|webhook|seed|admin|dispatch|run_due/.test(action)), false);
+  assert.equal(backend.actions.some((action) => /verification.?code/.test(action)), false);
   await backend.callable({
     auth: verifiedAuth(),
     data: { action: "wallet.ensure", payload: {} },

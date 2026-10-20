@@ -58,7 +58,11 @@ signed callback deliveries. It makes no network calls.
 `provider_events`. An initialization response cannot post to the ledger. Only
 an explicit adapter verification result or a signature-verified callback can
 do so, and the resulting ledger operation and callback processing are
-idempotent. Raw callback bodies are not persisted.
+idempotent. Signed callbacks must match the server-created provider reference,
+amount, currency, and beneficiary before an event is claimed. Raw callback
+bodies are not persisted. The server-only `reconcileAttempt` operation polls
+ambiguous attempts and applies results through this same settlement path; it is
+not exposed through the Flutter callable boundary.
 
 TODO when a regulated provider is selected:
 
@@ -67,13 +71,15 @@ TODO when a regulated provider is selected:
 - make provider initialization idempotent with the supplied `requestId`;
 - verify callbacks from their raw bytes and map proprietary states to the
   normalized statuses before returning them;
-- retrieve and compare provider-side amount, currency, beneficiary, and
-  reference data against the server-created attempt; and
+- validate provider-side amount, currency, beneficiary, and reference data
+  against the expected values supplied by the service; and
 - add the provider's regulated healthcare-eligibility/MCC controls separately.
 
 No production provider credential, settlement adapter, or real MCC
 verification is included in this codebase yet. The callable money commands
 therefore fail closed outside the local demo emulator.
+See `../docs/real-payment-readiness.md` for the completed architecture gate and
+the separate production cutover requirements.
 
 ## Add Money / funding
 
@@ -356,3 +362,24 @@ directory. The command is validation-only by default. Applying requires
 `--apply --project <id>`; a non-emulator target additionally requires
 `--confirm-project <id>`. Every completed release records an immutable checksum
 marker so identical retries are harmless and release-ID reuse fails closed.
+
+## Abuse and reliability protection
+
+`src/abuse/rate-limit-service.js` applies atomic per-user fixed-window limits to
+money initialization/verification, Family Pocket invitations, invite-code use,
+and device registration. It stores only hashed subjects and returns the shared
+`rate-limited` error before invoking the owning service. Exact limits,
+transaction ceilings, verification-code posture, replay rules, and provider
+timeout reconciliation are documented in `../docs/abuse-and-reliability.md`.
+
+Provider timeouts are ambiguous rather than failed. No timeout moves money or
+emits a terminal failure receipt/event; retries reuse the deterministic request
+ID, and scheduled savings does not advance until the occurrence reaches a
+definitive outcome.
+
+## Emulator tests
+
+The repeatable emulator commands, coverage map, and last verified pass counts
+are documented in `../docs/backend-testing.md`. The Functions emulator smoke
+script exercises the exported callable protocol in addition to the in-process
+service and boundary tests.

@@ -184,7 +184,7 @@ test("updates amount and frequency, pauses, resumes, then cancels terminally", a
   assert.equal((await db.collection("activities").get()).size, 5);
 });
 
-test("a pending mock contribution advances safely without crediting the ledger", async () => {
+test("a pending mock contribution holds its schedule without crediting the ledger", async () => {
   const plan = await createPlan("pending-user", {
     contributionAmountKobo: 60000,
     frequency: "daily",
@@ -202,8 +202,30 @@ test("a pending mock contribution advances safely without crediting the ledger",
       .availableBalanceKobo,
     0,
   );
-  const advanced = await savings.getPlan("pending-user");
-  assert.equal(advanced.nextContributionDate.toISOString(), "2026-02-01T09:30:00.000Z");
+  const held = await savings.getPlan("pending-user");
+  assert.equal(held.nextContributionDate.toISOString(), plan.nextContributionDate.toISOString());
+});
+
+test("a timed-out scheduled initialization stays pending and retries safely", async () => {
+  const plan = await createPlan("scheduled-timeout-user", { frequency: "daily" });
+  gateway.setNextOutcome("initializeFunding", "timeout");
+  const ambiguous = await savings.processDueContribution({
+    planId: plan.planId,
+    scheduledFor: plan.nextContributionDate,
+  });
+  assert.equal(ambiguous.status, "pending");
+  assert.equal(ambiguous.failureCode, "provider-timeout");
+  assert.equal((await db.collection("ledger_entries").get()).size, 0);
+
+  gateway.setNextOutcome("verifyFunding", "success");
+  const reconciled = await savings.processDueContribution({
+    planId: plan.planId,
+    scheduledFor: plan.nextContributionDate,
+  });
+  assert.equal(reconciled.status, "succeeded");
+  assert.equal((await db.collection("scheduled_contributions").get()).size, 1);
+  assert.equal((await db.collection("payment_attempts").get()).size, 1);
+  assert.equal((await db.collection("ledger_entries").get()).size, 1);
 });
 
 test("trusted mock success posts one savings credit across recurring-job retries", async () => {

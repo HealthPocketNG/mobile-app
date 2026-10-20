@@ -351,7 +351,7 @@ function buildSavingsPlanService({
     }
 
     let paymentAttempt;
-    if (contribution.paymentAttemptId) {
+    if (contribution.paymentAttemptId && contribution.providerReference) {
       paymentAttempt = {
         attemptId: contribution.paymentAttemptId,
         status: PAYMENT_STATUS.PENDING,
@@ -368,8 +368,14 @@ function buildSavingsPlanService({
     }
 
     let outcome;
-    if ([PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED,
-      PAYMENT_STATUS.TIMED_OUT].includes(paymentAttempt.status)) {
+    if (paymentAttempt.status === PAYMENT_STATUS.TIMED_OUT) {
+      outcome = {
+        status: "pending",
+        ledgerOperationId: null,
+        failureCode: paymentAttempt.failureCode || "provider-timeout",
+      };
+    } else if ([PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED]
+      .includes(paymentAttempt.status)) {
       outcome = {
         status: "failed",
         ledgerOperationId: null,
@@ -397,7 +403,7 @@ function buildSavingsPlanService({
       failureCode: outcome.failureCode,
       updatedAt: Timestamp.fromDate(nowFrom(clock)),
     });
-    await advanceSchedule(planRef, scheduleDate);
+    if (outcome.status !== "pending") await advanceSchedule(planRef, scheduleDate);
     await recordContributionActivity(contributionId, contribution, outcome.status);
     contribution = (await contributionRef.get()).data();
     log(logger, "process_scheduled_contribution", outcome.status);
@@ -405,8 +411,8 @@ function buildSavingsPlanService({
   }
 
   async function persistPaymentAttempt(reference, paymentAttempt) {
-    const status = [PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED,
-      PAYMENT_STATUS.TIMED_OUT].includes(paymentAttempt.status)
+    const status = [PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED]
+      .includes(paymentAttempt.status)
       ? "failed"
       : "pending";
     await reference.update({
@@ -415,7 +421,9 @@ function buildSavingsPlanService({
       status,
       failureCode: status === "failed"
         ? paymentAttempt.failureCode || paymentAttempt.status
-        : null,
+        : paymentAttempt.status === PAYMENT_STATUS.TIMED_OUT
+          ? paymentAttempt.failureCode || "provider-timeout"
+          : null,
       updatedAt: Timestamp.fromDate(nowFrom(clock)),
     });
     return (await reference.get()).data();

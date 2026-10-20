@@ -16,6 +16,8 @@ void main() {
     expect(find.text('Activity'), findsOneWidget);
     expect(find.text('Savings'), findsOneWidget);
     expect(find.text('Family'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Search activity'), findsOneWidget);
     expect(find.text('No activity yet'), findsOneWidget);
   });
 }

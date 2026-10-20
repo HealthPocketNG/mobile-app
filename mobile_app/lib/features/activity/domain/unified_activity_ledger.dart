@@ -67,8 +67,10 @@ List<ActivityLedgerItem> filterUnifiedActivityLedger(
   ActivityDateRange dateRange = ActivityDateRange.allTime,
   DateTime? now,
   ActivityDateInterval? customRange,
+  String searchQuery = '',
 }) {
   final today = now ?? DateTime.now();
+  final normalizedSearchQuery = searchQuery.trim().toLowerCase();
   final start = switch (dateRange) {
     ActivityDateRange.allTime => null,
     ActivityDateRange.last7Days => today.subtract(const Duration(days: 7)),
@@ -80,6 +82,16 @@ List<ActivityLedgerItem> filterUnifiedActivityLedger(
       .where((item) {
         if (category != ActivityCategory.all && item.category != category) {
           return false;
+        }
+        if (normalizedSearchQuery.isNotEmpty) {
+          final searchableText = [
+            item.title,
+            item.subtitle,
+            item.record.note ?? '',
+            item.record.status.name,
+            item.record.currency,
+          ].join(' ').toLowerCase();
+          if (!searchableText.contains(normalizedSearchQuery)) return false;
         }
         final createdAt = item.record.createdAt;
         if (start != null && (createdAt == null || createdAt.isBefore(start))) {

@@ -1,7 +1,9 @@
 "use strict";
 
-const MIN_FUNDING_AMOUNT_KOBO = 50000;
-const MAX_FUNDING_AMOUNT_KOBO = 100000000;
+const { TRANSACTION_POLICY } = require("../config/transaction-policy");
+
+const MIN_FUNDING_AMOUNT_KOBO = TRANSACTION_POLICY.funding.minimumKobo;
+const MAX_FUNDING_AMOUNT_KOBO = TRANSACTION_POLICY.funding.maximumSingleKobo;
 const FUNDING_PRESET_AMOUNTS_KOBO = Object.freeze([
   50000,
   100000,

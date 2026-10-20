@@ -182,6 +182,10 @@ current personal and family histories derive directly from contribution records.
   can finalize an attempt. Provider events and their ledger operations use
   deterministic IDs so callback retries and duplicate delivery do not move
   money twice.
+- Signed callbacks must match the server-created provider reference, amount,
+  currency, and beneficiary before their event is claimed. A server-only
+  reconciler polls pending or timed-out attempts and applies normalized results
+  through the same idempotent settlement path; Flutter cannot invoke it.
 - Add Money validates ₦500–₦1,000,000 centrally in the trusted payment service.
   Presets are ₦500, ₦1,000, ₦2,000, ₦5,000, and ₦10,000; custom amounts inside
   the same range are also accepted. Savings-plan funding uses its own amount
@@ -547,8 +551,10 @@ it does not create another Firestore collection or transmit logs externally.
   Manager parameters. Replaceable provider interfaces isolate external adapter
   code from ledger, authorization, orchestration, receipts, and notifications.
 - The complete operation/authority matrix is documented in
-  `docs/trusted-backend-boundary.md`. The backend suite passes 111/111 tests and
-  Functions emulator discovery confirms the trusted callable export.
+  `docs/trusted-backend-boundary.md`, and the real-payment cutover contract is
+  documented in `docs/real-payment-readiness.md`. The backend suite passes
+  130/130 tests and Functions emulator discovery confirms the trusted callable
+  export.
 
 ## Data integrity, schema evolution, and retention
 
@@ -558,6 +564,14 @@ deletion/financial-retention contract live in
 `docs/data-integrity-and-retention.md`. Historical healthcare transactions and
 receipts use embedded provider snapshots; catalog deactivation therefore never
 breaks completed records.
+
+## Abuse and reliability
+
+Authenticated rate-limit buckets live in the backend-only `_rate_limits`
+collection and store hashed subjects, bounded counters, fixed windows, and TTL
+expiry. The complete action limits, centralized transaction ceilings,
+verification-code posture, replay protections, timeout semantics, and
+reconciliation paths are documented in `docs/abuse-and-reliability.md`.
 
 ## Rules hardening notes
 

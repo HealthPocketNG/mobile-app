@@ -164,6 +164,20 @@ test("insufficient balance is rejected before any payment record or attempt", as
   assert.equal((await db.collection("payment_attempts").get()).empty, true);
 });
 
+test("rejects malformed, zero, fractional and out-of-policy healthcare amounts", async () => {
+  const invalidAmounts = [0, 9999, 10000.5, 100000001];
+  for (const [index, amountKobo] of invalidAmounts.entries()) {
+    await assert.rejects(
+      healthcare.initiatePartnerPayment(partnerRequest({
+        amountKobo,
+        idempotencyKey: `invalidcareamount000${index}`,
+      })),
+      (error) => error.code === "invalid-amount",
+    );
+  }
+  assert.equal((await db.collection("healthcare_payments").get()).size, 0);
+});
+
 test("inactive and wrong-flow providers cannot start payments", async () => {
   await seedProvider("closed-clinic", "partner", false);
   await assert.rejects(
@@ -203,6 +217,29 @@ test("pending and failed partner outcomes never debit the wallet", async () => {
   assert.equal((await db.collection("receipts").get()).empty, true);
 });
 
+test("payment timeout stays pending and reconciles without a second debit", async () => {
+  const pending = await healthcare.initiatePartnerPayment(partnerRequest({
+    idempotencyKey: "caretimeout00001",
+  }));
+  gateway.setNextOutcome("verifyTransaction", "timeout");
+  const ambiguous = await healthcare.verifyPayment({
+    paymentId: pending.paymentId,
+    userId,
+  });
+  assert.equal(ambiguous.status, "pending");
+  assert.equal((await db.collection("ledger_entries")
+    .where("direction", "==", "debit").get()).size, 0);
+
+  gateway.setNextOutcome("verifyTransaction", "success");
+  const completed = await healthcare.verifyPayment({
+    paymentId: pending.paymentId,
+    userId,
+  });
+  assert.equal(completed.status, "completed");
+  assert.equal((await db.collection("ledger_entries")
+    .where("direction", "==", "debit").get()).size, 1);
+});
+
 test("non-partner payment requires both mock verifications before settlement", async () => {
   const pending = await healthcare.initiateNonPartnerPayment(nonPartnerRequest());
   const saved = (await db.collection("healthcare_payments")
@@ -239,6 +276,24 @@ test("non-partner eligibility rejection blocks payment and preserves failure", a
     "healthcare_payment_failed",
   );
   assert.equal((await db.collection("receipts").get()).empty, true);
+});
+
+test("non-partner verification outage remains retryable without creating payment", async () => {
+  accountResolver.setNextOutcome("timeout");
+  const unavailable = await healthcare.initiateNonPartnerPayment(nonPartnerRequest({
+    idempotencyKey: "careverifytimeout1",
+  }));
+  assert.equal(unavailable.status, "created");
+  assert.equal(unavailable.verificationStatus, "unavailable");
+  assert.equal((await db.collection("payment_attempts").get()).size, 0);
+  assert.equal((await db.collection("activities").get()).size, 0);
+
+  const retried = await healthcare.initiateNonPartnerPayment(nonPartnerRequest({
+    idempotencyKey: "careverifytimeout1",
+  }));
+  assert.equal(retried.status, "pending");
+  assert.equal(retried.verificationStatus, "verified");
+  assert.equal((await db.collection("payment_attempts").get()).size, 1);
 });
 
 test("mock verification never claims production MCC verification", async () => {

@@ -96,6 +96,9 @@ class MockPaymentGateway extends PaymentGateway {
         typeof value.eventId !== "string" ||
         typeof value.attemptId !== "string" ||
         typeof value.providerReference !== "string" ||
+        !Number.isSafeInteger(value.amountKobo) || value.amountKobo <= 0 ||
+        value.currency !== "NGN" ||
+        !(value.beneficiaryId === null || typeof value.beneficiaryId === "string") ||
         !PAYMENT_STATUSES.has(value.status)) {
       throw new PaymentGatewayError("invalid-webhook", "Webhook fields are invalid.");
     }
@@ -104,6 +107,9 @@ class MockPaymentGateway extends PaymentGateway {
       attemptId: value.attemptId,
       providerReference: value.providerReference,
       status: value.status,
+      amountKobo: value.amountKobo,
+      currency: value.currency,
+      beneficiaryId: value.beneficiaryId,
     };
   }
 
@@ -113,15 +119,22 @@ class MockPaymentGateway extends PaymentGateway {
     providerReference,
     status,
     duplicate = false,
+    amountKobo,
+    currency,
+    beneficiaryId,
   }) {
     if (!PAYMENT_STATUSES.has(status)) {
       throw new PaymentGatewayError("invalid-argument", "Webhook status is invalid.");
     }
+    const transaction = this.#transaction(providerReference);
     const rawBody = Buffer.from(JSON.stringify({
       eventId,
       attemptId,
       providerReference,
       status,
+      amountKobo: amountKobo ?? transaction.amountKobo,
+      currency: currency ?? transaction.currency,
+      beneficiaryId: beneficiaryId ?? transaction.beneficiaryId,
     }));
     const delivery = {
       rawBody,
@@ -143,6 +156,9 @@ class MockPaymentGateway extends PaymentGateway {
       providerReference,
       requestId: request.requestId,
       status: outcomeStatus(outcome),
+      amountKobo: request.amountKobo,
+      currency: request.currency,
+      beneficiaryId: request.beneficiaryId ?? null,
     };
     this.requests.set(request.requestId, providerReference);
     this.transactions.set(providerReference, transaction);

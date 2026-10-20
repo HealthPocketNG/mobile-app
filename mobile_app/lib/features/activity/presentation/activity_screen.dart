@@ -31,6 +31,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   late ActivityCategory _category;
   var _dateRange = ActivityDateRange.allTime;
   ActivityDateInterval? _customRange;
+  var _searchQuery = '';
   @override
   void initState() {
     super.initState();
@@ -53,6 +54,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       category: _category,
       dateRange: _dateRange,
       customRange: _customRange,
+      searchQuery: _searchQuery,
     );
   }
 
@@ -114,6 +116,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 _CategoryChips(
                   selected: _category,
                   onSelected: (value) => setState(() => _category = value),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(
+                    hintText: 'Search activity',
+                    prefixIcon: Icon(LucideIcons.search),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 Text(

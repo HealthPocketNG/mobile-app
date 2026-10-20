@@ -113,7 +113,7 @@ test("trusted funding verification posts one credit across retries", async () =>
   );
 });
 
-test("provider timeout remains non-financial with a nullable external reference", async () => {
+test("provider timeout remains ambiguous and non-financial with a safe retry path", async () => {
   await ledger.ensureWallet("timeout-user");
   gateway.setNextOutcome("initializeFunding", "timeout");
   const attempt = await payments.initializeFunding({
@@ -125,12 +125,23 @@ test("provider timeout remains non-financial with a nullable external reference"
   assert.equal(attempt.status, PAYMENT_STATUS.TIMED_OUT);
   assert.equal(attempt.providerReference, null);
   assert.equal((await db.collection("ledger_entries").get()).size, 0);
-  const activity = (await db.collection("activities").get()).docs[0].data();
-  assert.equal(activity.activityType, "funding_failed");
-  assert.equal(activity.moneyMovement, false);
+  assert.equal(
+    (await db.collection("funding_transactions").doc(attempt.attemptId).get())
+      .data().status,
+    "pending",
+  );
+  assert.equal((await db.collection("activities").get()).size, 0);
+
+  const retried = await payments.initializeFunding({
+    userId: "timeout-user",
+    idempotencyKey: "timeoutfunding001",
+    amountKobo: 200000,
+  });
+  assert.equal(retried.status, PAYMENT_STATUS.PENDING);
+  assert.match(retried.providerReference, /^mock_funding_/);
 });
 
-test("verification timeout records failure without credit and can be retried", async () => {
+test("verification timeout remains non-financial and server reconciliation credits once", async () => {
   await ledger.ensureWallet("verify-timeout-user");
   const attempt = await payments.initializeFunding({
     userId: "verify-timeout-user",
@@ -145,13 +156,41 @@ test("verification timeout records failure without credit and can be retried", a
   assert.equal(
     (await db.collection("funding_transactions").doc(attempt.attemptId).get())
       .data().status,
-    "failed",
+    "pending",
   );
 
-  gateway.setNextOutcome("verifyFunding", "success");
-  const recovered = await payments.verifyFunding({ attemptId: attempt.attemptId });
+  gateway.setNextOutcome("queryStatus", "success");
+  const recovered = await payments.reconcileAttempt({
+    attemptId: attempt.attemptId,
+  });
+  const retry = await payments.reconcileAttempt({
+    attemptId: attempt.attemptId,
+  });
   assert.equal(recovered.status, PAYMENT_STATUS.SUCCEEDED);
+  assert.equal(retry.ledgerOperationId, recovered.ledgerOperationId);
   assert.equal((await db.collection("ledger_entries").get()).size, 1);
+});
+
+test("reconciliation timeout stays ambiguous and creates no ledger entry", async () => {
+  await ledger.ensureWallet("reconcile-timeout-user");
+  const attempt = await payments.initializeFunding({
+    userId: "reconcile-timeout-user",
+    idempotencyKey: "reconciletimeout01",
+    amountKobo: 100000,
+  });
+  gateway.setNextOutcome("queryStatus", "timeout");
+
+  const reconciled = await payments.reconcileAttempt({
+    attemptId: attempt.attemptId,
+  });
+
+  assert.equal(reconciled.status, PAYMENT_STATUS.TIMED_OUT);
+  assert.equal((await db.collection("ledger_entries").get()).size, 0);
+  assert.equal(
+    (await db.collection("wallets").doc("reconcile-timeout-user").get())
+      .data().availableBalanceKobo,
+    0,
+  );
 });
 
 test("signed duplicate callbacks are idempotent", async () => {
@@ -205,6 +244,34 @@ test("invalid webhook signatures are rejected before any state change", async ()
   );
   assert.equal((await db.collection("provider_events").get()).size, 0);
   assert.equal((await db.collection("ledger_entries").get()).size, 0);
+});
+
+test("signed callbacks with mismatched settlement details fail closed", async () => {
+  await ledger.ensureWallet("mismatch-user");
+  const attempt = await payments.initializeFunding({
+    userId: "mismatch-user",
+    idempotencyKey: "mismatchfunding01",
+    amountKobo: 100000,
+  });
+  const [delivery] = gateway.buildWebhookCallback({
+    eventId: "mock-event-mismatched-amount",
+    attemptId: attempt.attemptId,
+    providerReference: attempt.providerReference,
+    status: PAYMENT_STATUS.SUCCEEDED,
+    amountKobo: 200000,
+  });
+
+  await assert.rejects(
+    payments.processWebhook(delivery),
+    (error) => error.code === "provider-transaction-mismatch",
+  );
+  assert.equal((await db.collection("provider_events").get()).size, 0);
+  assert.equal((await db.collection("ledger_entries").get()).size, 0);
+  assert.equal(
+    (await db.collection("wallets").doc("mismatch-user").get())
+      .data().availableBalanceKobo,
+    0,
+  );
 });
 
 test("healthcare success and reversal create compensating ledger entries", async () => {
@@ -423,12 +490,12 @@ test("delayed success, failure, timeout and cancellation retain safe funding rec
 
   const funding = db.collection("funding_transactions");
   assert.equal((await funding.doc(failed.attemptId).get()).data().status, "failed");
-  assert.equal((await funding.doc(timedOut.attemptId).get()).data().status, "failed");
+  assert.equal((await funding.doc(timedOut.attemptId).get()).data().status, "pending");
   assert.equal(
     (await funding.doc(cancelledAttempt.attemptId).get()).data().status,
     "cancelled",
   );
   assert.equal((await db.collection("ledger_entries").get()).size, 1);
-  assert.equal((await db.collection("notification_events").get()).size, 4);
+  assert.equal((await db.collection("notification_events").get()).size, 3);
   assert.equal((await db.collection("receipts").get()).size, 1);
 });

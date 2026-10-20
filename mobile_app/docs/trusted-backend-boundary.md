@@ -41,6 +41,11 @@ introduced.
   committed through service-owned Firestore transactions/batches.
 - Provider timeouts remain pending/timed-out and can be checked safely; timeout
   is never interpreted as successful settlement or an automatic final failure.
+- The server-only payment reconciler polls ambiguous attempts and applies a
+  normalized result through the same idempotent ledger path as verification
+  and signed callbacks. It is intentionally absent from callable actions.
+- Signed callbacks are rejected unless provider reference, amount, currency,
+  and beneficiary match the server-created attempt.
 - Callable logs contain only component, operation, outcome, normalized error
   type/code, and correlation ID—never payloads, user IDs, emails, tokens,
   account numbers, amounts, or provider responses.
@@ -52,3 +57,6 @@ introduced.
   integrations are interfaces. Replacing a mock adapter does not replace
   ledger, idempotency, authorization, receipt, notification, or transaction
   orchestration.
+
+The readiness audit and provider-adapter cutover requirements are recorded in
+`real-payment-readiness.md`.

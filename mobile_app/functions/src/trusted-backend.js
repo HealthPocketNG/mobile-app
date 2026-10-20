@@ -6,10 +6,30 @@ const {
   assertVerifiedGoogleIdentity,
   runCallable,
 } = require("./errors/backend-error");
+const { buildRateLimitService } = require("./abuse/rate-limit-service");
 
 const OUTER_FIELDS = new Set(["action", "payload"]);
+const ACTION_RATE_LIMITS = Object.freeze({
+  "family.invite_create": limits([5, 3600], [20, 86400]),
+  "family.invite_resolve": limits([20, 600], [100, 86400]),
+  "family.invite_respond": limits([10, 600], [50, 86400]),
+  "funding.initialize": limits([5, 600], [20, 3600]),
+  "funding.verify": limits([20, 300], [100, 3600]),
+  "family.contribution_initialize": limits([5, 600], [20, 3600]),
+  "family.contribution_verify": limits([20, 300], [100, 3600]),
+  "healthcare.partner_initialize": limits([5, 600], [20, 3600]),
+  "healthcare.non_partner_initialize": limits([5, 600], [20, 3600]),
+  "healthcare.verify": limits([20, 300], [100, 3600]),
+  "notifications.register_device": limits([10, 600], [50, 86400]),
+});
 
-function buildTrustedBackend({ db, services, logger = console, moneyEnabled = false }) {
+function buildTrustedBackend({
+  db,
+  services,
+  logger = console,
+  moneyEnabled = false,
+  rateLimiter,
+}) {
   if (!db || typeof db.collection !== "function") {
     throw new TypeError("A Firestore Admin database is required.");
   }
@@ -22,6 +42,9 @@ function buildTrustedBackend({ db, services, logger = console, moneyEnabled = fa
       throw new TypeError(`Trusted service ${name} is required.`);
     }
   }
+  const limiter = rateLimiter || (typeof db.runTransaction === "function"
+    ? buildRateLimitService({ db, logger })
+    : { async consume() {} });
 
   const actions = {
     "wallet.ensure": command([], ({ identity }) =>
@@ -221,12 +244,25 @@ function buildTrustedBackend({ db, services, logger = console, moneyEnabled = fa
         if (definition.money && !moneyEnabled) {
           throw new BackendError(ERROR_CODES.UNAVAILABLE);
         }
+        const rateRules = ACTION_RATE_LIMITS[action];
+        if (rateRules) {
+          await limiter.consume({
+            subjectId: identity.userId,
+            operation: action,
+            rules: rateRules,
+          });
+        }
         return definition.execute({ identity, payload });
       },
     });
   }
 
   return Object.freeze({ callable, actions: Object.freeze(Object.keys(actions)) });
+}
+
+function limits(...entries) {
+  return Object.freeze(entries.map(([maxAttempts, windowSeconds]) =>
+    Object.freeze({ maxAttempts, windowSeconds })));
 }
 
 async function assertRecordOwner(db, collection, documentId, userId, ownerField) {
@@ -261,4 +297,4 @@ function requireAction(value) {
   return value;
 }
 
-module.exports = { buildTrustedBackend, assertRecordOwner };
+module.exports = { ACTION_RATE_LIMITS, buildTrustedBackend, assertRecordOwner };

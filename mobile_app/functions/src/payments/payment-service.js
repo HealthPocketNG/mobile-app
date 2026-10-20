@@ -106,7 +106,10 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
       return null;
     });
 
-    if (existing && existing.status !== PAYMENT_STATUS.CREATED) {
+    const retryAmbiguousInitialization = existing &&
+      existing.status === PAYMENT_STATUS.TIMED_OUT && !existing.providerReference;
+    if (existing && existing.status !== PAYMENT_STATUS.CREATED &&
+        !retryAmbiguousInitialization) {
       return attemptResult(attemptId, existing);
     }
 
@@ -166,6 +169,9 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
       const result = await gateway.verifyFunding({
         requestId: attemptId,
         providerReference: requireProviderReference(attempt),
+        expectedAmountKobo: attempt.amountKobo,
+        expectedCurrency: attempt.currency,
+        expectedBeneficiaryId: null,
       });
       return applyTrustedStatus(attemptId, normalizeProviderResult(result).status);
     } catch (error) {
@@ -178,11 +184,21 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
 
   async function verifyTransaction({ attemptId }) {
     const attempt = await getAttempt(attemptId, "healthcare_payment");
-    const result = await gateway.verifyTransaction({
-      requestId: attemptId,
-      providerReference: requireProviderReference(attempt),
-    });
-    return applyTrustedStatus(attemptId, normalizeProviderResult(result).status);
+    try {
+      const result = await gateway.verifyTransaction({
+        requestId: attemptId,
+        providerReference: requireProviderReference(attempt),
+        expectedAmountKobo: attempt.amountKobo,
+        expectedCurrency: attempt.currency,
+        expectedBeneficiaryId: attempt.beneficiaryId,
+      });
+      return applyTrustedStatus(attemptId, normalizeProviderResult(result).status);
+    } catch (error) {
+      if (error instanceof PaymentGatewayError && error.code === "provider-timeout") {
+        return applyTrustedStatus(attemptId, PAYMENT_STATUS.TIMED_OUT);
+      }
+      throw error;
+    }
   }
 
   async function resolveBeneficiary({ beneficiaryId }) {
@@ -197,7 +213,41 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
     return normalizeProviderResult(await gateway.queryStatus({
       requestId: attemptId,
       providerReference: requireProviderReference(attempt),
+      expectedAmountKobo: attempt.amountKobo,
+      expectedCurrency: attempt.currency,
+      expectedBeneficiaryId: attempt.beneficiaryId,
     }));
+  }
+
+  // Server-only reconciliation for scheduled jobs or trusted operations.
+  // Flutter cannot invoke this method through trustedBackend. A provider
+  // timeout remains ambiguous and never moves money; a later normalized
+  // provider result is applied through the same idempotent ledger path used by
+  // verification and signed webhooks.
+  async function reconcileAttempt({ attemptId }) {
+    const attempt = await getAttempt(attemptId);
+    if (attempt.status === PAYMENT_STATUS.SUCCEEDED ||
+        attempt.status === PAYMENT_STATUS.FAILED ||
+        attempt.status === PAYMENT_STATUS.CANCELLED ||
+        attempt.status === PAYMENT_STATUS.REVERSED) {
+      return attemptResult(attemptId, attempt);
+    }
+    let providerResult;
+    try {
+      providerResult = normalizeProviderResult(await gateway.queryStatus({
+        requestId: attemptId,
+        providerReference: requireProviderReference(attempt),
+        expectedAmountKobo: attempt.amountKobo,
+        expectedCurrency: attempt.currency,
+        expectedBeneficiaryId: attempt.beneficiaryId,
+      }));
+    } catch (error) {
+      if (error instanceof PaymentGatewayError && error.code === "provider-timeout") {
+        return applyTrustedStatus(attemptId, PAYMENT_STATUS.TIMED_OUT);
+      }
+      throw error;
+    }
+    return applyTrustedStatus(attemptId, providerResult.status);
   }
 
   async function processWebhook({ rawBody, headers }) {
@@ -209,6 +259,17 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
     }
     const event = await gateway.parseWebhook({ rawBody, headers });
     validateEvent(event);
+    const attempt = await getAttempt(event.attemptId);
+    if (attempt.provider !== gateway.name ||
+        attempt.providerReference !== event.providerReference ||
+        attempt.amountKobo !== event.amountKobo ||
+        attempt.currency !== event.currency ||
+        attempt.beneficiaryId !== event.beneficiaryId) {
+      throw new PaymentServiceError(
+        "provider-transaction-mismatch",
+        "Webhook does not match the server-created payment attempt.",
+      );
+    }
     const eventDocumentId = `event_${hash({
       provider: gateway.name,
       eventId: event.eventId,
@@ -246,15 +307,6 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
     if (claim.processed) {
       const attempt = await getAttempt(event.attemptId);
       return { ...attemptResult(event.attemptId, attempt), duplicate: true };
-    }
-
-    const attempt = await getAttempt(event.attemptId);
-    if (attempt.provider !== gateway.name ||
-        attempt.providerReference !== event.providerReference) {
-      throw new PaymentServiceError(
-        "provider-reference-mismatch",
-        "Webhook does not match the server-created payment attempt.",
-      );
     }
 
     const result = await applyTrustedStatus(event.attemptId, event.status);
@@ -453,6 +505,7 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
     initiateHealthcarePayment,
     verifyTransaction,
     queryStatus,
+    reconcileAttempt,
     processWebhook,
   };
 }
@@ -520,6 +573,15 @@ function validateEvent(event) {
   requireBoundedString(event.eventId, "eventId", 200);
   requireSafeId(event.attemptId, "attemptId");
   requireBoundedString(event.providerReference, "providerReference", 128);
+  if (!Number.isSafeInteger(event.amountKobo) || event.amountKobo <= 0) {
+    throw new PaymentServiceError("invalid-webhook", "Webhook amount is invalid.");
+  }
+  if (event.currency !== CURRENCY) {
+    throw new PaymentServiceError("invalid-webhook", "Webhook currency is invalid.");
+  }
+  if (event.beneficiaryId !== null) {
+    requireSafeId(event.beneficiaryId, "beneficiaryId");
+  }
   assertNormalizedStatus(event.status);
 }
 
@@ -576,7 +638,7 @@ function fundingTransactionStatus(paymentStatus) {
     [PAYMENT_STATUS.PENDING]: "pending",
     [PAYMENT_STATUS.SUCCEEDED]: "completed",
     [PAYMENT_STATUS.FAILED]: "failed",
-    [PAYMENT_STATUS.TIMED_OUT]: "failed",
+    [PAYMENT_STATUS.TIMED_OUT]: "pending",
     [PAYMENT_STATUS.CANCELLED]: "cancelled",
     [PAYMENT_STATUS.REVERSED]: "reversed",
   }[paymentStatus];
@@ -591,7 +653,7 @@ function fundingTerminalEvent(paymentStatus) {
       activity: true,
     };
   }
-  if ([PAYMENT_STATUS.FAILED, PAYMENT_STATUS.TIMED_OUT].includes(paymentStatus)) {
+  if (paymentStatus === PAYMENT_STATUS.FAILED) {
     return {
       type: "funding_failed",
       title: "Add Money unsuccessful",
