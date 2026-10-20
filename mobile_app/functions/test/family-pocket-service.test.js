@@ -134,6 +134,45 @@ test("validates pocket contribution defaults and editable scheduling centrally",
   assert.equal(pocket.defaultContributionAmountKobo, 75000);
 });
 
+test("accepts only image paths scoped to the same Family Pocket", async () => {
+  await assert.rejects(
+    family.createPocket({
+      ownerId: "owner-1",
+      ownerName: "Amara Owner",
+      idempotencyKey: "badimagecreate001",
+      name: "Unsafe Image Pocket",
+      imagePath: "users/another-user/profile/0123456789abcdef0123456789abcdef.webp",
+      frequency: "monthly",
+      defaultContributionAmountKobo: 50000,
+    }),
+    (error) => error.code === "invalid-argument",
+  );
+  const { pocketId } = await createPocket();
+  const validPath = `family_pockets/${pocketId}/profile/0123456789abcdef0123456789abcdef.webp`;
+
+  await family.updatePocket({ actorId: "owner-1", pocketId, imagePath: validPath });
+  assert.equal(
+    (await db.collection("family_pockets").doc(pocketId).get()).data().imagePath,
+    validPath,
+  );
+  await assert.rejects(
+    family.updatePocket({
+      actorId: "owner-1",
+      pocketId,
+      imagePath: "users/another-user/profile/0123456789abcdef0123456789abcdef.webp",
+    }),
+    (error) => error.code === "invalid-argument",
+  );
+  await assert.rejects(
+    family.updatePocket({
+      actorId: "owner-1",
+      pocketId,
+      imagePath: `family_pockets/${pocketId}/profile/avatar.svg`,
+    }),
+    (error) => error.code === "invalid-argument",
+  );
+});
+
 test("uses opaque invite codes, blocks duplicates and verifies invite ownership", async () => {
   const { pocketId } = await createPocket();
   const invite = await family.createInvite({

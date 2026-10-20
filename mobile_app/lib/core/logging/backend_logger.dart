@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
+import 'package:healthpocket/core/errors/backend_failure.dart';
+
 enum BackendLogLevel { info, warning, error }
 
 class BackendLogEntry {
@@ -91,7 +93,7 @@ class BackendLogger {
           'errorType': error.runtimeType.toString(),
         },
       );
-      rethrow;
+      throw mapBackendFailure(error);
     }
   }
 

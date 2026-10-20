@@ -235,89 +235,106 @@
 
 ## 14. “What Can My Balance Cover?”
 
-- [ ] Create `coverageItems`/care-cost model.
-- [ ] Start with approximately 5 curated healthcare items based on partner-supplied MVP data.
-- [ ] Store item name, category, indicative price, source/provider reference, location/context where relevant, last-updated timestamp, and active status.
-- [ ] Treat prices as indicative estimates rather than guaranteed treatment prices.
-- [ ] Compare each active item's price against the user's available balance.
-- [ ] Return `covered`, `amountRemaining`, or equivalent derived state.
-- [ ] When balance is ₦0, return the appropriate encouragement/empty-state data instead of pretending services are affordable.
-- [ ] Do not hard-code prices into Flutter.
-- [ ] Make coverage items remotely maintainable through backend/admin tooling.
-- [ ] Ensure stale/inactive pricing can be disabled.
+- [x] Create `coverageItems`/care-cost model.
+- [ ] Start with approximately 5 curated healthcare items based on partner-supplied MVP data. *(The seed service and five-item emulator fixture are complete; awaiting genuine partner-supplied prices before creating the live catalog.)*
+- [x] Store item name, category, indicative price, source/provider reference, location/context where relevant, last-updated timestamp, and active status.
+- [x] Treat prices as indicative estimates rather than guaranteed treatment prices.
+- [x] Compare each active item's price against the user's available balance.
+- [x] Return `covered`, `amountRemaining`, or equivalent derived state.
+- [x] When balance is ₦0, return the appropriate encouragement/empty-state data instead of pretending services are affordable.
+- [x] Do not hard-code prices into Flutter.
+- [x] Make coverage items remotely maintainable through backend/admin tooling.
+- [x] Ensure stale/inactive pricing can be disabled.
 
 ## 15. Email Infrastructure
 
-- [ ] Define centralized transactional email service abstraction.
-- [ ] Implement templates/events required for the final MVP.
-- [ ] Keep email sending server-side.
-- [ ] Add rate limits/retry strategy.
-- [ ] Do not expose email-provider credentials to Flutter.
-- [ ] Prevent duplicate sends for idempotent financial events.
-- [ ] Separate essential transactional/security messages from optional marketing communications.
-- [ ] Wire verification-code email flow if retained.
-- [ ] Prepare relevant transaction/family/security email event hooks without making email delivery a prerequisite for transaction correctness.
+- [x] Define centralized transactional email service abstraction.
+- [x] Implement templates/events required for the final MVP.
+- [x] Keep email sending server-side.
+- [x] Add rate limits/retry strategy.
+- [x] Do not expose email-provider credentials to Flutter.
+- [x] Prevent duplicate sends for idempotent financial events.
+- [x] Separate essential transactional/security messages from optional marketing communications.
+- [x] Wire verification-code email flow if retained. *(Not retained for the Google-only MVP; the reserved backend-only challenge boundary stores no plaintext codes.)*
+- [x] Prepare relevant transaction/family/security email event hooks without making email delivery a prerequisite for transaction correctness.
 
 ## 16. Backend System/Error States
 
-- [ ] Standardize backend error codes/messages.
-- [ ] Cover unauthenticated/unauthorized.
-- [ ] Cover invalid input.
-- [ ] Cover offline/network/retry scenarios at repository boundary.
-- [ ] Cover insufficient balance.
-- [ ] Cover provider not found/inactive.
-- [ ] Cover payment pending/failed.
-- [ ] Cover duplicate request/idempotency conflict.
-- [ ] Cover verification failure.
-- [ ] Cover savings-plan failure.
-- [ ] Cover Family Pocket permission/invite errors.
-- [ ] Avoid exposing internal stack traces/provider secrets to users.
-- [ ] Make errors actionable enough for Flutter to render the correct state.
+- [x] Standardize backend error codes/messages.
+- [x] Cover unauthenticated/unauthorized.
+- [x] Cover invalid input.
+- [x] Cover offline/network/retry scenarios at repository boundary.
+- [x] Cover insufficient balance.
+- [x] Cover provider not found/inactive.
+- [x] Cover payment pending/failed.
+- [x] Cover duplicate request/idempotency conflict.
+- [x] Cover verification failure.
+- [x] Cover savings-plan failure.
+- [x] Cover Family Pocket permission/invite errors.
+- [x] Avoid exposing internal stack traces/provider secrets to users.
+- [x] Make errors actionable enough for Flutter to render the correct state.
 
 ## 17. Firestore & Storage Security
 
-- [ ] Default-deny security posture.
-- [ ] Users may only read/write their permitted profile data.
-- [ ] Wallet balances and completed financial records cannot be manipulated by clients.
-- [ ] Ledger writes restricted to trusted backend.
-- [ ] Transaction finalization restricted to trusted backend.
-- [ ] Provider-directory writes restricted to trusted/admin backend.
-- [ ] Coverage-item writes restricted to trusted/admin backend.
-- [ ] Family Pocket rules enforce membership and role permissions.
-- [ ] Family Pocket private data inaccessible to non-members.
-- [ ] Notifications accessible only to intended user.
-- [ ] Storage rules protect profile and Family Pocket images.
-- [ ] Validate paths, ownership, file metadata/type/size where possible.
-- [ ] Test cross-user attacks in Emulator Suite.
-- [ ] Test guessed document IDs.
-- [ ] Test unauthorized update/delete attempts.
-- [ ] Test privilege escalation attempts.
+- [x] Default-deny security posture.
+- [x] Users may only read/write their permitted profile data.
+- [x] Wallet balances and completed financial records cannot be manipulated by clients.
+- [x] Ledger writes restricted to trusted backend.
+- [x] Transaction finalization restricted to trusted backend.
+- [x] Provider-directory writes restricted to trusted/admin backend.
+- [x] Coverage-item writes restricted to trusted/admin backend.
+- [x] Family Pocket rules enforce membership and role permissions.
+- [x] Family Pocket private data inaccessible to non-members.
+- [x] Notifications accessible only to intended user.
+- [x] Storage rules protect profile and Family Pocket images.
+- [x] Validate paths, ownership, file metadata/type/size where possible.
+- [x] Test cross-user attacks in Emulator Suite.
+- [x] Test guessed document IDs.
+- [x] Test unauthorized update/delete attempts.
+- [x] Test privilege escalation attempts.
+
+*Verified locally in the Firestore and Storage emulators. Live Storage rules
+remain undeployed until the DEV bucket/billing blocker is resolved; the earlier
+live-upload checklist items remain open.*
 
 ## 18. Cloud Functions / Trusted Backend
 
-- [ ] Identify every operation that must not trust Flutter.
-- [ ] Move authoritative financial mutations into trusted backend functions/services.
-- [ ] Validate authentication on every callable/API operation.
-- [ ] Validate authorization separately from authentication.
-- [ ] Validate all request payloads server-side.
-- [ ] Add idempotency support to money-moving operations.
-- [ ] Use transactions/batches where consistency requires them.
-- [ ] Add timeout/retry-safe behavior.
-- [ ] Add structured audit logs for sensitive operations.
-- [ ] Keep provider/payment secrets in server-side secret/config management.
-- [ ] Design functions so future Anchor/payment-provider integration replaces adapters rather than business logic.
+- [x] Identify every operation that must not trust Flutter.
+- [x] Move authoritative financial mutations into trusted backend functions/services.
+- [x] Validate authentication on every callable/API operation.
+- [x] Validate authorization separately from authentication.
+- [x] Validate all request payloads server-side.
+- [x] Add idempotency support to money-moving operations.
+- [x] Use transactions/batches where consistency requires them.
+- [x] Add timeout/retry-safe behavior.
+- [x] Add structured audit logs for sensitive operations.
+- [x] Keep provider/payment secrets in server-side secret/config management.
+- [x] Design functions so future Anchor/payment-provider integration replaces adapters rather than business logic.
+
+*The callable boundary and mock money flows are verified locally. Money commands
+fail closed outside the `demo-healthpocket` emulator until a regulated provider
+adapter and its Secret Manager values are configured; no live Functions deploy
+was performed.*
 
 ## 19. Data Integrity & Indexing
 
-- [ ] Review Firestore schema for query patterns before launch.
-- [ ] Create required composite indexes.
-- [ ] Avoid unbounded reads.
-- [ ] Paginate potentially large collections.
-- [ ] Eliminate N+1-style Firestore access where practical.
-- [ ] Define deletion/retention behavior for user accounts while preserving records that may later require financial/legal retention.
-- [ ] Ensure references to deleted/deactivated providers do not break historical transactions.
-- [ ] Add schema/version strategy where useful.
-- [ ] Add safe migration/seeding scripts for provider and coverage data.
+- [x] Review Firestore schema for query patterns before launch.
+- [x] Create required composite indexes.
+- [x] Avoid unbounded reads.
+- [x] Paginate potentially large collections.
+- [x] Eliminate N+1-style Firestore access where practical.
+- [x] Define deletion/retention behavior for user accounts while preserving records that may later require financial/legal retention.
+- [x] Ensure references to deleted/deactivated providers do not break historical transactions.
+- [x] Add schema/version strategy where useful.
+- [x] Add safe migration/seeding scripts for provider and coverage data.
+
+*Verified against the Firestore Standard emulator: the complete backend suite
+passes 115/115 tests, including bulk activity-source reads and idempotent,
+checksum-locked catalog releases. Flutter repository conventions pass 9/9
+tests. The new reconciliation indexes are declared in
+`firestore.indexes.json` but were not deployed to DEV or production in this
+phase. Retention periods remain intentionally unset until Nigerian
+legal/compliance and regulated-provider requirements are approved.*
 
 ## 20. Abuse & Reliability Protection
 

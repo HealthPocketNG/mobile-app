@@ -8,6 +8,7 @@ const { PUSH_RESULT } = require("./push-notification-service");
 const SAFE_ID = /^[A-Za-z0-9_-]{1,256}$/;
 const PLATFORMS = new Set(["android", "ios", "web"]);
 const READ_STATES = new Set(["read", "unread"]);
+const MAX_ACTIVE_DEVICES = 100;
 
 class NotificationError extends Error {
   constructor(code, message) {
@@ -182,7 +183,7 @@ function buildNotificationService({ db, push, clock = () => new Date(), logger =
     if (!snapshot.exists) throw notFound();
     const notice = snapshot.data();
     const deviceSnapshot = await devices.where("userId", "==", notice.userId)
-      .where("status", "==", "active").get();
+      .where("status", "==", "active").limit(MAX_ACTIVE_DEVICES).get();
     const now = Timestamp.fromDate(nowFrom(clock));
     if (deviceSnapshot.empty) {
       await reference.update({ deliveryStatus: "no_devices", updatedAt: now });

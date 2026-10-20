@@ -70,6 +70,18 @@ service cloud.firestore {
     // containing schemaVersion, userId, raw push token, platform, lifecycle
     // status, delivery diagnostics, and trusted timestamps. No client reads or
     // writes are permitted because possession of a token enables push delivery.
+    // email_outbox/{messageId}: backend-only transactional delivery record with
+    // schemaVersion, recipientEmail PII, eventType/classification, bounded
+    // template variables, requestFingerprint, delivery status/attempt fields,
+    // provider response metadata/errors, and trusted timestamps. It is never
+    // exposed through the client Firestore SDK.
+    // email_rate_limits/{bucketId}: backend-only abuse-control bucket containing
+    // schemaVersion, recipientHash, email classification, count, windowStartedAt,
+    // windowEndsAt, and updatedAt. Clients cannot inspect or reset rate state.
+    // email_verification_challenges/{challengeId}: reserved and disabled for
+    // the Google-only MVP. Any future backend implementation must store hashes
+    // only (never plaintext codes) plus attempt/state/expiry metadata, and must
+    // remain completely inaccessible through the client Firestore SDK.
     // family_pockets/{id}: private active-member-scoped pocket with immutable
     // ownerId (or legacy createdBy), bounded name/optional description and
     // imagePath, contribution frequency/default amount, NGN currency, status,
@@ -97,6 +109,15 @@ service cloud.firestore {
     // list, max 50), active (boolean), createdAt/updatedAt (timestamps), and
     // deactivatedAt (nullable timestamp). Verified Google clients may read only
     // active records; all create/update/delete operations are backend-only.
+    // coverage_items/{coverageItemId}: server/admin-owned, non-PII indicative
+    // care-cost catalog. Required fields: schemaVersion (1), name and
+    // normalizedName, category (consultation/diagnostics/pharmacy/dental/
+    // vision/maternal_care/other), positive integer indicativePriceKobo, NGN
+    // currency, priceType (indicative_estimate), sourceName, nullable
+    // sourceReference/providerId, locationContext map with nullable state/city,
+    // fixed disclaimer, active, createdAt/updatedAt/lastUpdatedAt, and nullable
+    // deactivatedAt. Verified Google clients may read active records only; all
+    // catalog writes are trusted-admin-only.
     // activities/{id}: append-only, narrowly typed audit event and small metadata.
 
     // ===============================================================
@@ -661,6 +682,24 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    match /email_outbox/{messageId} {
+      // Recipient PII, template variables, delivery errors, and provider
+      // metadata are accessible only to trusted Admin SDK email workers.
+      allow read, create, update, delete: if false;
+    }
+
+    match /email_rate_limits/{bucketId} {
+      // Rate-limit inspection or mutation would disclose security state and
+      // enable quota resets, so even authenticated/admin-claim clients fail.
+      allow read, create, update, delete: if false;
+    }
+
+    match /email_verification_challenges/{challengeId} {
+      // Verification hashes, attempts, expiry, and consumption are handled by
+      // the trusted backend; clients interact only through authenticated APIs.
+      allow read, create, update, delete: if false;
+    }
+
     match /healthcare_providers/{providerId} {
       // Queries must include active == true. Optional category, partnerStatus,
       // state/city, searchPrefixes, locationCell, ordering, and limit clauses do
@@ -669,6 +708,16 @@ service cloud.firestore {
         && resource.data.active == true;
       // Directory seeding, correction, activation, and deactivation are trusted
       // Admin SDK operations. Ordinary clients cannot publish or alter listings.
+      allow create, update, delete: if false;
+    }
+
+    match /coverage_items/{coverageItemId} {
+      // List queries must constrain active == true. Ordering by indicative
+      // price and applying a bounded limit do not widen the readable result.
+      allow read: if hasVerifiedIdentity()
+        && resource.data.active == true;
+      // Prices, sources, disclaimers, timestamps, and activation state are
+      // maintained only through trusted catalog administration.
       allow create, update, delete: if false;
     }
 

@@ -65,6 +65,23 @@ test("returns a normalized newest-first page with an opaque cursor", async () =>
   assert.equal(second.nextCursor, null);
 });
 
+test("bulk-loads authoritative sources once per history page", async () => {
+  let bulkReadCount = 0;
+  const bulkHistory = buildActivityHistoryService({
+    db: {
+      collection: db.collection.bind(db),
+      getAll: async (...references) => {
+        bulkReadCount += 1;
+        return db.getAll(...references);
+      },
+    },
+    logger: silentLogger,
+  });
+  const page = await bulkHistory.listHistory({ actorId: ownerId, pageSize: 3 });
+  assert.equal(page.items.length, 3);
+  assert.equal(bulkReadCount, 1);
+});
+
 test("uses authoritative transaction amounts instead of stale activity metadata", async () => {
   const detail = await history.getTransactionDetail({
     actorId: ownerId,

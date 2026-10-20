@@ -25,6 +25,27 @@ DEV deployment and existing-user wallet backfill are intentionally deferred
 until Cloud Billing is available. Do not treat the older `dev_simulation`
 contribution records as real money or migrate them into authoritative wallets.
 
+## Trusted callable boundary
+
+`trustedBackend` is an authenticated command router with per-command payload
+allowlists. It requires a verified Google Firebase identity and injects the
+token UID into every owner/actor/user field; Flutter cannot select another
+user's authority. Domain services remain responsible for role and resource
+authorization. Unknown actions, extra fields, and client-supplied authority
+fields fail before a service is invoked.
+
+The router exposes user-owned wallet, savings, Family Pocket, notification,
+activity, receipt, coverage, and payment workflows. Ledger finalization,
+reconciliation, provider/catalog administration, webhooks, scheduled savings,
+delivery workers, and seed operations are intentionally absent from the client
+surface. See `../docs/trusted-backend-boundary.md` for the complete matrix.
+
+Mock money commands run only in the Functions emulator with the
+`demo-healthpocket` project. A deployed function fails those commands closed
+until a regulated provider adapter is explicitly configured. Secret parameter
+declarations live in `src/config/backend-config.js`; mock adapters never read
+production secrets.
+
 ## Payment-provider boundary
 
 `src/payments/payment-gateway.js` defines the provider-neutral contract and the
@@ -50,8 +71,9 @@ TODO when a regulated provider is selected:
   reference data against the server-created attempt; and
 - add the provider's regulated healthcare-eligibility/MCC controls separately.
 
-No production payment endpoint, provider credential, settlement logic, or real
-MCC verification is included in this codebase yet.
+No production provider credential, settlement adapter, or real MCC
+verification is included in this codebase yet. The callable money commands
+therefore fail closed outside the local demo emulator.
 
 ## Add Money / funding
 
@@ -75,8 +97,8 @@ delivery reuse the same payment, ledger, activity, receipt, and notification
 records.
 
 `funding-policy.js` and the mock provider are currently local-backend building
-blocks. No production funding callable, real bank redirect, credentials, or
-real-money movement is exported or deployed.
+blocks. The funding command is emulator-only; no real bank redirect,
+credentials, or real-money movement is deployed.
 
 ## Savings-plan orchestration
 
@@ -122,9 +144,11 @@ pending, and timed-out attempts never credit the pocket; delayed verification
 can safely complete later. Reconciliation derives the expected balance from
 completed ledger postings.
 
-No production Family Pocket callable or real-money payment endpoint is
-exported yet. `imagePath` is ready in the model, but actual Family Pocket image
-upload remains deferred with the broader Cloud Storage billing work.
+Family Pocket management is exposed through the authenticated trusted command
+boundary. Contribution commands are emulator-only; no real-money payment
+endpoint is deployed. `imagePath` is ready in the model, but actual Family
+Pocket image upload remains deferred with the broader Cloud Storage billing
+work.
 
 ## Healthcare provider directory
 
@@ -162,8 +186,9 @@ production MCC verification. Non-partner persistence contains only safe bank
 display fields (last four digits, bank identity/name, and an opaque beneficiary
 reference); the raw account number is not stored.
 
-No healthcare callable, QR payment, production settlement endpoint, provider
-credential, or real MCC service is exported or deployed in this phase.
+Healthcare commands are present but fail closed outside the demo emulator. No
+QR payment, production settlement adapter, provider credential, or real MCC
+service is deployed in this phase.
 
 ## Activity and transaction history
 
@@ -186,8 +211,9 @@ Family Pocket exports require a current active/accepted membership and exclude
 removed or departed members. Export windows are limited to 366 days and 5,000
 records. Spreadsheet-formula prefixes are neutralized in generated CSV cells.
 Clients retain read-only access under Firestore Security Rules; every activity
-create, update, and delete remains trusted-backend-only. No public history
-callable or live deployment is included in this phase.
+create, update, and delete remains trusted-backend-only. Authenticated history,
+detail, and bounded statement commands are available through `trustedBackend`;
+there is no unauthenticated/public history endpoint.
 
 ## Receipts
 
@@ -210,8 +236,9 @@ The receipt read service supports owner-only lookup by receipt number or source
 transaction and returns JSON or plain-text download/share contracts. Stored
 receipts are checked against a deterministic source fingerprint and fail closed
 if corrupted. Clients may read only their own receipts and cannot create,
-update, or delete them. No PDF renderer, frontend share sheet, public callable,
-or deployment is included in this backend phase.
+update, or delete them. Owner-only get/export commands are available through
+`trustedBackend`; no PDF renderer, frontend share sheet, or unauthenticated
+receipt endpoint is included in this backend phase.
 
 ## Notifications
 
@@ -244,3 +271,88 @@ trusted invocation boundary are connected. Flutter foreground listeners,
 permission prompts, system-tray behavior, deep links, and physical-device
 lifecycle testing remain frontend/integration work. No FCM credential or live
 deployment is included here.
+
+## What can my balance cover?
+
+`src/coverage/coverage-service.js` owns the remotely maintainable
+`coverage_items` catalog and affordability projection. Trusted administrators
+can upsert, seed, activate, and deactivate indicative care-cost records; client
+SDKs cannot publish or change prices. Each item stores an integer-kobo estimate,
+category, source/provider reference, optional location context, trusted update
+time, active state, and an explicit non-guaranteed-price disclaimer.
+
+`evaluateCoverage` reads the authenticated user's server-owned wallet and a
+bounded, price-ordered set of active catalog items. It derives `covered`,
+`amountRemainingKobo`, and `shortfallKobo` without accepting a balance from the
+client. Zero balance returns an encouragement state without claiming that any
+care is affordable; unavailable or corrupt wallets fail closed. Inactive or
+stale catalog entries are excluded without being deleted.
+
+Tests use five local fixture items to exercise zero, low, exact, sufficient,
+and high balances. No production price dataset is included: the initial live
+catalog must be seeded from actual partner-supplied MVP data before release.
+
+## Email infrastructure
+
+`src/email/email-service.js` implements a backend-only Firestore outbox for
+transactional, security, and optional marketing messages. Its template catalog
+covers welcome, funding, healthcare payment, savings contribution, Family
+Pocket invitation/contribution, PIN-reset confirmation, security alert, and
+optional product-update events. Template variables are allowlisted and bounded;
+financial hooks use deterministic idempotency keys to prevent duplicate sends.
+
+Recipient/classification rate-limit buckets protect the queue without exposing
+email addresses in bucket IDs. Marketing messages require explicit consent and
+are suppressed without it; transactional and security messages never depend on
+marketing consent. Delivery uses the replaceable `TransactionalEmailProvider`
+contract. The mock adapter exercises success, transient failure, permanent
+failure, retry backoff, and expired-worker-lease recovery without credentials.
+
+Outbox dispatch is downstream of business transactions. Provider failure
+changes only email delivery metadata and never changes funding, savings,
+healthcare, Family Pocket, or security outcomes. Raw provider credentials do
+not exist in Flutter or this repository. A production adapter must read its
+credentials from server-side secret management.
+
+The Google-only MVP does not retain a second app-level verification-code flow,
+so no verification code is generated or emailed. The
+`email_verification_challenges` boundary is reserved and completely denied to
+clients; any future implementation must store only salted hashes, with expiry,
+single-use, resend cooldown, and attempt limits.
+
+## Backend error contract
+
+`src/errors/backend-error.js` is the public failure boundary for trusted
+callables and APIs. Existing domain-service codes are normalized into a stable
+contract containing `code`, safe `message`, `retryable`, recommended `action`,
+and a correlation ID. The catalog covers authentication/authorization, invalid
+input, connectivity and timeout states, insufficient balance, provider
+availability, payment lifecycle, idempotency conflicts, verification, savings,
+and Family Pocket permissions/invitations.
+
+`runCallable` logs started/success/failure lifecycle events using only bounded
+operational labels, normalized code/error type, and correlation ID. Provider
+messages, payloads, stack traces, accounts, tokens, and other internal details
+are never logged or returned to clients. `ensureMyWallet` and `trustedBackend`
+both use this boundary.
+
+Flutter mirrors the contract in `lib/core/errors/backend_failure.dart`.
+Repository futures and streams can convert Firebase, offline/network, timeout,
+validation, parsing, and unknown failures through `guardRepository` and
+`repositoryErrorTransformer`. Traced repository mutations now apply this
+normalization automatically, giving UI flows stable retry guidance without
+depending on Firebase/provider-specific error text.
+
+## Data integrity and catalog releases
+
+All query/index mappings, pagination ceilings, schema-version rules, account
+retention behavior, and historical provider guarantees are documented in
+`../docs/data-integrity-and-retention.md`. Large reconciliation scans page in
+bounded batches, and activity history bulk-fetches authoritative sources rather
+than issuing one source query per row.
+
+Catalog releases use `npm run seed:catalogs -- --file <manifest>` from this
+directory. The command is validation-only by default. Applying requires
+`--apply --project <id>`; a non-emulator target additionally requires
+`--confirm-project <id>`. Every completed release records an immutable checksum
+marker so identical retries are harmless and release-ID reuse fails closed.

@@ -6,7 +6,8 @@
     "node": "22"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 test/*.test.js"
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "seed:catalogs": "node scripts/seed-catalogs.js"
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",

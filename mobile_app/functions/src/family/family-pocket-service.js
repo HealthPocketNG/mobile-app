@@ -1,13 +1,14 @@
 "use strict";
 
 const { createHash, randomBytes } = require("node:crypto");
-const { FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { FieldPath, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { PaymentGatewayError, PAYMENT_STATUS } = require("../payments/payment-gateway");
 const { notificationDocument } = require("../notifications/notification-model");
 
 const CURRENCY = "NGN";
 const SAFE_ID = /^[A-Za-z0-9_-]{1,256}$/;
 const REQUEST_KEY = /^[A-Za-z0-9_-]{16,80}$/;
+const IMAGE_OBJECT_NAME = /^[A-Fa-f0-9]{32}\.(?:jpg|png|webp)$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FREQUENCIES = new Set(["daily", "weekly", "monthly"]);
 const ROLES = new Set(["owner", "admin", "member"]);
@@ -43,6 +44,7 @@ function buildFamilyPocketService({ db, gateway, logger = console }) {
   async function createPocket(input) {
     const value = normalizePocket(input);
     const pocketId = `family_${hash({ ownerId: value.ownerId, key: value.idempotencyKey }).slice(0, 48)}`;
+    requireFamilyImagePath(value.imagePath, pocketId);
     const pocketRef = pockets.doc(pocketId);
     const ownerRef = pocketRef.collection("members").doc(value.ownerId);
     await db.runTransaction(async (transaction) => {
@@ -86,7 +88,7 @@ function buildFamilyPocketService({ db, gateway, logger = console }) {
   async function updatePocket({ actorId, pocketId, ...changes }) {
     requireSafeId(actorId, "actorId");
     requireSafeId(pocketId, "pocketId");
-    const patch = normalizePocketChanges(changes);
+    const patch = normalizePocketChanges(changes, pocketId);
     await db.runTransaction(async (transaction) => {
       const pocketRef = pockets.doc(pocketId);
       const [pocket, actor] = await Promise.all([
@@ -539,21 +541,28 @@ function buildFamilyPocketService({ db, gateway, logger = console }) {
 
   async function reconcilePocket(pocketId) {
     requireSafeId(pocketId, "pocketId");
-    const [pocket, entries] = await Promise.all([
-      pockets.doc(pocketId).get(),
-      ledgerEntries.where("familyPocketId", "==", pocketId)
-        .where("status", "==", "completed").get(),
-    ]);
+    const pocket = await pockets.doc(pocketId).get();
     if (!pocket.exists) throw new FamilyPocketError("not-found", "Pocket was not found.");
-    const expectedBalanceKobo = entries.docs.reduce(
-      (total, entry) => total + entry.data().amountKobo,
-      0,
-    );
+    let expectedBalanceKobo = 0;
+    let entryCount = 0;
+    let cursor = null;
+    do {
+      let query = ledgerEntries.where("familyPocketId", "==", pocketId)
+        .where("status", "==", "completed")
+        .orderBy("createdAt", "asc")
+        .orderBy(FieldPath.documentId(), "asc")
+        .limit(500);
+      if (cursor) query = query.startAfter(cursor);
+      const page = await query.get();
+      for (const entry of page.docs) expectedBalanceKobo += entry.data().amountKobo;
+      entryCount += page.size;
+      cursor = page.size === 500 ? page.docs.at(-1) : null;
+    } while (cursor);
     return {
       matches: expectedBalanceKobo === pocket.data().balanceKobo,
       expectedBalanceKobo,
       actualBalanceKobo: pocket.data().balanceKobo,
-      entryCount: entries.size,
+      entryCount,
     };
   }
 
@@ -594,7 +603,7 @@ function normalizePocket(input) {
   };
 }
 
-function normalizePocketChanges(input) {
+function normalizePocketChanges(input, pocketId) {
   const result = {};
   if (Object.hasOwn(input, "name")) {
     requireBoundedString(input.name, "name", 100);
@@ -605,6 +614,7 @@ function normalizePocketChanges(input) {
   }
   if (Object.hasOwn(input, "imagePath")) {
     result.imagePath = optionalBoundedString(input.imagePath, "imagePath", 500);
+    requireFamilyImagePath(result.imagePath, pocketId);
   }
   if (Object.hasOwn(input, "frequency")) {
     requireFrequency(input.frequency);
@@ -616,6 +626,17 @@ function normalizePocketChanges(input) {
   }
   if (Object.keys(result).length === 0) invalid("No supported changes were supplied.");
   return result;
+}
+
+function requireFamilyImagePath(imagePath, pocketId) {
+  if (imagePath === null) return;
+  const prefix = `family_pockets/${pocketId}/profile/`;
+  const objectName = imagePath.startsWith(prefix)
+    ? imagePath.slice(prefix.length)
+    : "";
+  if (!IMAGE_OBJECT_NAME.test(objectName)) {
+    invalid("imagePath must reference this Family Pocket's protected image area.");
+  }
 }
 
 function normalizeInvite(input) {

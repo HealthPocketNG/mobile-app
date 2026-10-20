@@ -110,7 +110,10 @@ function buildProviderDirectoryService({ db, logger = console }) {
     let deactivatedCount = 0;
     if (deactivateMissing) {
       const retainedIds = new Set(prepared.map(({ providerId }) => providerId));
-      const active = await providers.where("active", "==", true).get();
+      const active = await providers.where("active", "==", true).limit(401).get();
+      if (active.size > 400) {
+        invalid("Cannot deactivate missing providers when more than 400 are active.");
+      }
       for (const document of active.docs) {
         if (!retainedIds.has(document.id)) {
           writes.push({

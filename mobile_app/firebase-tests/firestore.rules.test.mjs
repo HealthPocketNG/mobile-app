@@ -258,6 +258,68 @@ const seedHealthcareProviders = async () => {
   });
 };
 
+const coverageItem = ({
+  name,
+  category,
+  indicativePriceKobo,
+  active = true,
+  sourceName = 'HealthPocket partner pricing',
+  sourceReference = null,
+  providerId = null,
+  state = 'Lagos',
+  city = 'Ikeja',
+}) => ({
+  schemaVersion: 1,
+  name,
+  normalizedName: name.toLowerCase(),
+  category,
+  indicativePriceKobo,
+  currency: 'NGN',
+  priceType: 'indicative_estimate',
+  sourceName,
+  sourceReference,
+  providerId,
+  locationContext: { state, city },
+  disclaimer: 'Indicative estimate only. Actual healthcare costs may vary.',
+  active,
+  createdAt: now,
+  updatedAt: now,
+  lastUpdatedAt: now,
+  deactivatedAt: active ? null : now,
+});
+
+const seedCoverageItems = async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(
+      doc(db, 'coverage_items/basic-consultation'),
+      coverageItem({
+        name: 'Basic consultation',
+        category: 'consultation',
+        indicativePriceKobo: 500000,
+      }),
+    );
+    await setDoc(
+      doc(db, 'coverage_items/basic-diagnostics'),
+      coverageItem({
+        name: 'Basic diagnostics',
+        category: 'diagnostics',
+        indicativePriceKobo: 750000,
+        sourceReference: 'partner-price-list-2026-10',
+      }),
+    );
+    await setDoc(
+      doc(db, 'coverage_items/stale-pharmacy-estimate'),
+      coverageItem({
+        name: 'Stale pharmacy estimate',
+        category: 'pharmacy',
+        indicativePriceKobo: 250000,
+        active: false,
+      }),
+    );
+  });
+};
+
 const healthcarePayment = (uid, flowType, overrides = {}) => ({
   schemaVersion: 1,
   userId: uid,
@@ -1900,6 +1962,99 @@ test('healthcare directory rejects weak identities and every client write', asyn
   await assertFails(deleteDoc(doc(userDb, activePath)));
 });
 
+test('verified Google users can get and query only active coverage items', async () => {
+  await seedCoverageItems();
+  const userDb = verifiedContext('coverage-user').firestore();
+  const items = collection(userDb, 'coverage_items');
+
+  await assertSucceeds(
+    getDoc(doc(userDb, 'coverage_items/basic-consultation')),
+  );
+  await assertFails(
+    getDoc(doc(userDb, 'coverage_items/stale-pharmacy-estimate')),
+  );
+  await assertFails(
+    getDoc(doc(userDb, 'coverage_items/guessed-inactive-item')),
+  );
+
+  const activeItems = await assertSucceeds(getDocs(query(
+    items,
+    where('active', '==', true),
+    orderBy('indicativePriceKobo', 'asc'),
+    limit(100),
+  )));
+  if (activeItems.size !== 2) {
+    throw new Error(`Expected two active coverage items, got ${activeItems.size}.`);
+  }
+  await assertFails(getDocs(items));
+  await assertFails(getDocs(query(
+    items,
+    orderBy('indicativePriceKobo', 'asc'),
+    limit(100),
+  )));
+  await assertFails(getDocs(query(
+    items,
+    where('active', '==', false),
+    orderBy('indicativePriceKobo', 'asc'),
+  )));
+});
+
+test('coverage catalog rejects weak identities and every client mutation', async () => {
+  await seedCoverageItems();
+  const activePath = 'coverage_items/basic-consultation';
+  const anonymousDb = environment.unauthenticatedContext().firestore();
+  const unverifiedDb = environment.authenticatedContext('coverage-unverified', {
+    email: 'coverage-unverified@example.com',
+    email_verified: false,
+    firebase: { sign_in_provider: 'google.com' },
+  }).firestore();
+  const phoneDb = environment.authenticatedContext('coverage-phone', {
+    phone_number: '+2348012345678',
+    firebase: { sign_in_provider: 'phone' },
+  }).firestore();
+
+  for (const db of [anonymousDb, unverifiedDb, phoneDb]) {
+    await assertFails(getDoc(doc(db, activePath)));
+    await assertFails(getDocs(query(
+      collection(db, 'coverage_items'),
+      where('active', '==', true),
+      orderBy('indicativePriceKobo', 'asc'),
+      limit(20),
+    )));
+  }
+
+  const userDb = verifiedContext('coverage-user').firestore();
+  await assertFails(setDoc(
+    doc(userDb, 'coverage_items/forged-item'),
+    coverageItem({
+      name: 'Forged care price',
+      category: 'other',
+      indicativePriceKobo: 1,
+      sourceName: 'Attacker source',
+    }),
+  ));
+  const activeItem = doc(userDb, activePath);
+  for (const mutation of [
+    { active: false, deactivatedAt: now },
+    { indicativePriceKobo: 1 },
+    { indicativePriceKobo: '500000' },
+    { sourceName: 'Attacker source' },
+    { sourceReference: 'forged-reference' },
+    { priceType: 'guaranteed_price' },
+    { disclaimer: 'This price is guaranteed.' },
+    { updatedAt: Timestamp.fromDate(new Date('2099-01-01T00:00:00Z')) },
+    { extraData: 'x'.repeat(10000) },
+  ]) {
+    await assertFails(updateDoc(activeItem, mutation));
+  }
+  await assertFails(deleteDoc(activeItem));
+
+  await assertFails(updateDoc(
+    doc(userDb, 'coverage_items/stale-pharmacy-estimate'),
+    { active: true, deactivatedAt: null },
+  ));
+});
+
 test('phone identity cannot access Google-only MVP data', async () => {
   const phoneDb = environment.authenticatedContext('phone-user', {
     phone_number: '+2348012345678',
@@ -2422,6 +2577,133 @@ test('notification devices are completely inaccessible to clients', async () => 
   await assertFails(deleteDoc(
     doc(ownerDb, 'notification_devices/device-seeded'),
   ));
+});
+
+test('email infrastructure collections are completely backend-only', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'email_outbox/message-seeded'), {
+      schemaVersion: 1,
+      recipientEmail: 'owner@example.com',
+      eventType: 'family_invitation',
+      classification: 'transactional',
+      variables: {
+        inviterName: 'HealthPocket User',
+        pocketName: 'Family Care',
+        inviteUrl: 'https://healthpocket.example/invites/example',
+      },
+      requestFingerprint: 'd'.repeat(64),
+      status: 'queued',
+      attemptCount: 0,
+      maxAttempts: 5,
+      nextAttemptAt: now,
+      provider: null,
+      providerMessageId: null,
+      lastErrorCode: null,
+      createdAt: now,
+      updatedAt: now,
+      sentAt: null,
+    });
+    await setDoc(doc(db, 'email_rate_limits/bucket-seeded'), {
+      schemaVersion: 1,
+      recipientHash: 'a'.repeat(64),
+      classification: 'transactional',
+      count: 1,
+      windowStartedAt: now,
+      windowEndsAt: Timestamp.fromDate(new Date('2026-01-01T01:00:00Z')),
+      updatedAt: now,
+    });
+    await setDoc(doc(db, 'email_verification_challenges/challenge-seeded'), {
+      schemaVersion: 1,
+      userId: 'owner',
+      emailHash: 'b'.repeat(64),
+      challengeHash: 'c'.repeat(64),
+      status: 'pending',
+      attemptCount: 0,
+      expiresAt: Timestamp.fromDate(new Date('2026-01-01T00:15:00Z')),
+      consumedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
+  const contexts = [
+    environment.unauthenticatedContext().firestore(),
+    verifiedContext('owner').firestore(),
+    verifiedContext('stranger').firestore(),
+    environment.authenticatedContext('phone-user', {
+      phone_number: '+2348012345678',
+      firebase: { sign_in_provider: 'phone' },
+    }).firestore(),
+    environment.authenticatedContext('forged-admin', {
+      email: 'forged-admin@example.com',
+      email_verified: true,
+      admin: true,
+      firebase: { sign_in_provider: 'google.com' },
+    }).firestore(),
+  ];
+  const resources = [
+    ['email_outbox', 'message-seeded'],
+    ['email_rate_limits', 'bucket-seeded'],
+    ['email_verification_challenges', 'challenge-seeded'],
+  ];
+
+  for (const db of contexts) {
+    for (const [collectionName, documentIdValue] of resources) {
+      await assertFails(getDoc(
+        doc(db, collectionName, documentIdValue),
+      ));
+      await assertFails(getDocs(collection(db, collectionName)));
+    }
+  }
+
+  const ownerDb = verifiedContext('owner').firestore();
+  const forgedAdminDb = contexts.at(-1);
+  for (const db of [ownerDb, forgedAdminDb]) {
+    await assertFails(setDoc(doc(db, 'email_outbox/message-forged'), {
+      recipientEmail: 'victim@example.com',
+      eventType: 'security_alert',
+      variables: { malicious: 'x'.repeat(10000) },
+      status: 'queued',
+    }));
+    await assertFails(updateDoc(
+      doc(db, 'email_outbox/message-seeded'),
+      { status: 'sent', providerMessageId: 'forged-provider-id' },
+    ));
+    await assertFails(deleteDoc(
+      doc(db, 'email_outbox/message-seeded'),
+    ));
+
+    await assertFails(setDoc(doc(db, 'email_rate_limits/bucket-forged'), {
+      recipientHash: 'f'.repeat(64),
+      classification: 'transactional',
+      count: 0,
+    }));
+    await assertFails(updateDoc(
+      doc(db, 'email_rate_limits/bucket-seeded'),
+      { count: 0, windowEndsAt: now },
+    ));
+    await assertFails(deleteDoc(
+      doc(db, 'email_rate_limits/bucket-seeded'),
+    ));
+
+    await assertFails(setDoc(
+      doc(db, 'email_verification_challenges/challenge-forged'),
+      {
+        userId: 'owner',
+        emailHash: 'f'.repeat(64),
+        challengeHash: '0'.repeat(64),
+        status: 'verified',
+      },
+    ));
+    await assertFails(updateDoc(
+      doc(db, 'email_verification_challenges/challenge-seeded'),
+      { status: 'verified', attemptCount: 0, consumedAt: now },
+    ));
+    await assertFails(deleteDoc(
+      doc(db, 'email_verification_challenges/challenge-seeded'),
+    ));
+  }
 });
 
 test('wallet and financial history are owner-readable but client-immutable', async () => {

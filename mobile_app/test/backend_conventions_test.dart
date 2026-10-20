@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/core/data/backend_ids.dart';
 import 'package:healthpocket/core/data/firestore/firestore_repositories.dart';
+import 'package:healthpocket/core/errors/backend_failure.dart';
 import 'package:healthpocket/core/logging/backend_logger.dart';
 
 void main() {
@@ -113,7 +117,11 @@ void main() {
           entity: 'user_profile',
           action: () async => throw StateError('private payload'),
         ),
-        throwsStateError,
+        throwsA(
+          isA<BackendFailure>()
+              .having((error) => error.code, 'code', 'internal')
+              .having((error) => error.retryable, 'retryable', isTrue),
+        ),
       );
 
       expect(entries.last.level, BackendLogLevel.error);
@@ -122,6 +130,57 @@ void main() {
       expect(
         entries.last.toJson().toString(),
         isNot(contains('private payload')),
+      );
+    });
+  });
+
+  group('BackendFailure', () {
+    test('normalizes retryable Firebase and timeout failures', () async {
+      final offline = BackendFailure.fromCode('network-request-failed');
+      expect(offline.code, BackendFailureCodes.networkError);
+      expect(offline.retryable, isTrue);
+      expect(offline.action, 'retry');
+
+      await expectLater(
+        guardRepository<void>(
+          () async => throw TimeoutException('private provider payload'),
+        ),
+        throwsA(
+          isA<BackendFailure>()
+              .having((error) => error.code, 'code', 'timeout')
+              .having((error) => error.action, 'action', 'check_status'),
+        ),
+      );
+    });
+
+    test('provides actionable domain failures without internal details', () {
+      final failures = <BackendFailure>[
+        BackendFailure.fromCode('insufficient-balance'),
+        BackendFailure.fromCode('provider-inactive'),
+        BackendFailure.fromCode('payment-pending'),
+        BackendFailure.fromCode('idempotency-conflict'),
+        BackendFailure.fromCode('healthcare-verification-failed'),
+        BackendFailure.fromCode('plan-cancelled'),
+        BackendFailure.fromCode('owner-transfer-required'),
+      ];
+      expect(failures.every((failure) => failure.action.isNotEmpty), isTrue);
+      expect(
+        failures.map((failure) => failure.toString()).join(' '),
+        isNot(contains('stack')),
+      );
+    });
+
+    test('maps stream errors at the repository boundary', () async {
+      final stream = Stream<int>.error(
+        FirebaseException(plugin: 'cloud_firestore', code: 'unavailable'),
+      ).transform(repositoryErrorTransformer<int>());
+      await expectLater(
+        stream,
+        emitsError(
+          isA<BackendFailure>()
+              .having((error) => error.code, 'code', 'unavailable')
+              .having((error) => error.retryable, 'retryable', isTrue),
+        ),
       );
     });
   });

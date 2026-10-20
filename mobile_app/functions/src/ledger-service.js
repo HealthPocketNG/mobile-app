@@ -1,7 +1,7 @@
 "use strict";
 
 const { createHash } = require("node:crypto");
-const { FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { FieldPath, FieldValue, Timestamp } = require("firebase-admin/firestore");
 
 const CURRENCY = "NGN";
 const MAX_AMOUNT_KOBO = 100000000000;
@@ -333,23 +333,36 @@ function buildLedgerService({ db, logger = console }) {
 
   async function reconcileWallet(userId) {
     requireSafeId(userId, "userId");
-    const [walletSnapshot, ledgerSnapshot] = await Promise.all([
-      wallets.doc(userId).get(),
-      entries.where("userId", "==", userId).where("status", "==", "completed").get(),
-    ]);
+    const walletSnapshot = await wallets.doc(userId).get();
     if (!walletSnapshot.exists) {
       throw new LedgerError("wallet-not-found", "Wallet is not provisioned.");
     }
-    const expectedBalanceKobo = ledgerSnapshot.docs.reduce((total, document) => {
-      const entry = document.data();
-      return total + (entry.direction === "credit" ? entry.amountKobo : -entry.amountKobo);
-    }, 0);
+    let expectedBalanceKobo = 0;
+    let entryCount = 0;
+    let cursor = null;
+    do {
+      let query = entries.where("userId", "==", userId)
+        .where("status", "==", "completed")
+        .orderBy("createdAt", "asc")
+        .orderBy(FieldPath.documentId(), "asc")
+        .limit(500);
+      if (cursor) query = query.startAfter(cursor);
+      const page = await query.get();
+      for (const document of page.docs) {
+        const entry = document.data();
+        expectedBalanceKobo += entry.direction === "credit"
+          ? entry.amountKobo
+          : -entry.amountKobo;
+      }
+      entryCount += page.size;
+      cursor = page.size === 500 ? page.docs.at(-1) : null;
+    } while (cursor);
     const actualBalanceKobo = walletSnapshot.data().availableBalanceKobo;
     const result = {
       matches: expectedBalanceKobo === actualBalanceKobo,
       expectedBalanceKobo,
       actualBalanceKobo,
-      entryCount: ledgerSnapshot.size,
+      entryCount,
     };
     log(logger, "reconcile_wallet", result.matches ? "success" : "mismatch");
     return result;

@@ -273,6 +273,37 @@ current personal and family histories derive directly from contribution records.
   DEV deployment is pending one-time creation of the project's default Firebase
   Storage bucket; production remains unchanged.
 
+## Firestore and Storage security audit
+
+- Firestore uses recursive default deny. Private profiles are owner-only;
+  wallets, ledgers, completed financial records, transaction finalization,
+  provider administration, coverage administration, notification writes, and
+  device registrations are client-immutable trusted-backend boundaries.
+- Family Pocket reads derive authority from the backend-owned membership
+  document. Removed/left users and non-members cannot read pocket-private data;
+  clients cannot write roles, permissions, memberships, balances, ledgers, or
+  audit history.
+- Profile images live at
+  `users/{uid}/profile/{random32}.{jpg|png|webp}`. Family Pocket images live at
+  `family_pockets/{pocketId}/profile/{random32}.{jpg|png|webp}`. Profile images
+  are owner-private; Family images are readable by active members and writable
+  only by active owners/admins.
+- Image creates require verified Google identity, an allowed MIME type, a
+  matching extension, a non-empty payload no larger than 5 MiB, and an unused
+  random object name. Object bytes cannot be overwritten in place. Deletes are
+  limited to the profile owner or a current Family Pocket owner/admin.
+- The trusted Family Pocket service accepts only an image path scoped to the
+  same pocket and protected Storage directory. Cross-user/profile paths and
+  malformed or unsupported object names fail before persistence.
+- Emulator attacks cover cross-user reads/writes, guessed IDs, unscoped
+  queries, unauthorized update/delete, schema pollution, oversized values,
+  immutable financial records, removed Family members, and privilege
+  escalation. Firestore passed 48/48 rules tests; Storage passed 6/6 rules
+  tests; the Family Pocket service passed 10/10 tests.
+- Live Storage deployment remains deferred until the DEV default bucket and
+  billing setup are available. The locally verified rules are ready for that
+  later deployment; no production rules were changed by this audit.
+
 ## Wallet and ledger verification
 
 The wallet/ledger foundation is locally verified against the Firestore
@@ -430,6 +461,103 @@ it does not create another Firestore collection or transmit logs externally.
 - Verified owners can read only their own inbox documents. All client inbox
   mutations and all client access to device-token documents are denied; read
   state changes pass through the trusted service.
+
+## What can my balance cover?
+
+- `coverage_items/{coverageItemId}` is the remotely maintained indicative
+  care-cost catalog. Documents contain schema version, name/normalized name,
+  category, positive integer-kobo estimate, `NGN` currency,
+  `indicative_estimate` price type, source and optional provider reference,
+  optional state/city context, disclaimer, active state, and trusted creation,
+  update, price-update, and deactivation timestamps.
+- The trusted coverage service supports admin-only upsert, bulk seed, activation,
+  and non-destructive deactivation. Stale pricing can be removed from discovery
+  while retaining the record for audit and repair.
+- Affordability evaluation reads `wallets/{userId}` directly and never accepts a
+  client-supplied balance. Active items are ordered by `indicativePriceKobo` and
+  bounded to at most 100 records. Each result derives `covered`, remaining
+  balance, and shortfall values.
+- A zero balance returns `zero_balance` plus encouragement and marks every item
+  uncovered. An empty active catalog returns `empty_catalog`; restricted,
+  missing, or malformed wallets fail closed.
+- Verified Google users may read only active catalog entries. Client writes are
+  denied; pricing and source attribution remain trusted-admin operations.
+- The five-item automated fixture validates catalog and affordability behavior,
+  but is not production data. Actual partner-supplied MVP items must be reviewed
+  and seeded before the initial live catalog is considered complete.
+
+## Email infrastructure
+
+- `email_outbox/{messageId}` is a backend-only delivery queue. It stores the
+  normalized recipient, event/template type, transactional/security/marketing
+  classification, bounded template variables, request fingerprint, delivery
+  state, attempt limit/count, next-attempt lease time, provider result metadata,
+  and trusted timestamps.
+- Message IDs are deterministic hashes of recipient, event, and idempotency key.
+  Repeated financial hooks return the same message; conflicting reuse fails.
+- `email_rate_limits/{bucketId}` stores a recipient hash, classification,
+  bounded time window, count, and trusted timestamps. Security, transactional,
+  and marketing traffic have independent policies.
+- Queue workers claim messages with a five-minute lease. Transient failures use
+  bounded exponential backoff; expired sending leases are reclaimable;
+  permanent failures stop retrying. Delivery remains downstream of the source
+  business transaction.
+- `email_verification_challenges` is reserved but disabled because the MVP uses
+  Google as its only account-entry identity. Client access is denied, and no
+  plaintext verification code is persisted.
+- All three email collections deny every client read and write. Provider
+  credentials belong only in future server-side secret management.
+
+## Backend error contract
+
+- Public backend failures use stable codes plus a safe message, retryability
+  flag, recommended UI action, and correlation ID. Domain/provider exceptions
+  remain internal and are normalized only at callable/API boundaries.
+- Supported categories cover unauthenticated/unauthorized access, invalid
+  input, offline/network/unavailable/timeout states, insufficient balance,
+  provider availability, pending/failed payments, idempotency conflicts,
+  verification failures, savings failures, and Family Pocket permission/invite
+  failures.
+- Unknown errors and integrity failures map to a generic internal response.
+  Stack traces, provider responses, secrets, tokens, account data, and raw
+  exception messages are never part of the client response.
+- Flutter repository futures and streams share the same code/action vocabulary,
+  allowing UI retry, sign-in, add-money, choose-provider, check-status, and
+  contact-admin states without parsing human-readable exception text.
+
+## Trusted Cloud Functions boundary
+
+- `trustedBackend` is the verified-Google-user command boundary for wallet,
+  savings, Family Pocket, healthcare, coverage, notification, activity, and
+  receipt operations. It uses a fixed action registry and per-action payload
+  allowlists; unknown actions, extra fields, and client-supplied authority
+  fields are rejected.
+- User, actor, and owner IDs come only from the Firebase Auth token. Domain
+  services separately validate resource ownership and Family Pocket roles.
+  Verification commands first prove ownership of the referenced attempt without
+  revealing whether another user's record exists.
+- Flutter cannot invoke ledger finalization/reversal, reconciliation,
+  provider/catalog administration, provider webhooks, scheduled execution,
+  notification/email dispatch, or seed operations.
+- Financial services retain deterministic idempotency keys, Firestore
+  transactions/batches, explicit pending/timed-out states, and safe retry or
+  reconciliation paths. Mock money commands run only in the
+  `demo-healthpocket` emulator and fail closed in deployed environments.
+- Payment, webhook, email, and push secrets are declared as Firebase Secret
+  Manager parameters. Replaceable provider interfaces isolate external adapter
+  code from ledger, authorization, orchestration, receipts, and notifications.
+- The complete operation/authority matrix is documented in
+  `docs/trusted-backend-boundary.md`. The backend suite passes 111/111 tests and
+  Functions emulator discovery confirms the trusted callable export.
+
+## Data integrity, schema evolution, and retention
+
+The complete query/index inventory, collection bounds, cursor strategy,
+document-version policy, safe catalog release process, and account
+deletion/financial-retention contract live in
+`docs/data-integrity-and-retention.md`. Historical healthcare transactions and
+receipts use embedded provider snapshots; catalog deactivation therefore never
+breaks completed records.
 
 ## Rules hardening notes
 

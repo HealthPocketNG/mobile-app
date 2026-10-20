@@ -57,7 +57,7 @@ function buildActivityHistoryService({ db, logger = console, clock = () => new D
 
     const snapshot = await query.limit(options.pageSize + 1).get();
     const pageDocuments = snapshot.docs.slice(0, options.pageSize);
-    const items = await Promise.all(pageDocuments.map(normalizeActivityDocument));
+    const items = await normalizeActivityDocuments(pageDocuments);
     const hasMore = snapshot.size > options.pageSize;
     const last = hasMore ? pageDocuments.at(-1) : null;
     const nextCursor = last
@@ -152,12 +152,39 @@ function buildActivityHistoryService({ db, logger = console, clock = () => new D
 
   async function normalizeActivityDocument(document, includeMetadata = false) {
     const activity = document.data();
-    requireSafeId(activity.userId, "activity.userId");
-    if (!ACTIVITY_TYPE.test(activity.activityType || "")) {
-      throw integrityError("Activity type is invalid.");
-    }
-    requireTimestamp(activity.createdAt, "activity.createdAt");
+    validateActivity(activity);
     const source = await authoritativeSource(activity);
+    return normalizeActivity(document, activity, source, includeMetadata);
+  }
+
+  async function normalizeActivityDocuments(documents) {
+    const activitiesToSources = documents.map((document) => {
+      const activity = document.data();
+      validateActivity(activity);
+      const collectionName = SOURCE_COLLECTIONS[activity.relatedEntityType];
+      if (!collectionName) return { document, activity, reference: null };
+      requireSafeId(activity.relatedEntityId, "activity.relatedEntityId");
+      return {
+        document,
+        activity,
+        reference: db.collection(collectionName).doc(activity.relatedEntityId),
+      };
+    });
+    const references = activitiesToSources
+      .map(({ reference }) => reference)
+      .filter(Boolean);
+    const snapshots = references.length === 0 ? [] : await db.getAll(...references);
+    let sourceIndex = 0;
+    return activitiesToSources.map(({ document, activity, reference }) => {
+      const source = reference
+        ? validatedAuthoritativeSource(activity, snapshots[sourceIndex++])
+        : null;
+      return normalizeActivity(document, activity, source);
+    });
+  }
+
+  function normalizeActivity(document, activity, source, includeMetadata = false) {
+    validateActivity(activity);
     const amountKobo = authoritativeAmount(activity, source);
     const currency = authoritativeCurrency(activity, source, amountKobo);
     const status = activityStatus(activity, source);
@@ -192,7 +219,11 @@ function buildActivityHistoryService({ db, logger = console, clock = () => new D
     if (!collectionName) return null;
     requireSafeId(activity.relatedEntityId, "activity.relatedEntityId");
     const snapshot = await db.collection(collectionName).doc(activity.relatedEntityId).get();
-    if (!snapshot.exists) {
+    return validatedAuthoritativeSource(activity, snapshot);
+  }
+
+  function validatedAuthoritativeSource(activity, snapshot) {
+    if (!snapshot?.exists) {
       throw integrityError("The authoritative activity source is missing.");
     }
     const source = snapshot.data();
@@ -205,6 +236,14 @@ function buildActivityHistoryService({ db, logger = console, clock = () => new D
       throw integrityError("Activity Family Pocket does not match its source.");
     }
     return source;
+  }
+
+  function validateActivity(activity) {
+    requireSafeId(activity.userId, "activity.userId");
+    if (!ACTIVITY_TYPE.test(activity.activityType || "")) {
+      throw integrityError("Activity type is invalid.");
+    }
+    requireTimestamp(activity.createdAt, "activity.createdAt");
   }
 
   return { listHistory, getTransactionDetail, prepareStatement };

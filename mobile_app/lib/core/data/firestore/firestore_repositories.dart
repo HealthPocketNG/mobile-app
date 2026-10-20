@@ -447,6 +447,7 @@ class FirestoreContributionRepository implements ContributionRepository {
 
   final FirebaseFirestore _firestore;
   final BackendLogger _logger;
+  static const int _recentContributionLimit = 100;
 
   Query<ContributionDocument> _personalContributionQuery({
     required String userId,
@@ -455,7 +456,8 @@ class FirestoreContributionRepository implements ContributionRepository {
       FirestoreDocumentCollections.contributions(_firestore)
           .where('contributorUserId', isEqualTo: userId)
           .where('personalHealthPocketId', isEqualTo: personalHealthPocketId)
-          .orderBy('createdAt', descending: true);
+          .orderBy('createdAt', descending: true)
+          .limit(_recentContributionLimit);
 
   @override
   Future<List<ContributionRecord>> getPersonalContributions({
@@ -492,6 +494,7 @@ class FirestoreContributionRepository implements ContributionRepository {
       FirestoreDocumentCollections.contributions(_firestore)
           .where('familyPocketId', isEqualTo: familyPocketId)
           .orderBy('createdAt', descending: true)
+          .limit(_recentContributionLimit)
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -507,6 +510,7 @@ class FirestoreContributionRepository implements ContributionRepository {
         await FirestoreDocumentCollections.contributions(_firestore)
             .where('familyPocketId', isEqualTo: familyPocketId)
             .orderBy('createdAt', descending: true)
+            .limit(_recentContributionLimit)
             .get();
     return snapshot.docs
         .map((document) => document.data().contribution)
@@ -643,6 +647,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
 
   final FirebaseFirestore _firestore;
   final BackendLogger _logger;
+  static const int _familyListLimit = 100;
 
   @override
   Future<List<FamilyPocket>> getPocketsForUser(String userId) async {
@@ -654,6 +659,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
         .where('userId', isEqualTo: userId)
         .where(statusField, isEqualTo: status)
         .orderBy('joinedAt', descending: true)
+        .limit(_familyListLimit)
         .withConverter<FamilyMembershipDocument>(
           fromFirestore: (snapshot, _) =>
               FamilyMembershipDocument.fromMap(snapshot.id, snapshot.data()!),
@@ -681,7 +687,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
         final memberSnapshot = await FirestoreDocumentCollections.familyMembers(
           _firestore,
           pocket.id,
-        ).get();
+        ).limit(_familyListLimit).get();
         final members = memberSnapshot.docs
             .map((document) => document.data().membership)
             .where(
@@ -706,9 +712,12 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
             ownMembership.role == FamilyRole.admin) {
           final inviteSnapshot =
               await FirestoreDocumentCollections.familyInvitations(
-                _firestore,
-                pocket.id,
-              ).orderBy('createdAt', descending: true).get();
+                    _firestore,
+                    pocket.id,
+                  )
+                  .orderBy('createdAt', descending: true)
+                  .limit(_familyListLimit)
+                  .get();
           invitations = inviteSnapshot.docs
               .map((document) => document.data().invitation)
               .toList(growable: false);
@@ -730,6 +739,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
         .where('email', isEqualTo: normalizedEmail)
         .where('status', isEqualTo: FamilyInvitationStatus.pending.name)
         .orderBy('createdAt', descending: true)
+        .limit(_familyListLimit)
         .withConverter<FamilyInvitationDocument>(
           fromFirestore: (snapshot, _) =>
               FamilyInvitationDocument.fromMap(snapshot.id, snapshot.data()!),
@@ -756,6 +766,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
   Stream<List<FamilyMembership>> watchMembers(String pocketId) =>
       FirestoreDocumentCollections.familyMembers(_firestore, pocketId)
           .where('status', whereIn: const ['active', 'accepted'])
+          .limit(_familyListLimit)
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -770,6 +781,7 @@ class FirestoreFamilyPocketRepository implements FamilyPocketRepository {
           .where('userId', isEqualTo: userId)
           .where('status', whereIn: const ['active', 'accepted'])
           .orderBy('joinedAt', descending: true)
+          .limit(_familyListLimit)
           .withConverter<FamilyMembershipDocument>(
             fromFirestore: (snapshot, _) =>
                 FamilyMembershipDocument.fromMap(snapshot.id, snapshot.data()!),
@@ -1066,12 +1078,14 @@ class FirestoreActivityRepository implements ActivityRepository {
   FirestoreActivityRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
+  static const int _recentActivityLimit = 100;
 
   @override
   Stream<List<ActivityRecord>> watchUserActivity(String userId) =>
       FirestoreDocumentCollections.activities(_firestore)
           .where('userId', isEqualTo: userId)
           .orderBy('createdAt', descending: true)
+          .limit(_recentActivityLimit)
           .snapshots()
           .map(_activities);
 
@@ -1080,6 +1094,7 @@ class FirestoreActivityRepository implements ActivityRepository {
       FirestoreDocumentCollections.activities(_firestore)
           .where('familyPocketId', isEqualTo: familyPocketId)
           .orderBy('createdAt', descending: true)
+          .limit(_recentActivityLimit)
           .snapshots()
           .map(_activities);
 

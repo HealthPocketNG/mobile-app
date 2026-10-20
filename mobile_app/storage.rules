@@ -12,7 +12,32 @@ service firebase.storage {
       return hasVerifiedGoogleIdentity() && request.auth.uid == userId;
     }
 
-    function isValidProfilePhoto(fileName) {
+    function familyMemberPath(pocketId) {
+      return /databases/(default)/documents/family_pockets/$(pocketId)/members/$(request.auth.uid);
+    }
+
+    function isActiveFamilyMember(pocketId) {
+      return hasVerifiedGoogleIdentity()
+        && firestore.exists(familyMemberPath(pocketId))
+        && (
+          firestore.get(familyMemberPath(pocketId)).data.get('status', '')
+            in ['active', 'accepted']
+          || firestore.get(familyMemberPath(pocketId)).data
+            .get('invitationStatus', '') == 'accepted'
+        )
+        && firestore.get(familyMemberPath(pocketId)).data
+          .get('removedAt', null) == null
+        && firestore.get(familyMemberPath(pocketId)).data
+          .get('leftAt', null) == null;
+    }
+
+    function isFamilyImageManager(pocketId) {
+      return isActiveFamilyMember(pocketId)
+        && firestore.get(familyMemberPath(pocketId)).data.get('role', '')
+          in ['owner', 'admin'];
+    }
+
+    function isValidImage(fileName) {
       return fileName.matches('^[A-Fa-f0-9]{32}\\.(jpg|png|webp)$')
         && request.resource != null
         && request.resource.size > 0
@@ -26,9 +51,24 @@ service firebase.storage {
 
     match /users/{userId}/profile/{fileName} {
       allow read: if isOwner(userId);
-      allow create, update: if isOwner(userId)
-        && isValidProfilePhoto(fileName);
+      // Object bytes are immutable. Replacement uploads use a new random name
+      // and delete the old object only after the Firestore profile is updated.
+      allow create: if isOwner(userId)
+        && resource == null
+        && isValidImage(fileName);
+      allow update: if false;
       allow delete: if isOwner(userId);
+    }
+
+    match /family_pockets/{pocketId}/profile/{fileName} {
+      // Pocket imagery is private to current members. Only an active owner or
+      // admin can upload/replace it, and uploaded bytes remain immutable.
+      allow read: if isActiveFamilyMember(pocketId);
+      allow create: if isFamilyImageManager(pocketId)
+        && resource == null
+        && isValidImage(fileName);
+      allow update: if false;
+      allow delete: if isFamilyImageManager(pocketId);
     }
 
     match /{allPaths=**} {
