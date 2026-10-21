@@ -31,14 +31,16 @@ class BackendFailure implements Exception {
     required this.message,
     required this.retryable,
     required this.action,
+    this.correlationId,
   });
 
   final String code;
   final String message;
   final bool retryable;
   final String action;
+  final String? correlationId;
 
-  factory BackendFailure.fromCode(String code) {
+  factory BackendFailure.fromCode(String code, {String? correlationId}) {
     final normalized = _normalizeCode(code);
     final definition = _definitions[normalized]!;
     return BackendFailure(
@@ -46,11 +48,27 @@ class BackendFailure implements Exception {
       message: definition.message,
       retryable: definition.retryable,
       action: definition.action,
+      correlationId: _safeCorrelationId(correlationId),
     );
   }
 
   @override
   String toString() => message;
+}
+
+BackendFailure backendFailureFromCallable({
+  required String transportCode,
+  Object? details,
+}) {
+  String code = transportCode;
+  String? correlationId;
+  if (details is Map) {
+    final detailCode = details['code'];
+    final detailCorrelationId = details['correlationId'];
+    if (detailCode is String) code = detailCode;
+    if (detailCorrelationId is String) correlationId = detailCorrelationId;
+  }
+  return BackendFailure.fromCode(code, correlationId: correlationId);
 }
 
 BackendFailure mapBackendFailure(Object error) {
@@ -204,6 +222,7 @@ const _aliases = <String, String>{
   'failed-precondition': 'invalid-argument',
   'deadline-exceeded': 'timeout',
   'provider-timeout': 'timeout',
+  'verification-timeout': 'timeout',
   'resource-exhausted': 'rate-limited',
   'already-exists': 'idempotency-conflict',
   'cancelled': 'network-error',
@@ -213,27 +232,49 @@ const _aliases = <String, String>{
   'invalid-cursor': 'invalid-argument',
   'invalid-kind': 'invalid-argument',
   'invalid-state': 'invalid-argument',
+  'invalid-transition': 'invalid-argument',
+  'missing-provider-reference': 'payment-pending',
   'wallet-not-found': 'not-found',
   'wallet-unavailable': 'unavailable',
+  'operation-not-found': 'not-found',
   'provider-failed': 'payment-failed',
   'not-verifiable': 'payment-pending',
   'provider-flow-mismatch': 'provider-inactive',
+  'provider-transaction-mismatch': 'payment-failed',
   'account-resolution-failed': 'verification-failed',
+  'account-resolution-unavailable': 'unavailable',
   'healthcare-verification-failed': 'verification-failed',
+  'healthcare-verification-unavailable': 'unavailable',
+  'verification-required': 'verification-failed',
   'plan-not-found': 'not-found',
+  'plan-already-exists': 'idempotency-conflict',
   'plan-cancelled': 'savings-failed',
   'not-due': 'savings-failed',
   'duplicate-invite': 'family-invite-invalid',
+  'invite-already-created': 'family-invite-invalid',
   'invite-not-found': 'family-invite-invalid',
+  'email-not-verified': 'verification-failed',
   'owner-transfer-required': 'family-permission-denied',
   'pocket-closed': 'family-permission-denied',
+  'already-member': 'family-invite-invalid',
   'already-reversed': 'idempotency-conflict',
+  'token-conflict': 'idempotency-conflict',
+  'invalid-signature': 'permission-denied',
+  'invalid-webhook': 'invalid-argument',
+  'provider-reference-conflict': 'idempotency-conflict',
+  'provider-reference-mismatch': 'payment-failed',
   'invalid-bank-details': 'verification-failed',
   'not-implemented': 'unavailable',
+  'receipt-not-eligible': 'invalid-argument',
 };
 
 String _normalizeCode(String code) {
   final stripped = code.contains('/') ? code.split('/').last : code;
   if (_definitions.containsKey(stripped)) return stripped;
   return _aliases[code] ?? _aliases[stripped] ?? BackendFailureCodes.internal;
+}
+
+String? _safeCorrelationId(String? value) {
+  if (value == null || value.length > 64) return null;
+  return RegExp(r'^[A-Za-z0-9-]{8,64}$').hasMatch(value) ? value : null;
 }

@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:healthpocket/app/health_pocket_app.dart';
 import 'package:healthpocket/core/data/firestore/firestore_repositories.dart';
+import 'package:healthpocket/core/backend/firebase_functions_trusted_backend_client.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/profile/data/firebase_profile_photo_repository.dart';
 
@@ -84,6 +86,7 @@ Future<void> bootstrapFirebase({
     useEmulators: _useFirebaseEmulators,
   );
   await Firebase.initializeApp(options: options);
+  final functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
   if (_useFirebaseEmulators) {
     await FirebaseAuth.instance.useAuthEmulator(_firebaseEmulatorHost, 9099);
     FirebaseFirestore.instance.useFirestoreEmulator(
@@ -94,6 +97,7 @@ Future<void> bootstrapFirebase({
       _firebaseEmulatorHost,
       9199,
     );
+    functions.useFunctionsEmulator(_firebaseEmulatorHost, 5001);
   }
   final authRepository = await FirebaseAuthRepository.initialize(
     FirebaseAuth.instance,
@@ -114,6 +118,7 @@ Future<void> bootstrapFirebase({
       contributionRepository: repositories.contributions,
       familyPocketRepository: repositories.familyPockets,
       careDirectoryRepository: repositories.careDirectory,
+      backendClient: FirebaseFunctionsTrustedBackendClient(functions),
       developmentContributionsEnabled:
           environment == AppEnvironment.development,
     ),

@@ -115,6 +115,16 @@ test("supports exact activity-type and inclusive date-range filters", async () =
   ]);
 });
 
+test("rejects timezone-ambiguous activity filter dates", async () => {
+  await assert.rejects(
+    history.listHistory({
+      actorId: ownerId,
+      startDate: "2026-01-02T00:00:00",
+    }),
+    (error) => error.code === "invalid-argument",
+  );
+});
+
 test("rejects a cursor reused with different filters", async () => {
   const page = await history.listHistory({ actorId: ownerId, pageSize: 1 });
   await assert.rejects(

@@ -2,7 +2,11 @@
 
 const { createHash, randomBytes } = require("node:crypto");
 const { FieldPath, FieldValue, Timestamp } = require("firebase-admin/firestore");
-const { PaymentGatewayError, PAYMENT_STATUS } = require("../payments/payment-gateway");
+const {
+  PaymentGatewayError,
+  PAYMENT_STATUS,
+  assertNormalizedStatus,
+} = require("../payments/payment-gateway");
 const { notificationDocument } = require("../notifications/notification-model");
 const { TRANSACTION_POLICY } = require("../config/transaction-policy");
 
@@ -422,6 +426,7 @@ function buildFamilyPocketService({ db, gateway, logger = console }) {
       }
       throw error;
     }
+    assertFamilyProviderResult(provider, value, { requireReference: false });
     const status = provider.status === PAYMENT_STATUS.FAILED ? "failed" : "pending";
     await attemptRef.update({
       status,
@@ -447,6 +452,9 @@ function buildFamilyPocketService({ db, gateway, logger = console }) {
       result = await gateway.verifyFunding({
         requestId: attemptId,
         providerReference: attempt.providerReference,
+        expectedAmountKobo: attempt.amountKobo,
+        expectedCurrency: attempt.currency,
+        expectedBeneficiaryId: null,
       });
     } catch (error) {
       if (error instanceof PaymentGatewayError && error.code === "provider-timeout") {
@@ -457,6 +465,7 @@ function buildFamilyPocketService({ db, gateway, logger = console }) {
       }
       throw error;
     }
+    assertFamilyProviderResult(result, attempt, { requireReference: true });
     if (result.status !== PAYMENT_STATUS.SUCCEEDED) {
       const status = result.status === PAYMENT_STATUS.FAILED ? "failed" : "pending";
       await attemptRef.update({
@@ -744,6 +753,32 @@ function contributionResult(attemptId, data) {
     ledgerEntryId: data.ledgerEntryId || null,
     failureCode: data.failureCode || null,
   };
+}
+
+function assertFamilyProviderResult(result, expected, { requireReference }) {
+  if (!result || typeof result !== "object") {
+    throw new FamilyPocketError(
+      "invalid-provider-response",
+      "Payment provider response is invalid.",
+    );
+  }
+  assertNormalizedStatus(result.status);
+  const beneficiaryId = result.beneficiaryId ?? null;
+  if (!Number.isSafeInteger(result.amountKobo) || result.amountKobo <= 0 ||
+      result.currency !== CURRENCY || beneficiaryId !== null ||
+      (requireReference && result.providerReference !== expected.providerReference)) {
+    throw new FamilyPocketError(
+      "provider-transaction-mismatch",
+      "Provider result does not match the Family Pocket contribution.",
+    );
+  }
+  if (result.amountKobo !== expected.amountKobo ||
+      result.currency !== (expected.currency ?? CURRENCY)) {
+    throw new FamilyPocketError(
+      "provider-transaction-mismatch",
+      "Provider result does not match the Family Pocket contribution.",
+    );
+  }
 }
 
 function hashInviteCode(code) {

@@ -356,6 +356,31 @@ test("credits a Family Pocket only after trusted verification and only once", as
   assert.equal(notifications.docs[0].data().readState, "unread");
 });
 
+test("rejects mismatched provider settlement details before crediting a Family Pocket", async () => {
+  const { pocketId } = await createPocket();
+  const pending = await family.initializeContribution({
+    userId: "owner-1",
+    pocketId,
+    idempotencyKey: "familymismatch001",
+    amountKobo: 250000,
+  });
+  gateway.verifyFunding = async () => ({
+    status: "succeeded",
+    providerReference: pending.providerReference,
+    amountKobo: 249999,
+    currency: "NGN",
+    beneficiaryId: null,
+  });
+
+  await assert.rejects(
+    family.verifyContribution({ attemptId: pending.attemptId }),
+    (error) => error.code === "provider-transaction-mismatch",
+  );
+  assert.equal((await db.collection("family_pockets").doc(pocketId).get())
+    .data().balanceKobo, 0);
+  assert.equal((await db.collection("family_ledger_entries").get()).size, 0);
+});
+
 test("keeps concurrent member contributions independent and ledger-backed", async () => {
   const { pocketId } = await createPocket();
   await inviteAndAccept({

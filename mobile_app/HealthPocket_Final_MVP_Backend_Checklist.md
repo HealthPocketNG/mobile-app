@@ -435,7 +435,7 @@ Do **not** begin real payment integration until this section passes.
 - [x] Pending/ambiguous transaction reconciliation is designed.
 - [x] Provider/payment integration can be added without changing the Flutter domain models or rewriting wallet/ledger logic.
 
-_Verified locally on 2026-10-21 against Firestore Standard and mock infrastructure: Functions/services 130/130, Firestore and Storage rules 54/54, Flutter 94/94. Production payment commands remain fail-closed; no provider, credential, live webhook, real settlement, or live Firebase resource was enabled. The full audit and cutover conditions are in `docs/real-payment-readiness.md`._
+_Hardened locally on 2026-10-21 against Firestore Standard and mock infrastructure: Functions/services 135/135, Firestore and Storage rules 54/54, Flutter 99/99, and Flutter static analysis clean. The Flutter/Functions contract, UTC date transport, safe callable errors, and provider settlement binding are now regression-tested. Production payment commands remain fail-closed; no provider, credential, live webhook, real settlement, App Check enforcement, or live Firebase resource was enabled. The audit and remaining production gates are in `docs/backend-hardening-and-frontend-readiness.md` and `docs/real-payment-readiness.md`._
 
 ---
 

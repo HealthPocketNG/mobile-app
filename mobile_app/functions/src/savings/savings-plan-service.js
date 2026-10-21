@@ -688,10 +688,20 @@ function requireFrequency(value) {
 }
 
 function requireDate(value, name) {
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+  const parsed = value instanceof Date
+    ? new Date(value.getTime())
+    : typeof value === "string" && isUtcIsoDate(value)
+      ? new Date(value)
+      : null;
+  if (!parsed || !Number.isFinite(parsed.getTime())) {
     throw new SavingsPlanError("invalid-argument", `${name} is invalid.`);
   }
-  return new Date(value.getTime());
+  return parsed;
+}
+
+function isUtcIsoDate(value) {
+  return value.length <= 30 &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(value);
 }
 
 function optionalBoundedString(value, name, maximum) {

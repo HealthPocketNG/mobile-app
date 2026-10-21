@@ -34,6 +34,11 @@ user's authority. Domain services remain responsible for role and resource
 authorization. Unknown actions, extra fields, and client-supplied authority
 fields fail before a service is invoked.
 
+`../config/trusted-backend-contract.json` is the versioned public contract for
+the router. Tests compare its 33 actions and exact payload fields with the
+server allowlists and Flutter action enum. Dates crossing the callable boundary
+must be UTC ISO-8601 strings.
+
 The router exposes user-owned wallet, savings, Family Pocket, notification,
 activity, receipt, coverage, and payment workflows. Ledger finalization,
 reconciliation, provider/catalog administration, webhooks, scheduled savings,
@@ -58,11 +63,12 @@ signed callback deliveries. It makes no network calls.
 `provider_events`. An initialization response cannot post to the ledger. Only
 an explicit adapter verification result or a signature-verified callback can
 do so, and the resulting ledger operation and callback processing are
-idempotent. Signed callbacks must match the server-created provider reference,
-amount, currency, and beneficiary before an event is claimed. Raw callback
-bodies are not persisted. The server-only `reconcileAttempt` operation polls
-ambiguous attempts and applies results through this same settlement path; it is
-not exposed through the Flutter callable boundary.
+idempotent. Direct verification, reconciliation, and signed callbacks must all
+match the server-created provider reference, amount, currency, and beneficiary
+before settlement. Family Pocket contributions enforce the same binding. Raw
+callback bodies are not persisted. The server-only `reconcileAttempt`
+operation polls ambiguous attempts and applies results through this same
+settlement path; it is not exposed through the Flutter callable boundary.
 
 TODO when a regulated provider is selected:
 

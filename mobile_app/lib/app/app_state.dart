@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:healthpocket/core/data/backend_ids.dart';
+import 'package:healthpocket/core/backend/trusted_backend_client.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
@@ -28,6 +29,7 @@ class AppState extends ChangeNotifier {
     this.contributionRepository,
     this.familyPocketRepository,
     this.careDirectoryRepository,
+    this.backendClient,
     this.developmentContributionsEnabled = false,
   }) : authRepository = authRepository ?? InMemoryAuthRepository(),
        pinRepository =
@@ -42,6 +44,7 @@ class AppState extends ChangeNotifier {
   final ContributionRepository? contributionRepository;
   final FamilyPocketRepository? familyPocketRepository;
   final CareDirectoryRepository? careDirectoryRepository;
+  final TrustedBackendClient? backendClient;
   final bool developmentContributionsEnabled;
   final FamilyPocketStore familyPocketStore = FamilyPocketStore();
   final ProfileStore profileStore = ProfileStore();

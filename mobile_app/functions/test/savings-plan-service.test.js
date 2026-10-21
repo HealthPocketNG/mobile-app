@@ -134,6 +134,26 @@ test("creates one plan with the N500 default and records an idempotent activity"
   );
 });
 
+test("accepts callable-safe UTC date strings and rejects timezone-ambiguous dates", async () => {
+  await provisionUser("transport-date-user");
+  const plan = await savings.createPlan({
+    userId: "transport-date-user",
+    frequency: "weekly",
+    startDate: "2026-02-07T09:30:00.000Z",
+    idempotencyKey: "transportdate0001",
+  });
+
+  assert.equal(plan.startDate.toISOString(), "2026-02-07T09:30:00.000Z");
+  await assert.rejects(
+    savings.updatePlan({
+      userId: "transport-date-user",
+      startDate: "2026-02-08T09:30:00",
+      idempotencyKey: "ambiguousdate0001",
+    }),
+    (error) => error.code === "invalid-argument",
+  );
+});
+
 test("updates amount and frequency, pauses, resumes, then cancels terminally", async () => {
   await createPlan("lifecycle-user");
   currentTime = new Date("2026-02-01T10:00:00.000Z");

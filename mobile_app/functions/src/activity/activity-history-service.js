@@ -443,11 +443,18 @@ function requireDate(value, field) {
     ? new Date(value.getTime())
     : value && typeof value.toDate === "function"
       ? value.toDate()
-      : new Date(value);
-  if (Number.isNaN(result.getTime())) {
+      : typeof value === "string" && isUtcIsoDate(value)
+        ? new Date(value)
+        : null;
+  if (!result || Number.isNaN(result.getTime())) {
     throw new ActivityHistoryError("invalid-argument", `${field} is invalid.`);
   }
   return result;
+}
+
+function isUtcIsoDate(value) {
+  return value.length <= 30 &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(value);
 }
 
 function requireTimestamp(value, field) {

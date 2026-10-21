@@ -257,7 +257,20 @@ function buildTrustedBackend({
     });
   }
 
-  return Object.freeze({ callable, actions: Object.freeze(Object.keys(actions)) });
+  const actionContract = Object.freeze(Object.fromEntries(
+    Object.entries(actions).map(([name, definition]) => [
+      name,
+      Object.freeze({
+        payloadFields: Object.freeze([...definition.allowedFields]),
+        money: definition.money,
+      }),
+    ]),
+  ));
+  return Object.freeze({
+    callable,
+    actions: Object.freeze(Object.keys(actions)),
+    actionContract,
+  });
 }
 
 function limits(...entries) {

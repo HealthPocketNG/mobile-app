@@ -93,6 +93,7 @@ const ALIASES = Object.freeze({
   "invalid-webhook": "invalid-argument",
   "provider-reference-conflict": "idempotency-conflict",
   "provider-reference-mismatch": "payment-failed",
+  "provider-transaction-mismatch": "payment-failed",
   "provider-flow-mismatch": "provider-inactive",
   "webhook-conflict": "idempotency-conflict",
   "invalid-bank-details": "verification-failed",
@@ -145,14 +146,14 @@ function toHttpsError(error, options) {
 
 async function runCallable({ operation, logger = console, handler }) {
   const safeOperation = safeLabel(operation);
-  logger.info?.("healthpocket_backend", {
+  writeStructuredLog(logger, "INFO", {
     component: "callable",
     operation: safeOperation,
     outcome: "started",
   });
   try {
     const result = await handler();
-    logger.info?.("healthpocket_backend", {
+    writeStructuredLog(logger, "INFO", {
       component: "callable",
       operation: safeOperation,
       outcome: "success",
@@ -161,7 +162,7 @@ async function runCallable({ operation, logger = console, handler }) {
   } catch (error) {
     const correlationId = randomUUID();
     const safe = publicError(error, { correlationId });
-    logger.error?.("healthpocket_backend", {
+    writeStructuredLog(logger, "ERROR", {
       component: "callable",
       operation: safeOperation,
       outcome: "failure",
@@ -171,6 +172,15 @@ async function runCallable({ operation, logger = console, handler }) {
     });
     throw toHttpsError(error, { correlationId });
   }
+}
+
+function writeStructuredLog(logger, severity, fields) {
+  if (typeof logger.write === "function") {
+    logger.write({ severity, message: "healthpocket_backend", ...fields });
+    return;
+  }
+  const method = severity === "ERROR" ? "error" : "info";
+  logger[method]?.("healthpocket_backend", fields);
 }
 
 function assertAuthenticated(auth) {

@@ -5,6 +5,12 @@ point. It accepts `{action, payload}`, rejects unknown or extra fields, requires
 a verified Google Firebase identity, and derives every `userId`, `actorId`, and
 `ownerId` from that identity. Client-supplied authority fields are rejected.
 
+Flutter reaches this boundary through `TrustedBackendClient`. Its action enum
+and the Functions allowlists are checked against the versioned
+`config/trusted-backend-contract.json` manifest, preventing either side from
+silently adding or renaming a command. Callable date values use UTC ISO-8601
+strings because native JavaScript `Date` values are not valid callable JSON.
+
 ## Client-callable operations
 
 | Area | Allowed commands | Authority |
@@ -46,6 +52,8 @@ introduced.
   and signed callbacks. It is intentionally absent from callable actions.
 - Signed callbacks are rejected unless provider reference, amount, currency,
   and beneficiary match the server-created attempt.
+- Direct verification and reconciliation results are bound to those same four
+  server-owned settlement fields before any ledger or Family Pocket credit.
 - Callable logs contain only component, operation, outcome, normalized error
   type/code, and correlation ID—never payloads, user IDs, emails, tokens,
   account numbers, amounts, or provider responses.
@@ -58,5 +66,15 @@ introduced.
   ledger, idempotency, authorization, receipt, notification, or transaction
   orchestration.
 
+Callable failures expose only normalized codes, retry guidance, and a safe
+correlation ID. The Flutter mapper prefers this structured error detail over
+provider-specific transport text.
+
+App Check is a production rollout gate, not yet enforced. Enable it only after
+each shipped app has a registered provider, the Flutter client is activated,
+and monitoring confirms valid tokens; enforcing it earlier would lock out the
+current clients.
+
 The readiness audit and provider-adapter cutover requirements are recorded in
+`backend-hardening-and-frontend-readiness.md` and
 `real-payment-readiness.md`.

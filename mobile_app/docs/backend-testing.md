@@ -56,18 +56,24 @@ the smoke script.
 
 ## Verified baseline
 
-On 2026-10-21, Firestore Standard produced these local results:
+On 2026-10-21, Firestore Standard produced these hardened local results:
 
-- Functions/services: 130/130 passing.
+- Functions/services: 135/135 passing.
 - Firestore rules: 48/48 passing.
 - Storage rules: 6/6 passing.
-- Flutter: 94/94 passing.
+- Flutter: 99/99 passing.
+- Flutter static analysis: no issues.
 - Realistic trusted-backend journeys: 5/5 passing (included in the Functions
   total).
 - Functions emulator: all three exports discovered and the callable boundary
   smoke test passed.
 
 No live Firebase resources were changed by this test phase.
+
+The additional hardening tests lock the 33-action frontend/backend manifest,
+UTC callable date encoding, structured callable failure decoding, and rejection
+of provider results whose reference, amount, currency, or beneficiary differs
+from the server-created transaction.
 
 The Number 23 readiness additions cover server-only polling reconciliation and
 signed-callback matching for provider reference, amount, currency, and

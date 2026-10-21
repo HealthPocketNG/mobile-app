@@ -132,6 +132,7 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
       }
       throw error;
     }
+    assertProviderResultMatches(normalized, providerResult);
 
     // Initialization never moves money. Even if an adapter reports immediate
     // success, trusted verification or a signed webhook must finalize it.
@@ -166,14 +167,15 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
   async function verifyFunding({ attemptId }) {
     const attempt = await getAttempt(attemptId, "funding");
     try {
-      const result = await gateway.verifyFunding({
+      const result = normalizeProviderResult(await gateway.verifyFunding({
         requestId: attemptId,
         providerReference: requireProviderReference(attempt),
         expectedAmountKobo: attempt.amountKobo,
         expectedCurrency: attempt.currency,
         expectedBeneficiaryId: null,
-      });
-      return applyTrustedStatus(attemptId, normalizeProviderResult(result).status);
+      }));
+      assertProviderResultMatches(attempt, result, { requireReference: true });
+      return applyTrustedStatus(attemptId, result.status);
     } catch (error) {
       if (error instanceof PaymentGatewayError && error.code === "provider-timeout") {
         return applyTrustedStatus(attemptId, PAYMENT_STATUS.TIMED_OUT);
@@ -185,14 +187,15 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
   async function verifyTransaction({ attemptId }) {
     const attempt = await getAttempt(attemptId, "healthcare_payment");
     try {
-      const result = await gateway.verifyTransaction({
+      const result = normalizeProviderResult(await gateway.verifyTransaction({
         requestId: attemptId,
         providerReference: requireProviderReference(attempt),
         expectedAmountKobo: attempt.amountKobo,
         expectedCurrency: attempt.currency,
         expectedBeneficiaryId: attempt.beneficiaryId,
-      });
-      return applyTrustedStatus(attemptId, normalizeProviderResult(result).status);
+      }));
+      assertProviderResultMatches(attempt, result, { requireReference: true });
+      return applyTrustedStatus(attemptId, result.status);
     } catch (error) {
       if (error instanceof PaymentGatewayError && error.code === "provider-timeout") {
         return applyTrustedStatus(attemptId, PAYMENT_STATUS.TIMED_OUT);
@@ -210,13 +213,15 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
 
   async function queryStatus({ attemptId }) {
     const attempt = await getAttempt(attemptId);
-    return normalizeProviderResult(await gateway.queryStatus({
+    const result = normalizeProviderResult(await gateway.queryStatus({
       requestId: attemptId,
       providerReference: requireProviderReference(attempt),
       expectedAmountKobo: attempt.amountKobo,
       expectedCurrency: attempt.currency,
       expectedBeneficiaryId: attempt.beneficiaryId,
     }));
+    assertProviderResultMatches(attempt, result, { requireReference: true });
+    return result;
   }
 
   // Server-only reconciliation for scheduled jobs or trusted operations.
@@ -247,6 +252,7 @@ function buildPaymentService({ db, ledger, gateway, logger = console }) {
       }
       throw error;
     }
+    assertProviderResultMatches(attempt, providerResult, { requireReference: true });
     return applyTrustedStatus(attemptId, providerResult.status);
   }
 
@@ -563,7 +569,41 @@ function normalizeProviderResult(result) {
   if (providerReference !== null) {
     requireBoundedString(providerReference, "providerReference", 128);
   }
-  return { status: result.status, providerReference };
+  if (!Number.isSafeInteger(result.amountKobo) || result.amountKobo <= 0) {
+    throw new PaymentServiceError(
+      "invalid-provider-response",
+      "Payment provider amount is invalid.",
+    );
+  }
+  if (result.currency !== CURRENCY) {
+    throw new PaymentServiceError(
+      "invalid-provider-response",
+      "Payment provider currency is invalid.",
+    );
+  }
+  const beneficiaryId = result.beneficiaryId ?? null;
+  if (beneficiaryId !== null) requireSafeId(beneficiaryId, "beneficiaryId");
+  return {
+    status: result.status,
+    providerReference,
+    amountKobo: result.amountKobo,
+    currency: result.currency,
+    beneficiaryId,
+  };
+}
+
+function assertProviderResultMatches(expected, result, {
+  requireReference = false,
+} = {}) {
+  if ((requireReference && expected.providerReference !== result.providerReference) ||
+      expected.amountKobo !== result.amountKobo ||
+      expected.currency !== result.currency ||
+      (expected.beneficiaryId ?? null) !== result.beneficiaryId) {
+    throw new PaymentServiceError(
+      "provider-transaction-mismatch",
+      "Provider result does not match the server-created payment attempt.",
+    );
+  }
 }
 
 function validateEvent(event) {

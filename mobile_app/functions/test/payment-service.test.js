@@ -113,6 +113,33 @@ test("trusted funding verification posts one credit across retries", async () =>
   );
 });
 
+test("verification rejects mismatched provider settlement details", async () => {
+  await ledger.ensureWallet("provider-mismatch-user");
+  const attempt = await payments.initializeFunding({
+    userId: "provider-mismatch-user",
+    idempotencyKey: "providermismatch01",
+    amountKobo: 125000,
+  });
+  gateway.verifyFunding = async () => ({
+    status: PAYMENT_STATUS.SUCCEEDED,
+    providerReference: "different_provider_reference",
+    amountKobo: 125000,
+    currency: "NGN",
+    beneficiaryId: null,
+  });
+
+  await assert.rejects(
+    payments.verifyFunding({ attemptId: attempt.attemptId }),
+    (error) => error.code === "provider-transaction-mismatch",
+  );
+  assert.equal((await db.collection("ledger_entries").get()).size, 0);
+  assert.equal(
+    (await db.collection("wallets").doc("provider-mismatch-user").get())
+      .data().availableBalanceKobo,
+    0,
+  );
+});
+
 test("provider timeout remains ambiguous and non-financial with a safe retry path", async () => {
   await ledger.ensureWallet("timeout-user");
   gateway.setNextOutcome("initializeFunding", "timeout");

@@ -2,6 +2,7 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+const contract = require("../../config/trusted-backend-contract.json");
 const { buildTrustedBackend } = require("../src/trusted-backend");
 const {
   assertVerifiedGoogleIdentity,
@@ -234,4 +235,30 @@ test("exposes only user-safe actions and writes privacy-safe lifecycle logs", as
   });
   assert.deepEqual(logs.map((entry) => entry.fields.outcome), ["started", "success"]);
   assert.doesNotMatch(JSON.stringify(logs), /user-1@example|opaque|token|amountKobo/);
+});
+
+test("matches the versioned frontend callable contract", () => {
+  const { backend } = harness();
+  const expected = Object.fromEntries(contract.actions.map((action) => [
+    action.name,
+    {
+      payloadFields: [...action.payloadFields].sort(),
+      money: action.money,
+    },
+  ]));
+  const actual = Object.fromEntries(Object.entries(backend.actionContract).map(
+    ([name, action]) => [
+      name,
+      {
+        payloadFields: [...action.payloadFields].sort(),
+        money: action.money,
+      },
+    ],
+  ));
+
+  assert.equal(contract.schemaVersion, 1);
+  assert.equal(contract.region, "africa-south1");
+  assert.equal(contract.callable, "trustedBackend");
+  assert.equal(contract.dateEncoding, "utc_iso8601");
+  assert.deepEqual(actual, expected);
 });

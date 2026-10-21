@@ -1,13 +1,67 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:healthpocket/core/backend/trusted_backend_client.dart';
 import 'package:healthpocket/core/data/backend_ids.dart';
 import 'package:healthpocket/core/data/firestore/firestore_repositories.dart';
 import 'package:healthpocket/core/errors/backend_failure.dart';
 import 'package:healthpocket/core/logging/backend_logger.dart';
 
 void main() {
+  group('TrustedBackendClient contract', () {
+    test('exposes every callable action once with safe wire names', () {
+      final names = TrustedBackendAction.values
+          .map((action) => action.wireName)
+          .toList(growable: false);
+
+      expect(names, hasLength(33));
+      expect(names.toSet(), hasLength(names.length));
+      expect(
+        names.every(
+          (name) => RegExp(r'^[a-z][a-z0-9_.]{2,63}$').hasMatch(name),
+        ),
+        isTrue,
+      );
+      expect(names, containsAll(<String>[
+        'wallet.ensure',
+        'funding.initialize',
+        'family.contribution_verify',
+        'healthcare.non_partner_initialize',
+        'activity.statement',
+        'receipt.export',
+      ]));
+    });
+
+    test('matches the versioned backend contract manifest', () async {
+      final contract = jsonDecode(
+        await File('config/trusted-backend-contract.json').readAsString(),
+      ) as Map<String, dynamic>;
+      final actions = (contract['actions'] as List<dynamic>)
+          .cast<Map<String, dynamic>>()
+          .map((action) => action['name'] as String)
+          .toSet();
+
+      expect(contract['schemaVersion'], 1);
+      expect(contract['region'], 'africa-south1');
+      expect(contract['callable'], 'trustedBackend');
+      expect(contract['dateEncoding'], 'utc_iso8601');
+      expect(
+        TrustedBackendAction.values.map((action) => action.wireName).toSet(),
+        actions,
+      );
+    });
+
+    test('serializes callable dates as explicit UTC ISO-8601 strings', () {
+      expect(
+        backendUtcDate(DateTime.parse('2026-02-07T10:30:00+01:00')),
+        '2026-02-07T09:30:00.000Z',
+      );
+    });
+  });
+
   test('Firestore repositories compile against the shared conventions', () {
     const repositoryTypes = <Type>[
       FirestoreProfileRepository,
@@ -135,6 +189,35 @@ void main() {
   });
 
   group('BackendFailure', () {
+    test('prefers the safe callable detail code and keeps correlation', () {
+      final failure = backendFailureFromCallable(
+        transportCode: 'failed-precondition',
+        details: const <String, Object>{
+          'code': 'insufficient-balance',
+          'retryable': false,
+          'action': 'add_money',
+          'correlationId': '12345678-abcd-1234-abcd-123456789012',
+        },
+      );
+
+      expect(failure.code, BackendFailureCodes.insufficientBalance);
+      expect(failure.action, 'add_money');
+      expect(failure.correlationId, '12345678-abcd-1234-abcd-123456789012');
+    });
+
+    test('drops malformed callable correlation identifiers', () {
+      final failure = backendFailureFromCallable(
+        transportCode: 'unavailable',
+        details: const <String, Object>{
+          'code': 'payment-pending',
+          'correlationId': 'secret@example.com',
+        },
+      );
+
+      expect(failure.code, BackendFailureCodes.paymentPending);
+      expect(failure.correlationId, isNull);
+    });
+
     test('normalizes retryable Firebase and timeout failures', () async {
       final offline = BackendFailure.fromCode('network-request-failed');
       expect(offline.code, BackendFailureCodes.networkError);

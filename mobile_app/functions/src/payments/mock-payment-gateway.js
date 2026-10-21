@@ -207,6 +207,9 @@ function providerResult(transaction) {
   return {
     status: transaction.status,
     providerReference: transaction.providerReference,
+    amountKobo: transaction.amountKobo,
+    currency: transaction.currency,
+    beneficiaryId: transaction.beneficiaryId,
   };
 }
 

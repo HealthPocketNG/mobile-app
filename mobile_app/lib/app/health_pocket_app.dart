@@ -3,6 +3,7 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/core/theme/app_theme.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
+import 'package:healthpocket/core/backend/trusted_backend_client.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 
 class HealthPocketApp extends StatefulWidget {
@@ -16,6 +17,7 @@ class HealthPocketApp extends StatefulWidget {
     this.contributionRepository,
     this.familyPocketRepository,
     this.careDirectoryRepository,
+    this.backendClient,
     this.developmentContributionsEnabled = false,
   });
 
@@ -27,6 +29,7 @@ class HealthPocketApp extends StatefulWidget {
   final ContributionRepository? contributionRepository;
   final FamilyPocketRepository? familyPocketRepository;
   final CareDirectoryRepository? careDirectoryRepository;
+  final TrustedBackendClient? backendClient;
   final bool developmentContributionsEnabled;
 
   @override
@@ -48,6 +51,7 @@ class _HealthPocketAppState extends State<HealthPocketApp> {
       contributionRepository: widget.contributionRepository,
       familyPocketRepository: widget.familyPocketRepository,
       careDirectoryRepository: widget.careDirectoryRepository,
+      backendClient: widget.backendClient,
       developmentContributionsEnabled: widget.developmentContributionsEnabled,
     );
   }
