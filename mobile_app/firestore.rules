@@ -127,12 +127,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Google is the only MVP account-entry provider. Provider membership and
-    // email verification must both come from the trusted Firebase Auth token.
+    // Only verified Google and email/password Firebase identities may reach
+    // account data. An unverified password account stays outside this boundary.
     function hasVerifiedIdentity() {
       return isAuthenticated()
         && ('firebase' in request.auth.token)
-        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.firebase.sign_in_provider in ['google.com', 'password']
         && ('email_verified' in request.auth.token)
         && request.auth.token.email_verified == true;
     }
@@ -346,7 +346,9 @@ service cloud.firestore {
           || (data.dateOfBirth is timestamp
             && validString(data.gender, 1, 40)
             && validString(data.stateOfResidence, 1, 60)
-            && validString(data.residentialAddress, 1, 240)));
+            // V2 onboarding collects a state, not a street address. KYC is
+            // still notStarted and can collect an address when it is needed.
+            && validString(data.residentialAddress, 0, 240)));
     }
 
     function validProfileImagePath(data) {

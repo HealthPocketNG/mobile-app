@@ -1,45 +1,51 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/core/logging/backend_logger.dart';
-import 'package:healthpocket/core/theme/app_colors.dart';
-import 'package:healthpocket/core/widgets/app_brand_logo.dart';
+
+import 'auth_v2_widgets.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({required this.appState, super.key});
-
   final AppState appState;
-
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  Timer? _startupTimer;
-  String? _errorMessage;
-  bool _isResolving = false;
-
+  Timer? _timer;
+  bool _busy = false;
+  String? _error;
   @override
   void initState() {
     super.initState();
-    _startupTimer = Timer(const Duration(milliseconds: 1200), _resolveSession);
+    _timer = Timer(const Duration(milliseconds: 1200), _resolve);
   }
 
-  Future<void> _resolveSession() async {
-    if (_isResolving) return;
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _resolve() async {
+    if (_busy) return;
     setState(() {
-      _isResolving = true;
-      _errorMessage = null;
+      _busy = true;
+      _error = null;
     });
     try {
       final destination = await widget.appState.resolveStartup();
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(
-        context,
-        appRouteForAuthFlow(destination).path,
-      );
+      if (mounted) {
+        Navigator.pushReplacementNamed(
+          context,
+          appRouteForAuthFlow(destination).path,
+        );
+      }
     } catch (error) {
       BackendLogger.instance.error(
         'auth.session.restore_failed',
@@ -50,197 +56,181 @@ class _SplashScreenState extends State<SplashScreen> {
           'errorType': error.runtimeType.toString(),
         },
       );
+      if (mounted &&
+          (error is SocketException ||
+              (error is FirebaseException &&
+                  {
+                    'unavailable',
+                    'network-request-failed',
+                  }.contains(error.code)))) {
+        Navigator.pushReplacementNamed(context, AppRoute.offline.path);
+        return;
+      }
       if (mounted) {
-        setState(() {
-          _errorMessage = 'We could not restore your session. Try again.';
-        });
+        setState(
+          () => _error = 'We could not restore your session. Check your connection and try again.',
+        );
       }
     } finally {
-      if (mounted) setState(() => _isResolving = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _discardSession() async {
-    if (_isResolving) return;
-    setState(() => _isResolving = true);
+  Future<void> _discard() async {
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
       await widget.appState.signOut();
-      if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoute.welcome.path,
-        (route) => false,
-      );
-    } catch (error) {
-      BackendLogger.instance.error(
-        'auth.session.discard_failed',
-        fields: {
-          'operation': 'discard_session',
-          'entity': 'auth_session',
-          'outcome': 'failure',
-          'errorType': error.runtimeType.toString(),
-        },
-      );
       if (mounted) {
-        setState(() {
-          _isResolving = false;
-          _errorMessage = 'We could not reset this session. Try again.';
-        });
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoute.welcome.path,
+          (route) => false,
+        );
       }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'We could not reset this session. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
-  void dispose() {
-    _startupTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned(
-            left: 0,
-            top: 0,
-            child: Opacity(opacity: 0, child: AppBrandLogo()),
-          ),
-          const Positioned(top: -55, right: -40, child: _SoftOrb(size: 170)),
-          const Positioned(left: -45, top: 190, child: _SoftOrb(size: 125)),
-          Center(
+  Widget build(BuildContext context) => Scaffold(
+    body: Stack(
+      children: [
+        const Positioned.fill(child: SplashArtwork()),
+        if (_error != null)
+          Positioned(
+            bottom: 42,
+            left: 20,
+            right: 20,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset('assets/onboarding/HPLogo.png', height: 58),
-                const SizedBox(height: 16),
                 Text(
-                  'People care.\nBrighter days.',
+                  _error!,
+                  style: const TextStyle(color: Colors.red),
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.inkMuted,
-                    fontWeight: FontWeight.w700,
-                  ),
                 ),
-                const SizedBox(height: 18),
-                if (_errorMessage == null)
-                  SizedBox(
-                    width: 96,
-                    child: LinearProgressIndicator(
-                      minHeight: 3,
-                      borderRadius: BorderRadius.circular(20),
-                      backgroundColor: AppColors.primarySoft,
-                    ),
-                  )
-                else ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      _errorMessage!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.error),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _isResolving ? null : _resolveSession,
-                    child: const Text('Try again'),
-                  ),
-                  TextButton(
-                    onPressed: _isResolving ? null : _discardSession,
-                    child: const Text('Sign out and start again'),
-                  ),
-                ],
+                TextButton(
+                  onPressed: _busy ? null : _resolve,
+                  child: const Text('Try again'),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : _discard,
+                  child: const Text('Sign out and start again'),
+                ),
               ],
             ),
           ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 38,
-            child: Image.asset(
-              'assets/onboarding/splashHealthcareCharacters.png',
-              height: 150,
-              fit: BoxFit.contain,
-            ),
-          ),
-          const Align(alignment: Alignment.bottomCenter, child: _CareCity()),
-        ],
-      ),
-    );
-  }
-}
-
-class _SoftOrb extends StatelessWidget {
-  const _SoftOrb({required this.size});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: const BoxDecoration(
-      color: AppColors.primarySoft,
-      shape: BoxShape.circle,
+      ],
     ),
   );
 }
 
-class _CareCity extends StatelessWidget {
-  const _CareCity();
+/// The same V2 artwork is shown while Firebase initializes and while the
+/// authenticated destination is resolved, avoiding a blank startup interval.
+class SplashArtwork extends StatelessWidget {
+  const SplashArtwork({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 170,
-      width: double.infinity,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final h = constraints.maxHeight;
+      return Stack(
         children: [
-          Container(height: 54, color: const Color(0xFFB9E9DD)),
-          Positioned(
-            bottom: 38,
-            child: Container(
-              width: 112,
-              height: 94,
+          const Positioned.fill(
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFE4F6F3), Color(0xFFF6FCFB), Colors.white],
+                  stops: [0, .55, 1],
                 ),
-                border: Border.all(color: AppColors.outline),
-              ),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.local_hospital_rounded,
-                    color: AppColors.secondary,
-                    size: 32,
-                  ),
-                  SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Icon(Icons.window, color: AppColors.primary),
-                      Icon(Icons.door_front_door, color: AppColors.primary),
-                    ],
-                  ),
-                ],
               ),
             ),
           ),
-          const Positioned(
-            left: 38,
-            bottom: 42,
-            child: Icon(Icons.park_rounded, color: AppColors.primary, size: 60),
+          Positioned(
+            top: h * .546,
+            left: 32,
+            child: const _Orb(color: Color(0xFFE4F6F3)),
           ),
-          const Positioned(
-            right: 34,
-            bottom: 42,
-            child: Icon(Icons.park_rounded, color: AppColors.primary, size: 68),
+          Positioned(top: h * .546, right: 58, child: const _Orb()),
+          Positioned(
+            top: h * .2725,
+            left: 0,
+            right: 0,
+            child: Column(
+              children: [
+                SizedBox(
+                  width: 220,
+                  height: 153,
+                  child: ClipRect(
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left: -27.5,
+                          top: -56.4,
+                          width: 275,
+                          height: 275,
+                          child: Image.asset(
+                            '${AuthV2.assets}748df.png',
+                            fit: BoxFit.fill,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'HEALTHIER TOMORROW, TOGETHER',
+                  style: AuthV2.body.copyWith(fontSize: 8, letterSpacing: 2.5),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: h * .52,
+            left: 0,
+            right: 0,
+            child: Image.asset(
+              '${AuthV2.assets}7e4fa.png',
+              height: 202,
+              fit: BoxFit.contain,
+            ),
+          ),
+          Positioned(
+            bottom: h * .142,
+            left: 0,
+            right: 0,
+            child: Text(
+              'People Care.\nBrighter days.',
+              textAlign: TextAlign.center,
+              style: AuthV2.body.copyWith(
+                color: const Color(0xFF0E8C86),
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
           ),
         ],
-      ),
-    );
-  }
+      );
+    },
+  );
+}
+
+class _Orb extends StatelessWidget {
+  const _Orb({this.color = const Color(0xFFCDEFEA)});
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 150,
+    height: 150,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }

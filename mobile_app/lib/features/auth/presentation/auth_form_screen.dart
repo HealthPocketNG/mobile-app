@@ -1,45 +1,54 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/app/app_state.dart';
-import 'package:healthpocket/core/theme/app_colors.dart';
-import 'package:healthpocket/core/theme/app_spacing.dart';
-import 'package:healthpocket/core/widgets/app_brand_logo.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
+
+import 'auth_v2_widgets.dart';
 
 enum AuthMode { signIn, signUp }
 
 class AuthFormScreen extends StatefulWidget {
   const AuthFormScreen({required this.mode, required this.appState, super.key});
-
   final AuthMode mode;
   final AppState appState;
-
   @override
   State<AuthFormScreen> createState() => _AuthFormScreenState();
 }
 
 class _AuthFormScreenState extends State<AuthFormScreen> {
-  bool _acceptedTerms = false;
-  bool _isBusy = false;
-  String? _errorMessage;
+  final _form = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _emailFocus = FocusNode();
+  bool _terms = false;
+  bool _busy = false;
+  String? _error;
+  bool get _signUp => widget.mode == AuthMode.signUp;
 
-  bool get _isSignUp => widget.mode == AuthMode.signUp;
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _password.dispose();
+    _emailFocus.dispose();
+    super.dispose();
+  }
 
-  Future<void> _continueWithGoogle() async {
-    if (_isSignUp && !_acceptedTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please accept the Terms and Privacy Policy.'),
-        ),
+  Future<void> _run(Future<AuthResult?> Function() operation) async {
+    if (_signUp && !_terms) {
+      setState(
+        () => _error = 'Please accept the Terms of Service and Privacy Policy.',
       );
       return;
     }
     setState(() {
-      _isBusy = true;
-      _errorMessage = null;
+      _busy = true;
+      _error = null;
     });
     try {
-      final result = await widget.appState.authRepository.signInWithGoogle();
+      final result = await operation();
       if (result == null) return;
       final destination = await widget.appState.acceptAuthentication(result);
       if (!mounted) return;
@@ -49,126 +58,235 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
         (route) => false,
       );
     } on AuthFailure catch (error) {
-      if (mounted) setState(() => _errorMessage = error.message);
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Could not connect. Check your connection and try again.',
+        );
+      }
     } finally {
-      if (mounted) setState(() => _isBusy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
+  void _submitEmail() {
+    if (!_form.currentState!.validate()) return;
+    _run(
+      () => _signUp
+          ? widget.appState.authRepository.createAccountWithEmail(
+              name: _name.text.trim(),
+              email: _email.text.trim(),
+              password: _password.text,
+            )
+          : widget.appState.authRepository.signInWithEmail(
+              email: _email.text.trim(),
+              password: _password.text,
+            ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.white,
+    body: SafeArea(
+      child: Form(
+        key: _form,
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                onPressed: () => Navigator.maybePop(context),
-                icon: const Icon(Icons.arrow_back_rounded),
+            const AuthV2Back(),
+            const SizedBox(height: 18),
+            AuthV2Heading(
+              _signUp ? 'Create your account' : 'Welcome back',
+              _signUp
+                  ? 'Join thousands of people building\na healthier tomorrow.'
+                  : 'Sign in to keep saving for a\nhealthier tomorrow.',
+            ),
+            const SizedBox(height: 30),
+            SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                onPressed: _busy
+                    ? null
+                    : () =>
+                          _run(widget.appState.authRepository.signInWithGoogle),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AuthV2.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SvgPicture.asset(
+                      '${AuthV2.assets}google_g.svg',
+                      key: const Key('google-logo'),
+                      width: 18,
+                      height: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Continue with Google',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: AuthV2.navy,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const Center(
-              child: AppBrandLogo(showTagline: true, centered: true),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _AuthSwitcher(isSignUp: _isSignUp),
-            const SizedBox(height: AppSpacing.xl),
-            Text(
-              _isSignUp ? 'Create your account' : 'Welcome back',
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Continue securely with your Google account.',
-              style: Theme.of(context).textTheme.bodyLarge
-                  ?.copyWith(color: AppColors.inkMuted),
-            ),
-            if (_isSignUp) ...[
-              const SizedBox(height: AppSpacing.lg),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _acceptedTerms,
-                activeColor: AppColors.primary,
-                controlAffinity: ListTileControlAffinity.leading,
-                onChanged: (value) {
-                  setState(() => _acceptedTerms = value ?? false);
-                },
-                title: const Text(
-                  'I agree to the Terms of Service and Privacy Policy.',
+            if (_signUp) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 50,
+                child: FilledButton.icon(
+                  onPressed: () => _emailFocus.requestFocus(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFF0F3F5),
+                    foregroundColor: AuthV2.navy,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.mail_outline, size: 18),
+                  label: const Text(
+                    'Continue with Email',
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 14),
+                  ),
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.lg),
-            OutlinedButton.icon(
-              onPressed: _isBusy ? null : _continueWithGoogle,
-              icon: const Icon(Icons.g_mobiledata_rounded, size: 30),
-              label: Text(_isBusy ? 'Please wait…' : 'Continue with Google'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-              ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Expanded(child: Divider(color: AuthV2.border)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('or', style: AuthV2.body),
+                ),
+                const Expanded(child: Divider(color: AuthV2.border)),
+              ],
             ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.error),
+            const SizedBox(height: 18),
+            if (_signUp) ...[
+              AuthV2Field(
+                label: 'Full name',
+                controller: _name,
+                hint: 'David Okafor',
+                validator: (v) => v == null || v.trim().length < 2
+                    ? 'Enter your full name'
+                    : null,
               ),
+              const SizedBox(height: 16),
             ],
+            AuthV2Field(
+              label: 'Email address',
+              controller: _email,
+              focusNode: _emailFocus,
+              hint: 'you@example.com',
+              keyboardType: TextInputType.emailAddress,
+              validator: (v) =>
+                  v == null ||
+                      !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v.trim())
+                  ? 'Enter a valid email address'
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            AuthV2Field(
+              label: _signUp ? 'Create a password' : 'Password',
+              controller: _password,
+              hint: '••••••••••',
+              password: true,
+              validator: (v) => v == null || v.length < 8
+                  ? 'Use at least 8 characters'
+                  : null,
+            ),
+            if (_signUp) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: _terms,
+                      activeColor: AuthV2.teal,
+                      onChanged: (v) => setState(() => _terms = v ?? false),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'I agree to the Terms of Service and Privacy Policy',
+                      style: AuthV2.body.copyWith(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ] else
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    AppRoute.forgotPassword.path,
+                  ),
+                  child: const Text(
+                    'Forgot password?',
+                    style: TextStyle(
+                      color: AuthV2.teal,
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _AuthSwitcher extends StatelessWidget {
-  const _AuthSwitcher({required this.isSignUp});
-
-  final bool isSignUp;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget tab(String label, bool selected, AppRoute route) => Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: selected
-            ? null
-            : () => Navigator.pushReplacementNamed(context, route.path),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : AppColors.inkMuted,
-              fontWeight: FontWeight.w700,
+    ),
+    bottomNavigationBar: SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AuthV2Button(
+              label: _signUp ? 'Create Account   →' : 'Sign In   →',
+              onPressed: _busy ? null : _submitEmail,
+              busy: _busy,
             ),
-          ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () => Navigator.pushReplacementNamed(
+                context,
+                _signUp ? AppRoute.signIn.path : AppRoute.signUp.path,
+              ),
+              child: Text(
+                _signUp
+                    ? 'Already have an account? Sign In'
+                    : 'New to HealthPocket? Create account',
+                style: AuthV2.body.copyWith(fontSize: 12),
+              ),
+            ),
+          ],
         ),
       ),
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          tab('Sign up', isSignUp, AppRoute.signUp),
-          tab('Log in', !isSignUp, AppRoute.signIn),
-        ],
-      ),
-    );
-  }
+    ),
+  );
 }

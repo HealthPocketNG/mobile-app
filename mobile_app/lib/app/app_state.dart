@@ -5,8 +5,10 @@ import 'package:healthpocket/core/data/backend_ids.dart';
 import 'package:healthpocket/core/backend/trusted_backend_client.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
+import 'package:healthpocket/features/auth/data/biometric_unlock_service.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
 import 'package:healthpocket/features/auth/domain/app_pin.dart';
+import 'package:healthpocket/features/auth/domain/email_verification_service.dart';
 import 'package:healthpocket/features/auth/domain/auth_user.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
@@ -22,6 +24,8 @@ import 'package:healthpocket/features/savings/application/savings_store.dart';
 class AppState extends ChangeNotifier {
   AppState({
     AuthRepository? authRepository,
+    this.emailVerificationService,
+    BiometricUnlockService? biometricUnlockService,
     AppPinRepository? pinRepository,
     this.profileRepository,
     this.profilePhotoRepository,
@@ -32,11 +36,15 @@ class AppState extends ChangeNotifier {
     this.backendClient,
     this.developmentContributionsEnabled = false,
   }) : authRepository = authRepository ?? InMemoryAuthRepository(),
+       biometricUnlockService =
+           biometricUnlockService ?? BiometricUnlockService(),
        pinRepository =
            pinRepository ??
            SecureAppPinRepository(storage: MemorySecureValueStore());
 
   final AuthRepository authRepository;
+  final EmailVerificationService? emailVerificationService;
+  final BiometricUnlockService biometricUnlockService;
   final AppPinRepository pinRepository;
   final ProfileRepository? profileRepository;
   final ProfilePhotoRepository? profilePhotoRepository;
@@ -62,9 +70,15 @@ class AppState extends ChangeNotifier {
       _onboardingStatus == AccountOnboardingStatus.complete;
 
   Future<AuthFlowDestination> resolveStartup() async {
+    final previousUser = authRepository.currentUser;
     final user = await authRepository.restoreSession();
-    if (user == null) return AuthFlowDestination.welcome;
+    if (user == null) {
+      return previousUser == null
+          ? AuthFlowDestination.welcome
+          : AuthFlowDestination.sessionExpired;
+    }
     if (!user.emailVerified) {
+      if (user.usesPassword) return AuthFlowDestination.verifyEmail;
       await authRepository.signOut();
       return AuthFlowDestination.welcome;
     }
@@ -73,6 +87,11 @@ class AppState extends ChangeNotifier {
 
   Future<AuthFlowDestination> acceptAuthentication(AuthResult result) async {
     if (!result.user.emailVerified) {
+      if (result.user.usesPassword) {
+        _pendingNewAccount = result.isNewUser;
+        if (result.isNewUser) _beginRegistrationFor(result.user);
+        return AuthFlowDestination.verifyEmail;
+      }
       await authRepository.signOut();
       throw const AuthFailure(
         'Use a Google account with a verified email address.',
@@ -85,25 +104,55 @@ class AppState extends ChangeNotifier {
     return _destinationForVerifiedUser(result.user);
   }
 
+  Future<AuthFlowDestination> acceptEmailVerification() async {
+    final user = await authRepository.refreshCurrentUser();
+    if (user == null || !user.emailVerified || !user.usesPassword) {
+      throw const AuthFailure('Email verification is still pending.');
+    }
+    return _destinationForVerifiedUser(user);
+  }
+
   Future<void> setPin(String pin) async {
-    final user = _requireVerifiedGoogleUser();
+    final user = _requireVerifiedUser();
     await pinRepository.setPin(userId: user.uid, pin: pin);
     _pendingNewAccount = false;
   }
 
   Future<PinVerificationResult> verifyPin(String pin) async {
-    final user = _requireVerifiedGoogleUser();
+    final user = _requireVerifiedUser();
     return pinRepository.verifyPin(userId: user.uid, pin: pin);
   }
 
   Future<bool> reauthenticateAndResetPin() async {
-    final user = _requireVerifiedGoogleUser();
+    final user = _requireVerifiedUser();
+    if (!user.usesGoogle) {
+      throw const AuthFailure(
+        'Sign in with your email and password to reset your PIN.',
+      );
+    }
     final completed = await authRepository.reauthenticateWithGoogle();
     if (!completed) return false;
-    final restored = _requireVerifiedGoogleUser();
+    final restored = _requireVerifiedUser();
     if (restored.uid != user.uid) {
       throw const AuthFailure(
         'The Google account does not match this HealthPocket session.',
+      );
+    }
+    await pinRepository.clearPin(user.uid);
+    return true;
+  }
+
+  Future<bool> reauthenticateAndResetPinWithEmail(String password) async {
+    final user = _requireVerifiedUser();
+    if (!user.usesPassword) {
+      throw const AuthFailure('Sign in with Google to reset your PIN.');
+    }
+    final completed = await authRepository.reauthenticateWithEmail(password);
+    if (!completed) return false;
+    final restored = _requireVerifiedUser();
+    if (restored.uid != user.uid) {
+      throw const AuthFailure(
+        'The account does not match this HealthPocket session.',
       );
     }
     await pinRepository.clearPin(user.uid);
@@ -787,13 +836,11 @@ class AppState extends ChangeNotifier {
     return userId;
   }
 
-  AuthUser _requireVerifiedGoogleUser() {
+  AuthUser _requireVerifiedUser() {
     final user = authRepository.currentUser;
     if (user == null) throw const AuthFailure('Your session has expired.');
-    if (!user.emailVerified || !user.usesGoogle) {
-      throw const AuthFailure(
-        'Sign in again with your verified Google account.',
-      );
+    if (!user.emailVerified || (!user.usesGoogle && !user.usesPassword)) {
+      throw const AuthFailure('Sign in again with your verified account.');
     }
     return user;
   }
@@ -950,4 +997,11 @@ class AppState extends ChangeNotifier {
   }
 }
 
-enum AuthFlowDestination { welcome, personalInformation, createPin, unlockPin }
+enum AuthFlowDestination {
+  welcome,
+  sessionExpired,
+  verifyEmail,
+  personalInformation,
+  createPin,
+  unlockPin,
+}

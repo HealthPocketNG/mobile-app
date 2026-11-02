@@ -28,6 +28,26 @@ flutter run --flavor dev --target lib/main_dev.dart
 
 VS Code users can select the `HealthPocket Dev` launch configuration.
 
+The V2 onboarding flow uses Firebase Email/Password authentication. Enable
+that provider in the DEV Firebase project before testing email sign-up. The
+six-digit verification code and password-reset message are sent by Cloud
+Functions through Resend. Cloud Functions and Secret Manager require the DEV
+project to be on Firebase's Blaze plan. Before deploying the new functions,
+verify a sending
+domain in Resend, set `HEALTHPOCKET_RESEND_API_KEY` with
+`firebase functions:secrets:set HEALTHPOCKET_RESEND_API_KEY --project healthpocket-dev-a82f3`,
+and put `HEALTHPOCKET_VERIFICATION_FROM=HealthPocket <you@verified-domain>`
+in the uncommitted `functions/.env.healthpocket-dev-a82f3` file. Deploy the
+functions and updated Firestore/Storage rules to DEV only after reviewing the
+changes. The app's email verification and reset flows cannot send mail until
+these DEV services are configured and deployed.
+
+On a USB-connected Android phone, enable USB debugging, select the device with
+`flutter devices`, then run `flutter run -d <device-id> --flavor dev --target
+lib/main_dev.dart`. This uses the real DEV Firebase project. The password-reset
+email opens an HTTPS handoff page with an **Open HealthPocket** button. Open it
+on the same phone with HealthPocket Dev installed.
+
 ## Firebase emulators
 
 Start the local Auth and Firestore emulators from the repository root:

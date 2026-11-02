@@ -1,124 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:healthpocket/app/app_router.dart';
-import 'package:healthpocket/core/theme/app_colors.dart';
-import 'package:healthpocket/core/theme/app_spacing.dart';
-import 'package:healthpocket/core/widgets/app_primary_button.dart';
+
+import 'auth_v2_widgets.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
-
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            AppSpacing.lg,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(
-                height: 0,
-                child: Opacity(
-                  opacity: 0,
-                  child: Text('Prepare for medical bills before they happen.'),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'A healthier\ntomorrow, together.',
-                style: Theme.of(context).textTheme.displaySmall
-                    ?.copyWith(fontWeight: FontWeight.w800, height: 1.05),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Save, pay and access quality healthcare — all in one place.',
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: AppColors.inkMuted, height: 1.45),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              const Expanded(child: _WelcomeIllustration()),
-              const SizedBox(height: AppSpacing.md),
-              const Center(child: _PageDots()),
-              const SizedBox(height: AppSpacing.md),
-              AppPrimaryButton(
-                label: 'Get started',
-                onPressed: () =>
-                    Navigator.pushNamed(context, AppRoute.signUp.path),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Center(
-                child: TextButton(
-                  onPressed: () =>
-                      Navigator.pushNamed(context, AppRoute.signIn.path),
-                  child: const Text('Already have an account? Sign In'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WelcomeIllustration extends StatelessWidget {
-  const _WelcomeIllustration();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: AppColors.primarySoft,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: Image.asset(
-          'assets/onboarding/onboarding.png',
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-        ),
-      ),
-    );
-  }
-}
-
-class _PageDots extends StatelessWidget {
-  const _PageDots();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 20,
-          height: 6,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
-        const SizedBox(width: 5),
-        ...List.generate(
-          3,
-          (_) => Container(
-            width: 6,
-            height: 6,
-            margin: const EdgeInsets.only(right: 5),
-            decoration: const BoxDecoration(
-              color: AppColors.outline,
-              shape: BoxShape.circle,
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.white,
+    body: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          children: [
+            const SizedBox(height: 64),
+            Text(
+              'A healthier\ntomorrow, together.',
+              textAlign: TextAlign.center,
+              style: AuthV2.heading.copyWith(color: const Color(0xFF0E8C86)),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              'Save, pay and access quality\nhealthcare all in one place.',
+              textAlign: TextAlign.center,
+              style: AuthV2.body,
+            ),
+            const SizedBox(height: 46),
+            Image.asset(
+              '${AuthV2.assets}2081d.png',
+              width: 270,
+              height: 210,
+              fit: BoxFit.contain,
+            ),
+            const Spacer(),
+            AuthV2Button(
+              label: 'Get Started   →',
+              onPressed: () =>
+                  Navigator.pushNamed(context, AppRoute.signUp.path),
+            ),
+            const SizedBox(height: 18),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pushNamed(context, AppRoute.signIn.path),
+              child: Text(
+                'Already have an account? Sign In',
+                style: AuthV2.body.copyWith(fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
         ),
-      ],
-    );
-  }
+      ),
+    ),
+  );
 }

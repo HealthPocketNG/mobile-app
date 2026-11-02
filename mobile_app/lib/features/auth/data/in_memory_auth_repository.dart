@@ -8,6 +8,8 @@ class InMemoryAuthRepository implements AuthRepository {
   final StreamController<AuthUser?> _controller =
       StreamController<AuthUser?>.broadcast();
   AuthUser? _user;
+  final Map<String, String> _passwords = {};
+  final Map<String, String> _names = {};
 
   @override
   AuthUser? get currentUser => _user;
@@ -38,7 +40,66 @@ class InMemoryAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<AuthResult> createAccountWithEmail({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final key = email.trim().toLowerCase();
+    if (_passwords.containsKey(key)) {
+      throw const AuthFailure('An account with this email already exists.');
+    }
+    _passwords[key] = password;
+    _names[key] = name.trim();
+    _user = AuthUser(
+      uid: key,
+      email: key,
+      displayName: name.trim(),
+      emailVerified: false,
+      providers: const {AppAuthProvider.password},
+    );
+    _controller.add(_user);
+    return AuthResult(user: _user!, isNewUser: true);
+  }
+
+  @override
+  Future<AuthResult> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    final key = email.trim().toLowerCase();
+    if (_passwords[key] != password) {
+      throw const AuthFailure('Email or password is incorrect.');
+    }
+    _user = AuthUser(
+      uid: key,
+      email: key,
+      displayName: _names[key],
+      emailVerified: true,
+      providers: const {AppAuthProvider.password},
+    );
+    _controller.add(_user);
+    return AuthResult(user: _user!, isNewUser: false);
+  }
+
+  @override
+  Future<AuthUser?> refreshCurrentUser() async => _user;
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {}
+
+  @override
+  Future<void> confirmPasswordReset({
+    required String code,
+    required String password,
+  }) async {}
+
+  @override
   Future<bool> reauthenticateWithGoogle() async => true;
+
+  @override
+  Future<bool> reauthenticateWithEmail(String password) async =>
+      _user != null && _passwords[_user!.email] == password;
 
   @override
   Future<void> signOut() async {

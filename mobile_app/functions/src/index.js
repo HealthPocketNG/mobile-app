@@ -2,8 +2,10 @@
 
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
+const { defineSecret } = require("firebase-functions/params");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onCall } = require("firebase-functions/v2/https");
+const { onCall, onRequest } = require("firebase-functions/v2/https");
 const { logger } = require("firebase-functions");
 const { buildLedgerService } = require("./ledger-service");
 const { buildPaymentService } = require("./payments/payment-service");
@@ -29,8 +31,11 @@ const {
 } = require("./activity/activity-history-service");
 const { buildReceiptService } = require("./receipts/receipt-service");
 const { buildTrustedBackend } = require("./trusted-backend");
+const { buildEmailCodeService } = require("./auth/email-code-service");
+const { buildPasswordResetService } = require("./auth/password-reset-service");
 require("./config/backend-config");
 const {
+  BackendError,
   assertVerifiedGoogleIdentity,
   runCallable,
 } = require("./errors/backend-error");
@@ -39,6 +44,84 @@ initializeApp();
 const db = getFirestore();
 const ledger = buildLedgerService({ db, logger });
 const region = "africa-south1";
+const resendKey = defineSecret("HEALTHPOCKET_RESEND_API_KEY");
+
+async function sendViaResend({ to, subject, text }) {
+  const key = resendKey.value();
+  const from = process.env.HEALTHPOCKET_VERIFICATION_FROM;
+  if (!key || !from) throw new BackendError("unavailable");
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to: [to], subject, text }),
+  });
+  if (!response.ok) throw new BackendError("unavailable");
+}
+
+function passwordIdentity(request) {
+  const uid = request.auth?.uid;
+  const email = request.auth?.token?.email;
+  if (!uid || typeof email !== "string" ||
+      request.auth.token.firebase?.sign_in_provider !== "password") {
+    throw new BackendError("unauthenticated");
+  }
+  return { uid, email: email.trim().toLowerCase() };
+}
+
+const emailCodes = buildEmailCodeService({
+  db,
+  send: ({ to, code }) => sendViaResend({ to, subject: "Verify your HealthPocket email", text: `Your HealthPocket verification code is ${code}. It expires in 10 minutes.` }),
+});
+
+const passwordResets = buildPasswordResetService({
+  db,
+  auth: getAuth(),
+  buildResetLink: (token) => {
+    const project = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
+    if (!project) throw new BackendError("unavailable");
+    return `https://${region}-${project}.cloudfunctions.net/openPasswordReset?token=${encodeURIComponent(token)}`;
+  },
+  send: ({ to, link }) => sendViaResend({ to, subject: "Reset your HealthPocket password", text: `Open this link to create a new password. It expires in 30 minutes: ${link}` }),
+});
+
+exports.openPasswordReset = onRequest({ region }, (request, response) => {
+  response.set("Cache-Control", "no-store");
+  response.set("Referrer-Policy", "no-referrer");
+  response.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
+  const token = request.query.token;
+  if (typeof token !== "string" || !/^[A-Za-z0-9_-]{40,60}$/.test(token)) {
+    response.status(400).send("This password reset link is invalid.");
+    return;
+  }
+  const appLink = `healthpocket://reset-password?token=${encodeURIComponent(token)}`;
+  response.type("html").send(`<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reset HealthPocket password</title><style>body{font-family:Arial,sans-serif;background:#f5fbfa;color:#102b42;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;box-sizing:border-box}main{max-width:360px;text-align:center}a{display:block;background:#10a799;color:white;padding:16px;border-radius:12px;text-decoration:none;font-weight:700;margin-top:24px}</style></head><body><main><h1>Reset your password</h1><p>Open HealthPocket on this device to create a new password. This link expires in 30 minutes.</p><a href="${appLink}">Open HealthPocket</a></main></body></html>`);
+});
+
+exports.requestPasswordReset = onCall({ region, secrets: [resendKey] }, async (request) =>
+  runCallable({ operation: "request_password_reset", logger, handler: () => passwordResets.requestReset(request.data?.email) }),
+);
+
+exports.confirmPasswordReset = onCall({ region }, async (request) =>
+  runCallable({ operation: "confirm_password_reset", logger, handler: () => passwordResets.confirmReset({ token: request.data?.token, password: request.data?.password }) }),
+);
+
+exports.requestEmailVerificationCode = onCall({ region, secrets: [resendKey] }, async (request) =>
+  runCallable({ operation: "request_email_verification_code", logger, handler: async () => {
+    const identity = passwordIdentity(request);
+    const user = await getAuth().getUser(identity.uid);
+    if (user.emailVerified || user.email?.toLowerCase() !== identity.email) throw new BackendError("permission-denied");
+    return emailCodes.requestCode(identity);
+  } }),
+);
+
+exports.verifyEmailCode = onCall({ region }, async (request) =>
+  runCallable({ operation: "verify_email_code", logger, handler: async () => {
+    const identity = passwordIdentity(request);
+    const user = await getAuth().getUser(identity.uid);
+    if (user.emailVerified || user.email?.toLowerCase() !== identity.email) throw new BackendError("permission-denied");
+    return emailCodes.verifyCode({ ...identity, code: request.data?.code });
+  } }),
+);
 
 // Mock provider adapters can move only emulator data. The deployed callable
 // fails closed for every money action until regulated adapters are selected and

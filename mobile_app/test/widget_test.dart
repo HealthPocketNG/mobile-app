@@ -6,7 +6,6 @@ import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/app/health_pocket_app.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
-import 'package:healthpocket/core/widgets/app_brand_logo.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
@@ -20,10 +19,31 @@ import 'package:healthpocket/features/savings/presentation/savings_screen.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
+  testWidgets('password reset app link opens the V2 new-password form', (
+    tester,
+  ) async {
+    final router = AppRouter(AppState());
+    const link = 'healthpocket://reset-password?token=example-token';
+    await tester.pumpWidget(
+      MaterialApp(
+        initialRoute: link,
+        onGenerateRoute: router.onGenerateRoute,
+        onGenerateInitialRoutes: (name) => [
+          router.onGenerateRoute(RouteSettings(name: name)),
+        ],
+      ),
+    );
+    expect(find.text('Create a new password'), findsOneWidget);
+  });
+
   testWidgets('shows the HealthPocket launch screen', (tester) async {
     await tester.pumpWidget(const HealthPocketApp());
 
-    expect(find.byType(AppBrandLogo), findsOneWidget);
+    expect(
+      find.image(const AssetImage('assets/auth/v2/748df.png')),
+      findsOneWidget,
+    );
+    expect(find.text('People Care.\nBrighter days.'), findsOneWidget);
   });
 
   testWidgets('moves from launch to account creation', (tester) async {
@@ -31,11 +51,12 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 1700));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Prepare for medical'), findsOneWidget);
+    expect(find.textContaining('A healthier'), findsOneWidget);
 
-    await tester.tap(find.text('Get started'));
+    await tester.tap(find.textContaining('Get Started'));
     await tester.pumpAndSettle();
     expect(find.text('Create your account'), findsOneWidget);
+    expect(find.byKey(const Key('google-logo')), findsOneWidget);
   });
 
   testWidgets('explains that Google sign-up also requires consent', (
@@ -44,17 +65,17 @@ void main() {
     await tester.pumpWidget(const HealthPocketApp());
     await tester.pump(const Duration(milliseconds: 1700));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Get started'));
+    await tester.tap(find.textContaining('Get Started'));
     await tester.pumpAndSettle();
 
     await tester.drag(find.byType(ListView).last, const Offset(0, -700));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Continue with Google'));
+    await tester.tap(find.textContaining('Continue with Google'));
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Please accept the Terms and Privacy Policy.'),
+      find.text('Please accept the Terms of Service and Privacy Policy.'),
       findsOneWidget,
     );
   });

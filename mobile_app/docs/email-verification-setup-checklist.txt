@@ -1,0 +1,103 @@
+HEALTHPOCKET DEV EMAIL VERIFICATION - SETUP AND TEST CHECKLIST
+
+Project: healthpocket-dev-a82f3 (DEV only). Run commands from this repository root.
+Production project healthpocket-ng is outside this checklist.
+
+SETUP
+[ ] 1. In Firebase Console, select healthpocket-dev-a82f3 and link a working
+       Cloud Billing account to upgrade this DEV project to Blaze. Confirm the
+       console shows Blaze before continuing. Set a billing budget alert if
+       desired; alerts notify you but do not cap charges.
+
+[ ] 2. In Firebase Console > Authentication > Sign-in method, confirm
+       Email/Password is enabled for DEV. It was enabled at the last check;
+       recheck before the live test.
+
+[ ] 3. In Resend, add a domain you control, publish the DNS records Resend
+       requests, and wait until its sending status is verified. Choose a From
+       address on that domain, such as verify@yourdomain.com. Do not use a
+       personal Gmail address as the From address.
+
+[ ] 4. Create a Resend API key with Sending access for the verified domain.
+       Keep the key private. From the repository root, store it in DEV Firebase
+       Secret Manager (the CLI will prompt for its value):
+
+       firebase functions:secrets:set HEALTHPOCKET_RESEND_API_KEY --project healthpocket-dev-a82f3
+
+       Do not put the API key in source code, a .env file, or this checklist.
+
+[ ] 5. Create functions/.env.healthpocket-dev-a82f3 with this one line,
+       replacing the example address with your verified Resend sender:
+
+       HEALTHPOCKET_VERIFICATION_FROM=HealthPocket <verify@yourdomain.com>
+
+       The file is ignored by Git. Its address must use the verified domain.
+
+DEPLOY TO DEV
+[ ] 6. From the repository root, deploy only the five auth/recovery functions
+       needed by these screens. Confirm the CLI targets healthpocket-dev-a82f3,
+       and allow it to enable any required Google Cloud APIs:
+
+       firebase deploy --only functions:requestEmailVerificationCode,functions:verifyEmailCode,functions:requestPasswordReset,functions:confirmPasswordReset,functions:openPasswordReset --project healthpocket-dev-a82f3
+
+       These functions run in africa-south1. If a secret or sender setting is
+       changed later, redeploy the functions that send email.
+
+[ ] 7. Deploy the current DEV Firestore rules so the newly verified password
+       account can proceed into personal details and the rest of onboarding:
+
+       firebase deploy --only firestore:rules --project healthpocket-dev-a82f3
+
+       If you plan to test profile-photo upload, also deploy the current DEV
+       Storage rules after confirming a DEV Storage bucket is configured:
+
+       firebase deploy --only storage --project healthpocket-dev-a82f3
+
+[ ] 8. Check that the five functions appear in the deployed DEV function list:
+
+       firebase functions:list --project healthpocket-dev-a82f3
+
+LIVE TEST ON AN ANDROID PHONE
+[ ] 9. Connect the phone, enable USB debugging, and find its device ID:
+
+       flutter devices
+
+       Then run the real DEV build (do not enable Firebase emulators):
+
+       flutter run -d <device-id> --flavor dev --target lib/main_dev.dart
+
+[ ] 10. Use a fresh email address that you can access. Sign up, reach Verify
+        Email, receive the six-digit message from your verified sender, and
+        enter the code within 10 minutes. Confirm you reach Personal Details,
+        then complete Set PIN and the onboarding completion screen.
+
+[ ] 11. Check the recovery cases: an incorrect code shows an error; Resend
+        becomes available after 45 seconds; a new code arrives and works.
+        There are at most five code requests per hour and five attempts for a
+        code, so do not repeatedly tap Resend while troubleshooting.
+
+[ ] 12. Close and reopen the app, then sign in with the same account. Confirm
+        you are recognized as verified and are not sent through email
+        verification again. If testing password recovery, request a reset
+        message, open its link on the same phone with HealthPocket Dev
+        installed, and confirm the new password works. Reset links expire
+        after 30 minutes.
+
+IF A CODE DOES NOT ARRIVE
+[ ] Check the phone's internet connection and the inbox's Spam/Junk folder.
+[ ] Check Resend's email activity for a rejected or undelivered send, and
+    confirm that its domain is verified for sending and the From address
+    matches it.
+[ ] Check Firebase Console > Functions logs for
+    requestEmailVerificationCode in healthpocket-dev-a82f3. Verify the
+    HEALTHPOCKET_RESEND_API_KEY secret and sender setting are present, then
+    redeploy the sending function after any correction.
+[ ] If the app says to wait before requesting another code, respect the
+    cooldown/request limit rather than creating more attempts.
+
+Official references:
+https://firebase.google.com/docs/projects/billing/firebase-pricing-plans
+https://firebase.google.com/docs/functions/config-env
+https://firebase.google.com/docs/functions/manage-functions
+https://resend.com/docs/dashboard/domains/introduction
+https://resend.com/docs/dashboard/api-keys/introduction

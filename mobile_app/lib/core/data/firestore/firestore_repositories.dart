@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:healthpocket/core/data/backend_ids.dart';
@@ -19,25 +20,29 @@ import 'package:healthpocket/features/savings/domain/savings_schedule.dart';
 import 'package:healthpocket/features/wallet/domain/wallet_account.dart';
 
 class FirebaseAuthRepository implements AuthRepository {
-  FirebaseAuthRepository._(this._auth, this._googleSignIn);
+  FirebaseAuthRepository._(this._auth, this._googleSignIn, this._functions);
 
-  static Future<FirebaseAuthRepository> initialize(FirebaseAuth auth) async {
+  static Future<FirebaseAuthRepository> initialize(
+    FirebaseAuth auth, {
+    FirebaseFunctions? functions,
+  }) async {
     final googleSignIn = GoogleSignIn.instance;
     if (!kIsWeb) await googleSignIn.initialize();
-    return FirebaseAuthRepository._(auth, googleSignIn);
+    return FirebaseAuthRepository._(auth, googleSignIn, functions);
   }
 
   final FirebaseAuth _auth;
   final GoogleSignIn _googleSignIn;
+  final FirebaseFunctions? _functions;
 
   @override
-  AuthUser? get currentUser => _mapGoogleUser(_auth.currentUser);
+  AuthUser? get currentUser => _mapUser(_auth.currentUser);
 
   @override
   String? get currentUserId => currentUser?.uid;
 
   @override
-  Stream<AuthUser?> watchUser() => _auth.userChanges().map(_mapGoogleUser);
+  Stream<AuthUser?> watchUser() => _auth.userChanges().map(_mapUser);
 
   @override
   Future<bool> hasActiveSession() async => currentUser != null;
@@ -48,7 +53,7 @@ class FirebaseAuthRepository implements AuthRepository {
     if (existing == null) return null;
     try {
       await existing.reload();
-      final restored = _mapGoogleUser(_auth.currentUser);
+      final restored = _mapUser(_auth.currentUser);
       if (restored == null) await _signOutSafely();
       return restored;
     } on FirebaseAuthException catch (error) {
@@ -80,12 +85,105 @@ class FirebaseAuthRepository implements AuthRepository {
         credential = await _auth.signInWithCredential(firebaseCredential);
       }
       return AuthResult(
-        user: _mapGoogleUser(credential.user)!,
+        user: _mapUser(credential.user)!,
         isNewUser: credential.additionalUserInfo?.isNewUser ?? false,
       );
     } on GoogleSignInException catch (error) {
       if (error.code == GoogleSignInExceptionCode.canceled) return null;
       throw const AuthFailure('Google Sign-In could not be completed.');
+    } on FirebaseAuthException catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<AuthResult> createAccountWithEmail({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      await credential.user!.updateDisplayName(name.trim());
+      await credential.user!.reload();
+      return AuthResult(user: _mapUser(_auth.currentUser)!, isNewUser: true);
+    } on FirebaseAuthException catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<AuthResult> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      return AuthResult(user: _mapUser(credential.user)!, isNewUser: false);
+    } on FirebaseAuthException catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<AuthUser?> refreshCurrentUser() async {
+    try {
+      await _auth.currentUser?.reload();
+      await _auth.currentUser?.getIdToken(true);
+      return _mapUser(_auth.currentUser);
+    } on FirebaseAuthException catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      if (_functions != null) {
+        await _functions
+            .httpsCallable('requestPasswordReset')
+            .call<Map<String, dynamic>>({'email': email.trim()});
+        return;
+      }
+      await _auth.sendPasswordResetEmail(email: email.trim());
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthFailure(
+        error.code == 'resource-exhausted'
+            ? 'Please wait before requesting another reset link.'
+            : 'Could not send a reset link. Check your connection and try again.',
+        code: error.code,
+      );
+    } on FirebaseAuthException catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
+  Future<void> confirmPasswordReset({
+    required String code,
+    required String password,
+  }) async {
+    try {
+      if (_functions != null) {
+        await _functions
+            .httpsCallable('confirmPasswordReset')
+            .call<Map<String, dynamic>>({'token': code, 'password': password});
+        return;
+      }
+      await _auth.confirmPasswordReset(code: code, newPassword: password);
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthFailure(
+        error.code == 'failed-precondition'
+            ? 'This reset link is invalid or has expired.'
+            : 'Could not update your password. Try again.',
+        code: error.code,
+      );
     } on FirebaseAuthException catch (error) {
       throw _failure(error);
     }
@@ -115,6 +213,22 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<bool> reauthenticateWithEmail(String password) async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) {
+      throw const AuthFailure('Your session has expired.');
+    }
+    try {
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: user.email!, password: password),
+      );
+      return true;
+    } on FirebaseAuthException catch (error) {
+      throw _failure(error);
+    }
+  }
+
+  @override
   Future<void> signOut() async {
     await _signOutSafely();
   }
@@ -130,19 +244,27 @@ class FirebaseAuthRepository implements AuthRepository {
     await _auth.signOut();
   }
 
-  AuthUser? _mapGoogleUser(User? user) {
+  AuthUser? _mapUser(User? user) {
     if (user == null) return null;
     final usesGoogle = user.providerData.any(
       (provider) => provider.providerId == 'google.com',
     );
-    if (!usesGoogle) return null;
+    final usesPassword =
+        user.providerData.any(
+          (provider) => provider.providerId == 'password',
+        ) ||
+        (user.email != null && user.providerData.isEmpty);
+    if (!usesGoogle && !usesPassword) return null;
     return AuthUser(
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
       photoUrl: user.photoURL,
       emailVerified: user.emailVerified,
-      providers: const {AppAuthProvider.google},
+      providers: {
+        if (usesGoogle) AppAuthProvider.google,
+        if (usesPassword) AppAuthProvider.password,
+      },
     );
   }
 
@@ -153,6 +275,12 @@ class FirebaseAuthRepository implements AuthRepository {
         'too-many-requests' => 'Too many attempts. Please wait and try again.',
         'requires-recent-login' =>
           'Please sign in again before changing this security setting.',
+        'email-already-in-use' => 'An account with this email already exists.',
+        'weak-password' => 'Choose a stronger password.',
+        'invalid-email' => 'Enter a valid email address.',
+        'invalid-login-credentials' ||
+        'wrong-password' ||
+        'user-not-found' => 'Email or password is incorrect.',
         'network-request-failed' =>
           'Check your internet connection and try again.',
         _ => 'Authentication could not be completed. Please try again.',

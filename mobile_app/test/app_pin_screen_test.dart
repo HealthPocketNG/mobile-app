@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/app/app_state.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
+import 'package:healthpocket/features/auth/data/biometric_unlock_service.dart';
 import 'package:healthpocket/features/auth/data/in_memory_auth_repository.dart';
 import 'package:healthpocket/features/auth/presentation/app_pin_screen.dart';
 
@@ -16,6 +17,7 @@ void main() {
     final auth = InMemoryAuthRepository();
     final appState = AppState(
       authRepository: auth,
+      biometricUnlockService: _NoBiometrics(),
       pinRepository: SecureAppPinRepository(
         storage: MemorySecureValueStore(),
         algorithm: Pbkdf2.hmacSha256(iterations: 10, bits: 256),
@@ -35,16 +37,20 @@ void main() {
       ),
     );
 
-    final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), '482913');
-    await tester.enterText(fields.at(1), '482914');
-    final continueButton = find.text('Continue  →');
+    final field = find.byType(TextField);
+    await tester.enterText(field, '482913');
+    final continueButton = find.text('Continue   →');
     await tester.ensureVisible(continueButton);
     await tester.tap(continueButton);
     await tester.pump();
-    expect(find.text('PINs do not match'), findsOneWidget);
+    expect(find.text('Confirm your login PIN'), findsOneWidget);
 
-    await tester.enterText(fields.at(1), '482913');
+    await tester.enterText(field, '482914');
+    await tester.tap(continueButton);
+    await tester.pump();
+    expect(find.textContaining('PINs do not match'), findsOneWidget);
+
+    await tester.enterText(field, '482913');
     await tester.ensureVisible(continueButton);
     await tester.tap(continueButton);
     await tester.pumpAndSettle();
@@ -59,6 +65,7 @@ void main() {
     final auth = InMemoryAuthRepository();
     final appState = AppState(
       authRepository: auth,
+      biometricUnlockService: _NoBiometrics(),
       pinRepository: SecureAppPinRepository(
         storage: MemorySecureValueStore(),
         algorithm: Pbkdf2.hmacSha256(iterations: 10, bits: 256),
@@ -80,9 +87,14 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byType(TextFormField), '482913');
+    await tester.enterText(find.byType(TextField), '482913');
     await tester.pumpAndSettle();
 
     expect(find.text('Unlocked dashboard'), findsOneWidget);
   });
+}
+
+class _NoBiometrics extends BiometricUnlockService {
+  @override
+  Future<bool> shouldOffer(String uid) async => false;
 }

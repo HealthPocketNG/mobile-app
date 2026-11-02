@@ -34,6 +34,7 @@ migrate_working_dir/
 /coverage/
 /google-services.json
 **/node_modules/
+/functions/.env*
 
 # Symbolication related
 app.*.symbols

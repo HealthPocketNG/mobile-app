@@ -88,7 +88,7 @@ function harness({ moneyEnabled = true, records = {}, rateLimiter } = {}) {
   };
 }
 
-test("requires a verified Google identity", async () => {
+test("requires a verified Google or password identity", async () => {
   const { backend } = harness();
   const request = { data: { action: "wallet.ensure", payload: {} } };
   await assert.rejects(backend.callable(request), (error) => error.code === "unauthenticated");
@@ -103,6 +103,14 @@ test("requires a verified Google identity", async () => {
     (error) => error.code === "permission-denied",
   );
   assert.equal(assertVerifiedGoogleIdentity(verifiedAuth()).userId, "user-1");
+  assert.equal(assertVerifiedGoogleIdentity({ uid: "email-user", token: {
+    email: "email-user@example.com", email_verified: true,
+    firebase: { sign_in_provider: "password" },
+  } }).userId, "email-user");
+  assert.throws(() => assertVerifiedGoogleIdentity({ uid: "pending", token: {
+    email: "pending@example.com", email_verified: false,
+    firebase: { sign_in_provider: "password" },
+  } }), { code: "permission-denied" });
 });
 
 test("rate-limits sensitive commands after authentication and validation", async () => {

@@ -8,6 +8,9 @@ import 'package:healthpocket/features/auth/presentation/app_pin_screen.dart';
 import 'package:healthpocket/features/auth/presentation/pin_recovery_screen.dart';
 import 'package:healthpocket/features/auth/presentation/splash_screen.dart';
 import 'package:healthpocket/features/auth/presentation/welcome_screen.dart';
+import 'package:healthpocket/features/auth/presentation/verify_email_screen.dart';
+import 'package:healthpocket/features/auth/presentation/password_recovery_screen.dart';
+import 'package:healthpocket/features/auth/presentation/auth_state_screen.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:healthpocket/features/activity/presentation/activity_screen.dart';
 import 'package:healthpocket/features/family/presentation/family_pocket_screen.dart';
@@ -22,6 +25,15 @@ enum AppRoute {
   welcome('/welcome'),
   signIn('/sign-in'),
   signUp('/sign-up'),
+  verifyEmail('/verify-email'),
+  forgotPassword('/forgot-password'),
+  passwordResetSent('/password-reset-sent'),
+  createNewPassword('/create-new-password'),
+  sessionExpired('/session-expired'),
+  offline('/offline'),
+  accountLocked('/account-locked'),
+  biometrics('/biometrics'),
+  success('/success'),
   createPin('/create-pin'),
   unlockPin('/unlock-pin'),
   pinRecovery('/pin-recovery'),
@@ -46,8 +58,16 @@ class AppRouter {
   final AppState appState;
 
   Route<void> onGenerateRoute(RouteSettings settings) {
-    final route = AppRoute.values.where((item) => item.path == settings.name);
-    final destination = route.isEmpty ? AppRoute.splash : route.first;
+    final uri = Uri.tryParse(settings.name ?? '/');
+    final resetLink =
+        (uri?.scheme == 'healthpocket' && uri?.host == 'reset-password') ||
+        uri?.path == '/reset-password';
+    final route = AppRoute.values.where((item) => item.path == uri?.path);
+    final destination = resetLink
+        ? AppRoute.createNewPassword
+        : route.isEmpty
+        ? AppRoute.splash
+        : route.first;
     final guardedDestination = _guard(destination);
 
     return MaterialPageRoute<void>(
@@ -63,6 +83,43 @@ class AppRouter {
           ),
           AppRoute.signUp => AuthFormScreen(
             mode: AuthMode.signUp,
+            appState: appState,
+          ),
+          AppRoute.verifyEmail => VerifyEmailScreen(appState: appState),
+          AppRoute.forgotPassword => PasswordRecoveryScreen(
+            appState: appState,
+            step: PasswordRecoveryStep.request,
+          ),
+          AppRoute.passwordResetSent => PasswordRecoveryScreen(
+            appState: appState,
+            step: PasswordRecoveryStep.sent,
+            email: settings.arguments as String?,
+          ),
+          AppRoute.createNewPassword => PasswordRecoveryScreen(
+            appState: appState,
+            step: PasswordRecoveryStep.create,
+            resetCode:
+                settings.arguments as String? ?? uri?.queryParameters['token'],
+          ),
+          AppRoute.sessionExpired => AuthStateScreen(
+            kind: AuthStateKind.sessionExpired,
+            appState: appState,
+          ),
+          AppRoute.offline => AuthStateScreen(
+            kind: AuthStateKind.offline,
+            appState: appState,
+          ),
+          AppRoute.accountLocked => AuthStateScreen(
+            kind: AuthStateKind.accountLocked,
+            appState: appState,
+            lockedUntil: settings.arguments as DateTime?,
+          ),
+          AppRoute.biometrics => AuthStateScreen(
+            kind: AuthStateKind.biometrics,
+            appState: appState,
+          ),
+          AppRoute.success => AuthStateScreen(
+            kind: AuthStateKind.success,
             appState: appState,
           ),
           AppRoute.createPin => AppPinScreen(
@@ -175,6 +232,8 @@ class AppRouter {
 AppRoute appRouteForAuthFlow(AuthFlowDestination destination) =>
     switch (destination) {
       AuthFlowDestination.welcome => AppRoute.welcome,
+      AuthFlowDestination.sessionExpired => AppRoute.sessionExpired,
+      AuthFlowDestination.verifyEmail => AppRoute.verifyEmail,
       AuthFlowDestination.personalInformation => AppRoute.personalInformation,
       AuthFlowDestination.createPin => AppRoute.createPin,
       AuthFlowDestination.unlockPin => AppRoute.unlockPin,

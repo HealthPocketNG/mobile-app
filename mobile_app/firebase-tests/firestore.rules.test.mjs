@@ -646,6 +646,21 @@ test('unverified email accounts cannot access application data', async () => {
   );
 });
 
+test('verified password accounts can access only their own profile', async () => {
+  const passwordDb = environment.authenticatedContext('email-owner', {
+    email: 'email-owner@example.com', email_verified: true,
+    firebase: { sign_in_provider: 'password' },
+  }).firestore();
+  await assertSucceeds(setDoc(doc(passwordDb, 'users/email-owner'), profileFor('email-owner')));
+  await assertSucceeds(getDoc(doc(passwordDb, 'users/email-owner')));
+  await assertFails(getDoc(doc(passwordDb, 'users/other')));
+  const unverifiedDb = environment.authenticatedContext('new-email', {
+    email: 'new-email@example.com', email_verified: false,
+    firebase: { sign_in_provider: 'password' },
+  }).firestore();
+  await assertFails(setDoc(doc(unverifiedDb, 'users/new-email'), profileFor('new-email')));
+});
+
 test('an owner-scoped empty query can precede private document creation', async () => {
   const ownerDb = verifiedContext('owner').firestore();
 
@@ -749,7 +764,7 @@ test('profile image references stay inside the owners storage path', async () =>
   );
 });
 
-test('onboarding completion requires profile details and cannot be reverted', async () => {
+test('onboarding completion requires the V2 details and cannot be reverted', async () => {
   const ownerDb = verifiedContext('owner').firestore();
   const reference = doc(ownerDb, 'users/owner');
   await assertSucceeds(setDoc(reference, profileFor('owner')));
@@ -764,7 +779,7 @@ test('onboarding completion requires profile details and cannot be reverted', as
     updateDoc(reference, {
       dateOfBirth: now,
       gender: 'Female',
-      residentialAddress: '12 Health Street',
+      residentialAddress: '',
       onboardingStatus: 'complete',
       updatedAt: serverTimestamp(),
     }),

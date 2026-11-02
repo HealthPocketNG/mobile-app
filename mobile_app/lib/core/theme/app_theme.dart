@@ -20,10 +20,13 @@ abstract final class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'Inter',
+      fontFamilyFallback: const ['sans-serif'],
       colorScheme: scheme,
       scaffoldBackgroundColor: AppColors.background,
       textTheme: ThemeData.light().textTheme.apply(
-        fontFamily: 'Geomini',
+        fontFamily: 'Inter',
+        fontFamilyFallback: const ['sans-serif'],
         bodyColor: AppColors.ink,
         displayColor: AppColors.ink,
       ),

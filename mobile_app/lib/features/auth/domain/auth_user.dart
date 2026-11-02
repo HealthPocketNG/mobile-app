@@ -1,4 +1,4 @@
-enum AppAuthProvider { google }
+enum AppAuthProvider { google, password }
 
 class AuthUser {
   const AuthUser({
@@ -18,6 +18,7 @@ class AuthUser {
   final Set<AppAuthProvider> providers;
 
   bool get usesGoogle => providers.contains(AppAuthProvider.google);
+  bool get usesPassword => providers.contains(AppAuthProvider.password);
 }
 
 class AuthResult {

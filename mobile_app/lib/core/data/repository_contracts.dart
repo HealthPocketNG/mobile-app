@@ -20,7 +20,23 @@ abstract interface class AuthRepository {
   Future<AuthUser?> restoreSession();
   Future<bool> hasActiveSession();
   Future<AuthResult?> signInWithGoogle();
+  Future<AuthResult> createAccountWithEmail({
+    required String name,
+    required String email,
+    required String password,
+  });
+  Future<AuthResult> signInWithEmail({
+    required String email,
+    required String password,
+  });
+  Future<AuthUser?> refreshCurrentUser();
+  Future<void> sendPasswordResetEmail(String email);
+  Future<void> confirmPasswordReset({
+    required String code,
+    required String password,
+  });
   Future<bool> reauthenticateWithGoogle();
+  Future<bool> reauthenticateWithEmail(String password);
   Future<void> signOut();
 }
 

@@ -7,7 +7,7 @@
 class EmailVerificationPolicy {
   const EmailVerificationPolicy({
     this.codeLifetime = const Duration(minutes: 10),
-    this.resendCooldown = const Duration(seconds: 60),
+    this.resendCooldown = const Duration(seconds: 45),
     this.maximumAttempts = 5,
     this.maximumRequestsPerHour = 5,
   });

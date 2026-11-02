@@ -48,6 +48,7 @@ dependencies:
   firebase_storage: ^13.6.0
   image_picker: ^1.2.3
   cloud_functions: ^6.5.0
+  local_auth: ^3.0.2
 
 dev_dependencies:
   flutter_test:
@@ -74,6 +75,7 @@ flutter:
   assets:
     - assets/dashboard/
     - assets/dashboard/v2/
+    - assets/auth/v2/
     - assets/activity/
     - assets/HPLogo/
     - assets/profile/
@@ -94,22 +96,6 @@ flutter:
           weight: 700
         - asset: font/Inter-Variable.ttf
           weight: 900
-    - family: Geomini
-      fonts:
-        - asset: font/static/Geomini-ExtraLight.ttf
-          weight: 200
-        - asset: font/static/Geomini-Light.ttf
-          weight: 300
-        - asset: font/static/Geomini-Regular.ttf
-          weight: 400
-        - asset: font/static/Geomini-Medium.ttf
-          weight: 500
-        - asset: font/static/Geomini-SemiBold.ttf
-          weight: 600
-        - asset: font/static/Geomini-Bold.ttf
-          weight: 700
-        - asset: font/static/Geomini-ExtraBold.ttf
-          weight: 800
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -73,6 +73,19 @@ test('only the verified owner can upload and read a profile photo', async () => 
   );
 });
 
+test('verified password owner may upload, but unverified password identity may not', async () => {
+  const verified = environment.authenticatedContext('email-owner', {
+    email: 'email-owner@example.com', email_verified: true,
+    firebase: { sign_in_provider: 'password' },
+  }).storage(`gs://${bucket}`);
+  const unverified = environment.authenticatedContext('new-email', {
+    email: 'new-email@example.com', email_verified: false,
+    firebase: { sign_in_provider: 'password' },
+  }).storage(`gs://${bucket}`);
+  await assertSucceeds(verified.ref('users/email-owner/profile/11111111111111111111111111111111.jpg').putString('image', 'raw', { contentType: 'image/jpeg' }));
+  await assertFails(unverified.ref('users/new-email/profile/22222222222222222222222222222222.jpg').putString('image', 'raw', { contentType: 'image/jpeg' }));
+});
+
 test('profile photo rules reject bad names, types, and oversized files', async () => {
   const owner = verifiedContext('owner').storage(`gs://${bucket}`);
   await assertFails(

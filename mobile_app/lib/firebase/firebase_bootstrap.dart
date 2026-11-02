@@ -4,12 +4,15 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:healthpocket/app/health_pocket_app.dart';
+import 'package:healthpocket/core/theme/app_theme.dart';
 import 'package:healthpocket/core/data/firestore/firestore_repositories.dart';
 import 'package:healthpocket/core/backend/firebase_functions_trusted_backend_client.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
+import 'package:healthpocket/features/auth/data/firebase_email_verification_service.dart';
+import 'package:healthpocket/features/auth/presentation/splash_screen.dart';
 import 'package:healthpocket/features/profile/data/firebase_profile_photo_repository.dart';
 
 enum AppEnvironment { development, production }
@@ -85,6 +88,13 @@ Future<void> bootstrapFirebase({
     environment: environment,
     useEmulators: _useFirebaseEmulators,
   );
+  runApp(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      home: const Scaffold(body: SplashArtwork()),
+    ),
+  );
   await Firebase.initializeApp(options: options);
   final functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
   if (_useFirebaseEmulators) {
@@ -101,6 +111,7 @@ Future<void> bootstrapFirebase({
   }
   final authRepository = await FirebaseAuthRepository.initialize(
     FirebaseAuth.instance,
+    functions: functions,
   );
   final repositories = FirebaseRepositoryBundle(
     auth: authRepository,
@@ -109,6 +120,7 @@ Future<void> bootstrapFirebase({
   runApp(
     HealthPocketApp(
       authRepository: authRepository,
+      emailVerificationService: FirebaseEmailVerificationService(functions),
       pinRepository: SecureAppPinRepository(storage: FlutterSecureValueStore()),
       profileRepository: repositories.profiles,
       profilePhotoRepository: FirebaseProfilePhotoRepository(

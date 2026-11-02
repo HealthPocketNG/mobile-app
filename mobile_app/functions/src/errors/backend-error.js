@@ -194,7 +194,7 @@ function assertVerifiedGoogleIdentity(auth) {
   const userId = assertAuthenticated(auth);
   const token = auth.token;
   if (!token || token.email_verified !== true ||
-      token.firebase?.sign_in_provider !== "google.com") {
+      !["google.com", "password"].includes(token.firebase?.sign_in_provider)) {
     throw new BackendError(ERROR_CODES.PERMISSION_DENIED);
   }
   return Object.freeze({

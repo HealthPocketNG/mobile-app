@@ -2,14 +2,14 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    function hasVerifiedGoogleIdentity() {
+    function hasVerifiedIdentity() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.firebase.sign_in_provider == 'google.com';
+        && request.auth.token.firebase.sign_in_provider in ['google.com', 'password'];
     }
 
     function isOwner(userId) {
-      return hasVerifiedGoogleIdentity() && request.auth.uid == userId;
+      return hasVerifiedIdentity() && request.auth.uid == userId;
     }
 
     function familyMemberPath(pocketId) {
@@ -17,7 +17,7 @@ service firebase.storage {
     }
 
     function isActiveFamilyMember(pocketId) {
-      return hasVerifiedGoogleIdentity()
+      return hasVerifiedIdentity()
         && firestore.exists(familyMemberPath(pocketId))
         && (
           firestore.get(familyMemberPath(pocketId)).data.get('status', '')

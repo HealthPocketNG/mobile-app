@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:healthpocket/app/app_router.dart';
-import 'package:healthpocket/core/theme/app_colors.dart';
-import 'package:healthpocket/core/theme/app_spacing.dart';
-import 'package:healthpocket/core/widgets/app_primary_button.dart';
-import 'package:healthpocket/core/widgets/initials_avatar.dart';
+import 'package:healthpocket/features/auth/presentation/auth_v2_widgets.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 
 class PersonalInformationScreen extends StatefulWidget {
@@ -12,207 +10,257 @@ class PersonalInformationScreen extends StatefulWidget {
     required this.onCompleted,
     super.key,
   });
-
   final ProfileStore profileStore;
   final Future<void> Function() onCompleted;
-
   @override
   State<PersonalInformationScreen> createState() =>
       _PersonalInformationScreenState();
 }
 
 class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _addressController;
-  late final TextEditingController _nextOfKinNameController;
-  late final TextEditingController _nextOfKinPhoneController;
-  DateTime? _dateOfBirth;
+  final _name = TextEditingController();
+  DateTime? _birth;
   String? _gender;
   String? _state;
+  bool _busy = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    final profile = widget.profileStore.profile;
-    _dateOfBirth = profile.dateOfBirth;
-    _gender = profile.gender;
-    _state = profile.stateOfResidence.isEmpty ? null : profile.stateOfResidence;
-    _addressController = TextEditingController(
-      text: profile.residentialAddress,
-    );
-    _nextOfKinNameController = TextEditingController(
-      text: profile.nextOfKinName,
-    );
-    _nextOfKinPhoneController = TextEditingController(
-      text: profile.nextOfKinPhone,
-    );
+    final p = widget.profileStore.profile;
+    _name.text = p.fullName;
+    _birth = p.dateOfBirth;
+    _gender = p.gender;
+    _state = p.stateOfResidence.isEmpty ? null : p.stateOfResidence;
   }
 
   @override
   void dispose() {
-    _addressController.dispose();
-    _nextOfKinNameController.dispose();
-    _nextOfKinPhoneController.dispose();
+    _name.dispose();
     super.dispose();
   }
 
-  Future<void> _selectDate() async {
+  Future<void> _pickDate() async {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
+      initialDate: _birth ?? DateTime(now.year - 25),
       firstDate: DateTime(now.year - 100),
       lastDate: DateTime(now.year - 18),
-      initialDate: DateTime(now.year - 25),
     );
-    if (date != null) setState(() => _dateOfBirth = date);
+    if (date != null) setState(() => _birth = date);
   }
 
   Future<void> _continue() async {
-    if (!_formKey.currentState!.validate() ||
-        _dateOfBirth == null ||
+    if (_name.text.trim().length < 2 ||
+        _birth == null ||
         _gender == null ||
         _state == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Complete the required details to continue.'),
-        ),
-      );
+      setState(() => _error = 'Complete the required details to continue.');
       return;
     }
-    widget.profileStore.updatePersonalInformation(
-      dateOfBirth: _dateOfBirth!,
-      gender: _gender!,
-      residentialAddress: _addressController.text.trim(),
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final profile = widget.profileStore.profile;
+    widget.profileStore.updateAccount(
+      fullName: _name.text.trim(),
+      email: profile.email,
+      phoneNumber: profile.phoneNumber,
       stateOfResidence: _state!,
-      nextOfKinName: _nextOfKinNameController.text.trim(),
-      nextOfKinPhone: _nextOfKinPhoneController.text.trim(),
+    );
+    widget.profileStore.updatePersonalInformation(
+      dateOfBirth: _birth!,
+      gender: _gender!,
+      residentialAddress: profile.residentialAddress,
+      stateOfResidence: _state!,
+      nextOfKinName: profile.nextOfKinName,
+      nextOfKinPhone: profile.nextOfKinPhone,
     );
     try {
       await widget.onCompleted();
-      if (!mounted) return;
-      Navigator.pushNamed(context, AppRoute.createPin.path);
+      if (mounted) Navigator.pushNamed(context, AppRoute.createPin.path);
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('We could not save your details. Try again.'),
-        ),
-      );
+      if (mounted) {
+        setState(
+          () => _error = 'We could not save your details. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final date = _dateOfBirth;
-    final dateText = date == null
-        ? 'Select your date of birth'
-        : '${date.day} ${_monthName(date.month)} ${date.year}';
-
+    final birthday = _birth;
+    final birthLabel = birthday == null
+        ? 'Select date of birth'
+        : '${_month(birthday.month)} ${birthday.day}, ${birthday.year}';
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              AppSpacing.lg,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+          children: [
+            const AuthV2Back(),
+            const SizedBox(height: 18),
+            const AuthV2Heading(
+              'Tell us a bit about you',
+              'This helps us personalize\nyour experience.',
             ),
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.maybePop(context),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Center(
-                child: InitialsAvatar(
-                  name: widget.profileStore.profile.fullName,
-                  radius: 42,
+            const SizedBox(height: 26),
+            Center(
+              child: SizedBox(
+                width: 96,
+                height: 96,
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 96,
+                      height: 96,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFCDEFEA),
+                        shape: BoxShape.circle,
+                      ),
+                      child: SvgPicture.asset('${AuthV2.assets}77fb1.svg'),
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 27,
+                        height: 27,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: AuthV2.navy,
+                          shape: BoxShape.circle,
+                        ),
+                        child: SvgPicture.asset('${AuthV2.assets}ecc31.svg'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Tell us a bit about you',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'This helps us personalize your experience.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: AppColors.inkMuted),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              _SelectionField(
-                icon: Icons.calendar_today_outlined,
-                label: 'Date of birth',
-                value: dateText,
-                onTap: _selectDate,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<String>(
-                initialValue: _gender,
-                decoration: const InputDecoration(
-                  labelText: 'Gender',
-                  prefixIcon: Icon(Icons.person_outline_rounded),
+            ),
+            const SizedBox(height: 24),
+            AuthV2Field(
+              label: 'Full name',
+              controller: _name,
+              hint: 'David Okafor',
+            ),
+            const SizedBox(height: 16),
+            _field('Date of birth', birthLabel, _pickDate, '1e5a5.svg'),
+            const SizedBox(height: 16),
+            Text('Gender', style: AuthV2.label),
+            const SizedBox(height: 7),
+            DropdownButtonFormField<String>(
+              initialValue: _gender,
+              decoration: _decoration(),
+              items: const [
+                DropdownMenuItem(value: 'male', child: Text('Male')),
+                DropdownMenuItem(value: 'female', child: Text('Female')),
+                DropdownMenuItem(
+                  value: 'prefer_not_to_say',
+                  child: Text('Prefer not to say'),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'female', child: Text('Female')),
-                  DropdownMenuItem(value: 'male', child: Text('Male')),
-                  DropdownMenuItem(
-                    value: 'prefer_not_to_say',
-                    child: Text('Prefer not to say'),
-                  ),
-                ],
-                onChanged: (value) => setState(() => _gender = value),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(
-                  labelText: 'Location',
-                  hintText: 'City, state or neighbourhood',
-                  prefixIcon: Icon(Icons.location_on_outlined),
+              ],
+              onChanged: (v) => setState(() => _gender = v),
+            ),
+            const SizedBox(height: 16),
+            Text('Location', style: AuthV2.label),
+            const SizedBox(height: 7),
+            DropdownButtonFormField<String>(
+              initialValue: _state,
+              decoration: _decoration(),
+              hint: const Text('Select location'),
+              items: const [
+                DropdownMenuItem(value: 'Lagos', child: Text('Lagos, Nigeria')),
+                DropdownMenuItem(value: 'Abuja', child: Text('Abuja, Nigeria')),
+                DropdownMenuItem(value: 'Ogun', child: Text('Ogun, Nigeria')),
+                DropdownMenuItem(value: 'Oyo', child: Text('Oyo, Nigeria')),
+                DropdownMenuItem(
+                  value: 'Rivers',
+                  child: Text('Rivers, Nigeria'),
                 ),
-                validator: _required,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<String>(
-                initialValue: _state,
-                decoration: const InputDecoration(
-                  labelText: 'State of residence',
-                  prefixIcon: Icon(Icons.apartment_rounded),
+                DropdownMenuItem(value: 'Other', child: Text('Other, Nigeria')),
+              ],
+              onChanged: (v) => setState(() => _state = v),
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'Lagos', child: Text('Lagos')),
-                  DropdownMenuItem(value: 'Abuja', child: Text('Abuja (FCT)')),
-                  DropdownMenuItem(value: 'Ogun', child: Text('Ogun')),
-                  DropdownMenuItem(value: 'Oyo', child: Text('Oyo')),
-                  DropdownMenuItem(value: 'Rivers', child: Text('Rivers')),
-                  DropdownMenuItem(value: 'Other', child: Text('Other state')),
-                ],
-                onChanged: (value) => setState(() => _state = value),
               ),
-              const SizedBox(height: AppSpacing.xl),
-              AppPrimaryButton(label: 'Continue  →', onPressed: _continue),
-            ],
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          child: AuthV2Button(
+            label: 'Continue   →',
+            onPressed: _busy ? null : _continue,
+            busy: _busy,
           ),
         ),
       ),
     );
   }
 
-  String? _required(String? value) =>
-      value == null || value.trim().isEmpty ? 'Required' : null;
+  Widget _field(String label, String value, VoidCallback onTap, String icon) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AuthV2.label),
+          const SizedBox(height: 7),
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                border: Border.all(color: AuthV2.border),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      style: AuthV2.body.copyWith(color: AuthV2.navy),
+                    ),
+                  ),
+                  SvgPicture.asset('${AuthV2.assets}$icon'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
 
-  String _monthName(int month) => const [
+  InputDecoration _decoration() => InputDecoration(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    enabledBorder: OutlineInputBorder(
+      borderSide: const BorderSide(color: AuthV2.border),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderSide: const BorderSide(color: AuthV2.teal),
+      borderRadius: BorderRadius.circular(12),
+    ),
+  );
+
+  String _month(int month) => const [
     'January',
     'February',
     'March',
@@ -226,59 +274,4 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
     'November',
     'December',
   ][month - 1];
-}
-
-class _SelectionField extends StatelessWidget {
-  const _SelectionField({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surfaceMuted,
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: AppColors.outline),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: 13,
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: AppColors.primaryDark),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: Theme.of(context).textTheme.labelMedium
-                          ?.copyWith(color: AppColors.inkMuted),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(value, style: Theme.of(context).textTheme.bodyLarge),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

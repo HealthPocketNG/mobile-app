@@ -5,11 +5,13 @@ import 'package:healthpocket/core/theme/app_theme.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/core/backend/trusted_backend_client.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
+import 'package:healthpocket/features/auth/domain/email_verification_service.dart';
 
 class HealthPocketApp extends StatefulWidget {
   const HealthPocketApp({
     super.key,
     this.authRepository,
+    this.emailVerificationService,
     this.pinRepository,
     this.profileRepository,
     this.profilePhotoRepository,
@@ -22,6 +24,7 @@ class HealthPocketApp extends StatefulWidget {
   });
 
   final AuthRepository? authRepository;
+  final EmailVerificationService? emailVerificationService;
   final AppPinRepository? pinRepository;
   final ProfileRepository? profileRepository;
   final ProfilePhotoRepository? profilePhotoRepository;
@@ -44,6 +47,7 @@ class _HealthPocketAppState extends State<HealthPocketApp> {
     super.initState();
     _appState = AppState(
       authRepository: widget.authRepository,
+      emailVerificationService: widget.emailVerificationService,
       pinRepository: widget.pinRepository,
       profileRepository: widget.profileRepository,
       profilePhotoRepository: widget.profilePhotoRepository,
@@ -71,7 +75,12 @@ class _HealthPocketAppState extends State<HealthPocketApp> {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         onGenerateRoute: AppRouter(_appState).onGenerateRoute,
-        initialRoute: AppRoute.splash.path,
+        onGenerateInitialRoutes: (initialRouteName) => [
+          AppRouter(_appState)
+              .onGenerateRoute(RouteSettings(name: initialRouteName)),
+        ],
+        initialRoute:
+            WidgetsBinding.instance.platformDispatcher.defaultRouteName,
       ),
     );
   }
