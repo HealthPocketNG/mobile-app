@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/app/app_state.dart';
+import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/app/health_pocket_app.dart';
+import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_brand_logo.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
@@ -81,6 +83,28 @@ void main() {
     expect(find.text('Recent Activity'), findsOneWidget);
   });
 
+  testWidgets('V2 bottom bar opens Activity from its fourth tab', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: {
+          AppRoute.activity.path: (_) =>
+              const Scaffold(body: Center(child: Text('Activity destination'))),
+        },
+        home: const Scaffold(
+          bottomNavigationBar: AppBottomNavigation(currentIndex: 0),
+        ),
+      ),
+    );
+
+    expect(find.text('Care'), findsNothing);
+    expect(find.text('Activity'), findsOneWidget);
+    await tester.tap(find.text('Activity'));
+    await tester.pumpAndSettle();
+    expect(find.text('Activity destination'), findsOneWidget);
+  });
+
   testWidgets('pulling down refreshes dashboard data', (tester) async {
     final store = SavingsStore();
     final profileStore = ProfileStore();
@@ -101,6 +125,54 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(refreshCount, 1);
+  });
+
+  testWidgets('V2 dashboard fits its reference and a narrow text-scaled view', (
+    tester,
+  ) async {
+    final store = SavingsStore();
+    final profileStore = ProfileStore();
+    final records = StreamController<List<ContributionRecord>>();
+    addTearDown(store.dispose);
+    addTearDown(profileStore.dispose);
+    addTearDown(records.close);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    store.watchPersonalContributions(
+      userId: 'demo-user',
+      personalHealthPocketId: 'personal-demo-user',
+      streamFactory: () => records.stream,
+    );
+    records.add([
+      _developmentRecord(
+        key: 'cccccccccccccccc',
+        amountKobo: 1250000,
+        createdAt: DateTime(2026, 9, 11),
+      ),
+    ]);
+    tester.view.devicePixelRatio = 1;
+    for (final width in [390.0, 320.0]) {
+      tester.view.physicalSize = Size(width, 844);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(width, 844),
+              textScaler: TextScaler.linear(width == 320 ? 1.3 : 1),
+            ),
+            child: DashboardScreen(
+              savingsStore: store,
+              profileStore: profileStore,
+              developmentContributionsEnabled: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Malaria treatment'), findsOneWidget);
+      expect(find.text('Basic tests'), findsOneWidget);
+      expect(find.text('First aid essentials'), findsOneWidget);
+    }
   });
 
   testWidgets('records a clearly labelled development contribution', (

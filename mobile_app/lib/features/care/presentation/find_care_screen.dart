@@ -95,7 +95,7 @@ class _FindCareScreenState extends State<FindCareScreen> {
     final partners = results.where((item) => item.isPartner).toList();
     final other = results.where((item) => !item.isPartner).toList();
     return Scaffold(
-      bottomNavigationBar: const AppBottomNavigation(currentIndex: 3),
+      bottomNavigationBar: const AppBottomNavigation(currentIndex: 2),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _load,

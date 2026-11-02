@@ -13,11 +13,15 @@ void main() {
       MaterialApp(home: ActivityScreen(savingsStore: store)),
     );
 
-    expect(find.text('Activity'), findsOneWidget);
-    expect(find.text('Savings'), findsOneWidget);
+    expect(find.text('Activity'), findsWidgets);
+    expect(find.text('Savings'), findsWidgets);
     expect(find.text('Family'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.text('Search activity'), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      3,
+    );
     expect(find.text('No activity yet'), findsOneWidget);
   });
 }

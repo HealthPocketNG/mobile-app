@@ -7,8 +7,18 @@ import 'package:healthpocket/features/dashboard/domain/coverage_guide.dart';
 import 'package:healthpocket/features/dashboard/presentation/coverage_details_screen.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+abstract final class _DashboardV2 {
+  static const navy = Color(0xFF0F1B4C);
+  static const muted = Color(0xFF5B6477);
+  static const teal = Color(0xFF0B7F7A);
+  static const paleTeal = Color(0xFFE4F6F3);
+  static const palePink = Color(0xFFFDE8EE);
+  static const divider = Color(0xFFE8EDF0);
+  static const assets = 'assets/dashboard/v2/';
+}
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
@@ -43,53 +53,59 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: Listenable.merge([savingsStore, profileStore]),
-    builder: (context, child) => Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: () => _refresh(context),
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
-                sliver: SliverList.list(
-                  children: [
-                    _DashboardHeader(profileStore: profileStore),
-                    const SizedBox(height: 22),
-                    _SavingsBalanceCard(
-                      store: savingsStore,
-                      developmentContributionsEnabled:
-                          developmentContributionsEnabled,
-                    ),
-                    const SizedBox(height: 14),
-                    _CoveragePanel(
-                      balanceKobo: savingsStore.developmentBalanceKobo,
-                    ),
-                    const SizedBox(height: 20),
-                    _PrimaryActions(
-                      onAddMoney: () =>
-                          Navigator.pushNamed(context, AppRoute.savings.path),
-                      onFamilyPocket: () => Navigator.pushNamed(
-                        context,
-                        AppRoute.familyPocket.path,
+    builder: (context, child) => Theme(
+      data: Theme.of(context).copyWith(
+        scaffoldBackgroundColor: Colors.white,
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+      ),
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: RefreshIndicator(
+            onRefresh: () => _refresh(context),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
+                  sliver: SliverList.list(
+                    children: [
+                      _DashboardHeader(profileStore: profileStore),
+                      const SizedBox(height: 14),
+                      _SavingsBalanceCard(
+                        store: savingsStore,
+                        developmentContributionsEnabled:
+                            developmentContributionsEnabled,
                       ),
-                    ),
-                    const SizedBox(height: 28),
-                    _RecentActivity(
-                      store: savingsStore,
-                      developmentContributionsEnabled:
-                          developmentContributionsEnabled,
-                      onRetry: onRetryContributions,
-                    ),
-                  ],
+                      const SizedBox(height: 14),
+                      _CoveragePanel(
+                        balanceKobo: savingsStore.developmentBalanceKobo,
+                      ),
+                      const SizedBox(height: 14),
+                      _PrimaryActions(
+                        onAddMoney: () =>
+                            Navigator.pushNamed(context, AppRoute.savings.path),
+                        onFamilyPocket: () => Navigator.pushNamed(
+                          context,
+                          AppRoute.familyPocket.path,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _RecentActivity(
+                        store: savingsStore,
+                        developmentContributionsEnabled:
+                            developmentContributionsEnabled,
+                        onRetry: onRetryContributions,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+        bottomNavigationBar: const AppBottomNavigation(currentIndex: 0),
       ),
-      bottomNavigationBar: const AppBottomNavigation(currentIndex: 0),
     ),
   );
 }
@@ -109,16 +125,45 @@ class _DashboardHeader extends StatelessWidget {
             children: [
               Text(
                 'Greetings ${_firstName(profileStore.profile.fullName)},',
-                style: const TextStyle(color: AppColors.inkMuted, fontSize: 16),
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: _DashboardV2.muted,
+                  fontSize: 16,
+                  height: 1.2,
+                ),
               ),
               const SizedBox(height: 2),
-              Text(
-                'There’s a healthier\ntomorrow ahead.',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  height: 1.12,
-                ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 220;
+                  return SizedBox(
+                    height: narrow ? 72 : 53,
+                    child: Stack(
+                      children: [
+                        Text(
+                          'There’s a healthier\ntomorrow ahead.',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: _DashboardV2.navy,
+                            fontSize: narrow ? 18 : 21,
+                            fontWeight: FontWeight.w700,
+                            height: 1.25,
+                          ),
+                        ),
+                        Positioned(
+                          left: narrow ? null : 180,
+                          right: narrow ? 0 : null,
+                          bottom: 0,
+                          child: SvgPicture.asset(
+                            '${_DashboardV2.assets}sprout.svg',
+                            width: 22,
+                            height: 22,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -127,23 +172,27 @@ class _DashboardHeader extends StatelessWidget {
           onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('You have no new notifications.')),
           ),
-          icon: const Badge(
-            smallSize: 8,
-            backgroundColor: AppColors.secondary,
-            child: Icon(LucideIcons.bell, size: 27),
+          icon: Badge(
+            smallSize: 9,
+            backgroundColor: const Color(0xFFE8405F),
+            child: SvgPicture.asset(
+              '${_DashboardV2.assets}bell.svg',
+              width: 28,
+              height: 28,
+            ),
           ),
           tooltip: 'Notifications',
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         Semantics(
           label: '${_firstName(profileStore.profile.fullName)} profile',
-          child: const CircleAvatar(
-            radius: 23,
-            backgroundColor: Color(0xFFD7F6F3),
-            child: Icon(
-              LucideIcons.userRound,
-              color: AppColors.primaryDark,
-              size: 27,
+          child: CircleAvatar(
+            radius: 28,
+            backgroundColor: const Color(0xFFB5EDE5),
+            child: SvgPicture.asset(
+              '${_DashboardV2.assets}avatar.svg',
+              width: 28,
+              height: 28,
             ),
           ),
         ),
@@ -173,52 +222,30 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         onTap: () => Navigator.pushNamed(context, AppRoute.savings.path),
         child: Ink(
-          height: 145,
-          padding: const EdgeInsets.all(18),
+          height: 142 + (MediaQuery.textScalerOf(context).scale(1) - 1) * 250,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 13),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF09A99F), Color(0xFF006A6A)],
+              colors: [Color(0xFF0A7F7B), Color(0xFF0E9A93)],
             ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x2B007A76),
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
           ),
           child: Stack(
             children: [
               Positioned(
-                right: -26,
-                top: -66,
+                right: -40,
+                top: -58,
                 child: Container(
-                  width: 126,
-                  height: 126,
-                  decoration: BoxDecoration(
+                  width: 150,
+                  height: 150,
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: .10),
-                      width: 20,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: -2,
-                top: -32,
-                child: Container(
-                  width: 74,
-                  height: 74,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: .07),
+                    color: Color(0x14FFFFFF),
                   ),
                 ),
               ),
@@ -228,11 +255,19 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        'Total Savings',
-                        style: TextStyle(color: Colors.white, fontSize: 15),
+                      const Flexible(
+                        child: Text(
+                          'Total Savings',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.white,
+                            fontSize: 15,
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 10),
                       Tooltip(
                         message: _isBalanceHidden
                             ? 'Show savings balance'
@@ -246,53 +281,91 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
                             onTap: () => setState(
                               () => _isBalanceHidden = !_isBalanceHidden,
                             ),
-                            child: Icon(
-                              _isBalanceHidden
-                                  ? LucideIcons.eyeOff
-                                  : LucideIcons.eye,
-                              color: Colors.white,
-                              size: 17,
+                            child: Container(
+                              width: 28,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                color: const Color(0x2E000000),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Center(
+                                child: _isBalanceHidden
+                                    ? const Icon(
+                                        LucideIcons.eyeOff,
+                                        size: 16,
+                                        color: Colors.white,
+                                      )
+                                    : SvgPicture.asset(
+                                        '${_DashboardV2.assets}balance-visibility.svg',
+                                        width: 16,
+                                        height: 16,
+                                      ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 11),
                   Text(
                     _isBalanceHidden ? '₦••••••' : _formatKobo(balanceKobo),
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      fontFamily: 'Inter',
+                      fontSize: 34,
                       color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -.5,
                       height: 1,
                     ),
                   ),
                   const Spacer(),
-                  Row(
-                    children: [
-                      Text(
-                        widget.developmentContributionsEnabled &&
-                                balanceKobo > 0
-                            ? 'Keep going 💪'
-                            : 'Start your health fund 💪',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
+                  SizedBox(
+                    height: 40,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.developmentContributionsEnabled &&
+                                      balanceKobo > 0
+                                  ? 'Keep going'
+                                  : 'Start your health fund',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                color: Colors.white,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          SvgPicture.asset(
+                            '${_DashboardV2.assets}keep-going.svg',
+                            width: 20,
+                            height: 20,
+                          ),
+                        ],
                       ),
-                      const Spacer(),
-                      const CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.white,
-                        child: Icon(
-                          LucideIcons.arrowRight,
-                          color: AppColors.primaryDark,
-                          size: 20,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
+              ),
+              Positioned(
+                right: -2,
+                bottom: 4,
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.white,
+                  child: SvgPicture.asset(
+                    '${_DashboardV2.assets}savings-arrow.svg',
+                    width: 20,
+                    height: 20,
+                  ),
+                ),
               ),
             ],
           ),
@@ -313,9 +386,9 @@ class _CoveragePanel extends StatelessWidget {
         ? 'Start saving to see the care your balance can cover.'
         : 'You’re close! Continue saving to see the care your balance can cover.';
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFE7FAF8),
+        color: const Color(0xFFEEF9F7),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -325,8 +398,12 @@ class _CoveragePanel extends StatelessWidget {
               Expanded(
                 child: Text(
                   'What can my balance cover?',
-                  style: Theme.of(context).textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontFamily: 'Inter',
+                    color: _DashboardV2.navy,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               TextButton.icon(
@@ -339,14 +416,26 @@ class _CoveragePanel extends StatelessWidget {
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                label: const Text('See more'),
-                icon: const Icon(LucideIcons.arrowRight, size: 16),
+                label: const Text(
+                  'See more',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    color: _DashboardV2.teal,
+                  ),
+                ),
+                icon: SvgPicture.asset(
+                  '${_DashboardV2.assets}see-more.svg',
+                  width: 14,
+                  height: 14,
+                ),
                 iconAlignment: IconAlignment.end,
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           if (eligibleGuides.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
@@ -356,17 +445,36 @@ class _CoveragePanel extends StatelessWidget {
               ),
             )
           else
-            SizedBox(
-              height: 112,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: eligibleGuides.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 10),
-                itemBuilder: (context, index) => _CoverageTile(
-                  guide: eligibleGuides[index],
-                  balanceKobo: balanceKobo,
-                ),
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) => constraints.maxWidth >= 300
+                  ? Row(
+                      children: [
+                        for (
+                          var index = 0;
+                          index < eligibleGuides.length;
+                          index++
+                        ) ...[
+                          if (index > 0) const SizedBox(width: 6),
+                          Expanded(
+                            child: _CoverageTile(guide: eligibleGuides[index]),
+                          ),
+                        ],
+                      ],
+                    )
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final guide in eligibleGuides) ...[
+                            SizedBox(
+                              width: 106,
+                              child: _CoverageTile(guide: guide),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                        ],
+                      ),
+                    ),
             ),
         ],
       ),
@@ -375,54 +483,70 @@ class _CoveragePanel extends StatelessWidget {
 }
 
 class _CoverageTile extends StatelessWidget {
-  const _CoverageTile({required this.guide, required this.balanceKobo});
+  const _CoverageTile({required this.guide});
   final CoverageGuide guide;
-  final int balanceKobo;
   @override
   Widget build(BuildContext context) => Container(
-    width: 154,
-    height: 112,
-    padding: const EdgeInsets.all(10),
+    height: 75 + (MediaQuery.textScalerOf(context).scale(1) - 1) * 60,
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(10),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    child: Row(
       children: [
         SvgPicture.asset(
-          guide.asset,
-          width: 46,
-          height: 46,
+          switch (guide.title) {
+            'Malaria treatment' => '${_DashboardV2.assets}coverage-malaria.svg',
+            'Basic tests' => '${_DashboardV2.assets}coverage-basic-tests.svg',
+            'First aid essentials' =>
+              '${_DashboardV2.assets}coverage-first-aid.svg',
+            _ => guide.asset,
+          },
+          width: 30,
+          height: 30,
           fit: BoxFit.contain,
         ),
-        const SizedBox(height: 3),
+        const SizedBox(width: 6),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 guide.title,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: _DashboardV2.muted,
                   fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  height: 1.05,
+                  height: 1.15,
                 ),
               ),
-              const Spacer(),
+              if (guide.title == 'Basic tests')
+                const Text(
+                  '(e.g. blood test)',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: _DashboardV2.muted,
+                    fontSize: 10,
+                    height: 1.1,
+                  ),
+                ),
+              const SizedBox(height: 2),
               Text(
                 _formatNaira(guide.referenceCost),
                 maxLines: 1,
                 overflow: TextOverflow.clip,
                 softWrap: false,
                 style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: balanceKobo >= guide.referenceCost * 100
-                      ? AppColors.success
-                      : AppColors.primaryDark,
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _DashboardV2.teal,
                 ),
               ),
             ],
@@ -446,27 +570,26 @@ class _PrimaryActions extends StatelessWidget {
       Expanded(
         child: _ActionButton(
           label: 'Add Money',
-          icon: LucideIcons.plus,
-          color: const Color(0xFFDDF8F6),
+          asset: 'action-add-money.svg',
+          color: _DashboardV2.paleTeal,
           onTap: onAddMoney,
         ),
       ),
-      const SizedBox(width: 12),
+      const SizedBox(width: 10),
       Expanded(
         child: _ActionButton(
-          label: 'Scan to Pay',
-          icon: LucideIcons.scan,
-          color: const Color(0xFFFFEAEE),
-          iconColor: AppColors.secondary,
+          label: 'Find Care',
+          asset: 'action-find-care.svg',
+          color: _DashboardV2.palePink,
           onTap: () => Navigator.pushNamed(context, AppRoute.findCare.path),
         ),
       ),
-      const SizedBox(width: 12),
+      const SizedBox(width: 10),
       Expanded(
         child: _ActionButton(
           label: 'Family Pocket',
-          icon: LucideIcons.usersRound,
-          color: const Color(0xFFDDF8F6),
+          asset: 'action-family.svg',
+          color: _DashboardV2.paleTeal,
           onTap: onFamilyPocket,
         ),
       ),
@@ -477,46 +600,48 @@ class _PrimaryActions extends StatelessWidget {
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.label,
-    required this.icon,
+    required this.asset,
     required this.color,
     required this.onTap,
-    this.iconColor,
   });
   final String label;
-  final IconData icon;
+  final String asset;
   final Color color;
-  final Color? iconColor;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
     label: label,
     child: InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Column(
         children: [
           Ink(
-            height: 62,
+            height: 52,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
-              child: Icon(
-                icon,
-                color: iconColor ?? AppColors.primary,
-                size: 30,
+              child: SvgPicture.asset(
+                '${_DashboardV2.assets}$asset',
+                width: label == 'Family Pocket' ? 28 : 26,
+                height: label == 'Family Pocket' ? 28 : 26,
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             label,
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              color: _DashboardV2.navy,
+            ),
           ),
         ],
       ),
@@ -539,20 +664,37 @@ class _RecentActivity extends StatelessWidget {
     children: [
       Row(
         children: [
-          Text(
-            'Recent Activity',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
+          Expanded(
+            child: Text(
+              'Recent Activity',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontFamily: 'Inter',
+                fontSize: 16,
+                color: _DashboardV2.navy,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-          const Spacer(),
           TextButton(
             onPressed: () =>
                 Navigator.pushNamed(context, AppRoute.activity.path),
-            child: const Text('See all'),
+            style: TextButton.styleFrom(
+              minimumSize: Size.zero,
+              padding: EdgeInsets.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'See all',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                color: _DashboardV2.muted,
+              ),
+            ),
           ),
         ],
       ),
-      const SizedBox(height: 4),
+      const SizedBox(height: 2),
       if (store.contributionLoadStatus == ContributionLoadStatus.loading)
         const Center(
           child: Padding(
@@ -567,10 +709,14 @@ class _RecentActivity extends StatelessWidget {
       else
         ...store.contributions
             .take(3)
+            .toList()
+            .asMap()
+            .entries
             .map(
-              (activity) => _ActivityTile(
-                amountKobo: activity.amountKobo,
-                date: activity.createdAt,
+              (entry) => _ActivityTile(
+                amountKobo: entry.value.amountKobo,
+                date: entry.value.createdAt,
+                showDivider: entry.key > 0,
               ),
             ),
     ],
@@ -635,23 +781,33 @@ class _ActivityFailure extends StatelessWidget {
 }
 
 class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({required this.amountKobo, required this.date});
+  const _ActivityTile({
+    required this.amountKobo,
+    required this.date,
+    required this.showDivider,
+  });
   final int amountKobo;
   final DateTime? date;
+  final bool showDivider;
   @override
   Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    height: 61 * MediaQuery.textScalerOf(context).scale(1),
+    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
     decoration: BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(14),
+      border: showDivider
+          ? const Border(top: BorderSide(color: _DashboardV2.divider))
+          : null,
     ),
     child: Row(
       children: [
-        const CircleAvatar(
-          radius: 20,
-          backgroundColor: AppColors.primarySoft,
-          child: Icon(Icons.savings_outlined, color: AppColors.primary),
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: _DashboardV2.paleTeal,
+          child: SvgPicture.asset(
+            '${_DashboardV2.assets}activity-family.svg',
+            width: 24,
+            height: 24,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -660,20 +816,41 @@ class _ActivityTile extends StatelessWidget {
             children: [
               const Text(
                 'Savings Contribution',
-                style: TextStyle(fontWeight: FontWeight.w700),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 15,
+                  color: _DashboardV2.navy,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               Text(
                 _activityDate(date),
-                style: const TextStyle(fontSize: 12, color: AppColors.inkMuted),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  color: _DashboardV2.muted,
+                ),
               ),
             ],
           ),
         ),
-        Text(
-          '+${_formatKobo(amountKobo)}',
-          style: const TextStyle(
-            fontWeight: FontWeight.w800,
-            color: AppColors.primary,
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 100),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '+${_formatKobo(amountKobo)}',
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _DashboardV2.teal,
+              ),
+            ),
           ),
         ),
       ],

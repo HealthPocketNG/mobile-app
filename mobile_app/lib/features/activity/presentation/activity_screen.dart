@@ -4,6 +4,7 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
+import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/healthpocket_state_view.dart';
 import 'package:healthpocket/features/activity/domain/unified_activity_ledger.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
@@ -74,6 +75,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 ContributionLoadStatus.failure ||
             family?.loadStatus == FamilyPocketLoadStatus.failure;
         return Scaffold(
+          bottomNavigationBar: widget.showBackButton
+              ? null
+              : const AppBottomNavigation(currentIndex: 3),
           body: SafeArea(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
