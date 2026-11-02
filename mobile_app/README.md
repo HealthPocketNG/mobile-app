@@ -26,6 +26,28 @@ flutter pub get
 flutter run --flavor dev --target lib/main_dev.dart
 ```
 
+For a local UI preview while DEV email verification is awaiting
+Cloud Functions setup, run the normal **debug** DEV build:
+
+```bash
+flutter run -d <device-id> --flavor dev --target lib/main_dev.dart
+```
+
+After the splash, the app opens the "Preview HealthPocket" sign-in screen;
+the Get Started screen is skipped. Enter any valid email and a password of at
+least eight characters, then tap Sign In. Preview sign-in opens the dashboard
+immediately, skips email verification and PIN,
+and uses local screen data only. It does not create a Firebase account, read
+or write Firestore, or call Cloud Functions. The preview session ends when the
+app process stops; sign in again after relaunch. The normal navigation can
+open all app sections. The dashboard shows the Figma sample balance and
+activity rows in preview mode; they are display-only and do not appear in
+account history. To test the real V2 authentication flow in DEV, add
+`--dart-define=DEV_PREVIEW_AUTH=false` to the run command or select the
+`HealthPocket Dev (full auth)` VS Code configuration. Production and release
+builds never default to preview, and explicitly enabling preview in either is
+rejected.
+
 VS Code users can select the `HealthPocket Dev` launch configuration.
 
 The V2 onboarding flow uses Firebase Email/Password authentication. Enable

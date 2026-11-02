@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:healthpocket/features/family/application/family_pocket_store.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 import 'package:healthpocket/app/app_router.dart';
-import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class AppBottomNavigation extends StatelessWidget {
@@ -16,92 +15,98 @@ class AppBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFFE8EDF0))),
-      ),
-      child: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          iconTheme: WidgetStateProperty.resolveWith(
-            (states) => IconThemeData(
-              color: states.contains(WidgetState.selected)
-                  ? const Color(0xFF0B7F7A)
-                  : const Color(0xFF5B6477),
-            ),
-          ),
+    final compact =
+        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.1;
+    final iconSize = compact ? 26.0 : 30.0;
+    const routes = [
+      AppRoute.dashboard,
+      AppRoute.savings,
+      AppRoute.findCare,
+      AppRoute.activity,
+      AppRoute.profile,
+    ];
+    const labels = ['Home', 'Savings', 'Pay', 'Activity', 'More'];
+    const icons = [
+      'nav-home.svg',
+      'nav-savings.svg',
+      'nav-pay.svg',
+      'nav-activity.svg',
+      'nav-more.svg',
+    ];
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.1,
+      child: Container(
+        height: compact ? 70 : 84,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Color(0xFFE8EDF0))),
         ),
-        child: NavigationBar(
-          selectedIndex: currentIndex,
-          height: 84,
-          backgroundColor: AppColors.surface,
-          elevation: 0,
-          indicatorColor: Colors.transparent,
-          labelTextStyle: WidgetStateProperty.resolveWith(
-            (states) => TextStyle(
-              color: states.contains(WidgetState.selected)
-                  ? const Color(0xFF0B7F7A)
-                  : const Color(0xFF5B6477),
-              fontFamily: 'Inter',
-              fontSize: 12,
-              fontWeight: states.contains(WidgetState.selected)
-                  ? FontWeight.w500
-                  : FontWeight.w400,
-            ),
-          ),
-          onDestinationSelected: (index) {
-            if (index == currentIndex) return;
-            final route = switch (index) {
-              0 => AppRoute.dashboard,
-              1 => AppRoute.savings,
-              2 => AppRoute.findCare,
-              3 => AppRoute.activity,
-              4 => AppRoute.profile,
-              _ => null,
-            };
-            if (route == null) return;
-            Navigator.pushReplacementNamed(context, route.path);
-          },
-          destinations: [
-            NavigationDestination(
-              icon: _navIcon('nav-home.svg', false),
-              selectedIcon: _navIcon('nav-home.svg', true),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              icon: _navIcon('nav-savings.svg', false),
-              selectedIcon: _navIcon('nav-savings.svg', true),
-              label: 'Savings',
-            ),
-            NavigationDestination(
-              icon: _navIcon('nav-pay.svg', false),
-              selectedIcon: _navIcon('nav-pay.svg', true),
-              label: 'Pay',
-            ),
-            NavigationDestination(
-              icon: _navIcon('nav-activity.svg', false),
-              selectedIcon: _navIcon('nav-activity.svg', true),
-              label: 'Activity',
-            ),
-            const NavigationDestination(
-              icon: _FamilyInviteIcon(selected: false),
-              selectedIcon: _FamilyInviteIcon(selected: true),
-              label: 'More',
-            ),
+        padding: EdgeInsets.only(top: compact ? 8 : 12),
+        child: Row(
+          children: [
+            for (var index = 0; index < routes.length; index++)
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: index == currentIndex,
+                  label: labels[index],
+                  child: InkWell(
+                    onTap: index == currentIndex
+                        ? null
+                        : () => Navigator.pushReplacementNamed(
+                            context,
+                            routes[index].path,
+                          ),
+                    child: Column(
+                      children: [
+                        index == 4
+                            ? _FamilyInviteIcon(
+                                selected: index == currentIndex,
+                                size: iconSize,
+                              )
+                            : _navIcon(
+                                icons[index],
+                                index == currentIndex,
+                                iconSize,
+                              ),
+                        SizedBox(height: compact ? 3 : 4),
+                        Text(
+                          labels[index],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: compact ? 11 : 12,
+                            fontWeight: index == currentIndex
+                                ? FontWeight.w500
+                                : FontWeight.w400,
+                            color: index == currentIndex
+                                ? const Color(0xFF0B7F7A)
+                                : const Color(0xFF5B6477),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  static Widget _navIcon(String file, bool selected) => SvgPicture.asset(
-    '$_assetRoot$file',
-    width: 30,
-    height: 30,
-    colorFilter: ColorFilter.mode(
-      selected ? const Color(0xFF0B7F7A) : const Color(0xFF5B6477),
-      BlendMode.srcIn,
-    ),
-  );
+  static Widget _navIcon(String file, bool selected, double size) =>
+      SvgPicture.asset(
+        '$_assetRoot$file',
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(
+          selected ? const Color(0xFF0B7F7A) : const Color(0xFF5B6477),
+          BlendMode.srcIn,
+        ),
+      );
 }
 
 class FamilyInvitationScope extends InheritedNotifier<FamilyPocketStore> {
@@ -113,9 +118,10 @@ class FamilyInvitationScope extends InheritedNotifier<FamilyPocketStore> {
 }
 
 class _FamilyInviteIcon extends StatefulWidget {
-  const _FamilyInviteIcon({required this.selected});
+  const _FamilyInviteIcon({required this.selected, required this.size});
 
   final bool selected;
+  final double size;
 
   @override
   State<_FamilyInviteIcon> createState() => _FamilyInviteIconState();
@@ -163,8 +169,8 @@ class _FamilyInviteIconState extends State<_FamilyInviteIcon> {
         isLabelVisible: pending.isNotEmpty,
         child: SvgPicture.asset(
           '${AppBottomNavigation._assetRoot}nav-more.svg',
-          width: 30,
-          height: 30,
+          width: widget.size,
+          height: widget.size,
           colorFilter: ColorFilter.mode(
             widget.selected ? const Color(0xFF0B7F7A) : const Color(0xFF5B6477),
             BlendMode.srcIn,

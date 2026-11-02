@@ -19,7 +19,19 @@
             "toolArgs": [
                 "--flavor",
                 "dev",
-                "--dart-define=USE_FIREBASE_EMULATORS=true"
+                "--dart-define=USE_FIREBASE_EMULATORS=true",
+                "--dart-define=DEV_PREVIEW_AUTH=false"
+            ]
+        },
+        {
+            "name": "HealthPocket Dev (full auth)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main_dev.dart",
+            "toolArgs": [
+                "--flavor",
+                "dev",
+                "--dart-define=DEV_PREVIEW_AUTH=false"
             ]
         }
     ]

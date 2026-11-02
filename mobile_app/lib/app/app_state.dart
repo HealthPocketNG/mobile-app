@@ -18,6 +18,7 @@ import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/profile/domain/user_profile.dart';
 import 'package:healthpocket/features/savings/domain/personal_health_pocket.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
+import 'package:healthpocket/features/savings/data/mock_savings_data.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 
 /// Owns only application-wide UI state. Feature state belongs to its feature.
@@ -35,6 +36,7 @@ class AppState extends ChangeNotifier {
     this.careDirectoryRepository,
     this.backendClient,
     this.developmentContributionsEnabled = false,
+    this.previewMode = false,
   }) : authRepository = authRepository ?? InMemoryAuthRepository(),
        biometricUnlockService =
            biometricUnlockService ?? BiometricUnlockService(),
@@ -54,6 +56,7 @@ class AppState extends ChangeNotifier {
   final CareDirectoryRepository? careDirectoryRepository;
   final TrustedBackendClient? backendClient;
   final bool developmentContributionsEnabled;
+  final bool previewMode;
   final FamilyPocketStore familyPocketStore = FamilyPocketStore();
   final ProfileStore profileStore = ProfileStore();
   final SavingsStore savingsStore = SavingsStore();
@@ -72,6 +75,11 @@ class AppState extends ChangeNotifier {
   Future<AuthFlowDestination> resolveStartup() async {
     final previousUser = authRepository.currentUser;
     final user = await authRepository.restoreSession();
+    if (previewMode) {
+      return user == null
+          ? AuthFlowDestination.signIn
+          : _enterPreviewSession(user);
+    }
     if (user == null) {
       return previousUser == null
           ? AuthFlowDestination.welcome
@@ -86,6 +94,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<AuthFlowDestination> acceptAuthentication(AuthResult result) async {
+    if (previewMode) return _enterPreviewSession(result.user);
     if (!result.user.emailVerified) {
       if (result.user.usesPassword) {
         _pendingNewAccount = result.isNewUser;
@@ -169,6 +178,26 @@ class AppState extends ChangeNotifier {
     familyPocketStore.resetForNewUser(name: '', email: '');
     await authRepository.signOut();
     notifyListeners();
+  }
+
+  AuthFlowDestination _enterPreviewSession(AuthUser user) {
+    profileStore.beginRegistration(
+      fullName: user.displayName ?? 'Preview User',
+      email: user.email ?? '',
+      phoneNumber: '',
+      emailVerified: true,
+    );
+    savingsStore.hydrate(plan: MockSavingsData.plan);
+    familyPocketStore.resetForNewUser(
+      userId: user.uid,
+      name: profileStore.profile.fullName,
+      email: profileStore.profile.email,
+    );
+    _onboardingStatus = AccountOnboardingStatus.complete;
+    _hasCompletedOnboarding = true;
+    _pendingNewAccount = false;
+    notifyListeners();
+    return AuthFlowDestination.dashboard;
   }
 
   Future<AuthFlowDestination> _destinationForVerifiedUser(AuthUser user) async {
@@ -999,6 +1028,8 @@ class AppState extends ChangeNotifier {
 
 enum AuthFlowDestination {
   welcome,
+  signIn,
+  dashboard,
   sessionExpired,
   verifyEmail,
   personalInformation,

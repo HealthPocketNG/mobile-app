@@ -147,6 +147,7 @@ class AppRouter {
           AppRoute.dashboard => DashboardScreen(
             savingsStore: appState.savingsStore,
             profileStore: appState.profileStore,
+            designPreview: appState.previewMode,
             developmentContributionsEnabled:
                 appState.developmentContributionsEnabled,
             onRetryContributions: appState.retryContributionLoad,
@@ -209,6 +210,17 @@ class AppRouter {
   }
 
   AppRoute _guard(AppRoute destination) {
+    if (appState.previewMode &&
+        {
+          AppRoute.welcome,
+          AppRoute.signUp,
+          AppRoute.verifyEmail,
+          AppRoute.forgotPassword,
+          AppRoute.passwordResetSent,
+          AppRoute.createNewPassword,
+        }.contains(destination)) {
+      return AppRoute.signIn;
+    }
     const protected = {
       AppRoute.createPin,
       AppRoute.unlockPin,
@@ -232,6 +244,8 @@ class AppRouter {
 AppRoute appRouteForAuthFlow(AuthFlowDestination destination) =>
     switch (destination) {
       AuthFlowDestination.welcome => AppRoute.welcome,
+      AuthFlowDestination.signIn => AppRoute.signIn,
+      AuthFlowDestination.dashboard => AppRoute.dashboard,
       AuthFlowDestination.sessionExpired => AppRoute.sessionExpired,
       AuthFlowDestination.verifyEmail => AppRoute.verifyEmail,
       AuthFlowDestination.personalInformation => AppRoute.personalInformation,

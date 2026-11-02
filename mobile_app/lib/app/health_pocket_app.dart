@@ -21,6 +21,7 @@ class HealthPocketApp extends StatefulWidget {
     this.careDirectoryRepository,
     this.backendClient,
     this.developmentContributionsEnabled = false,
+    this.previewMode = false,
   });
 
   final AuthRepository? authRepository;
@@ -34,6 +35,7 @@ class HealthPocketApp extends StatefulWidget {
   final CareDirectoryRepository? careDirectoryRepository;
   final TrustedBackendClient? backendClient;
   final bool developmentContributionsEnabled;
+  final bool previewMode;
 
   @override
   State<HealthPocketApp> createState() => _HealthPocketAppState();
@@ -57,6 +59,7 @@ class _HealthPocketAppState extends State<HealthPocketApp> {
       careDirectoryRepository: widget.careDirectoryRepository,
       backendClient: widget.backendClient,
       developmentContributionsEnabled: widget.developmentContributionsEnabled,
+      previewMode: widget.previewMode,
     );
   }
 

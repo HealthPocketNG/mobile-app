@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/features/activity/presentation/activity_screen.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
+import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 
 void main() {
   testWidgets('activity renders unified-ledger filters and empty state', (
@@ -19,7 +20,7 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
     expect(find.text('Search activity'), findsOneWidget);
     expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      tester.widget<AppBottomNavigation>(find.byType(AppBottomNavigation)).currentIndex,
       3,
     );
     expect(find.text('No activity yet'), findsOneWidget);

@@ -12,6 +12,7 @@ import 'package:healthpocket/core/data/firestore/firestore_repositories.dart';
 import 'package:healthpocket/core/backend/firebase_functions_trusted_backend_client.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/firebase_email_verification_service.dart';
+import 'package:healthpocket/features/auth/data/preview_auth_repository.dart';
 import 'package:healthpocket/features/auth/presentation/splash_screen.dart';
 import 'package:healthpocket/features/profile/data/firebase_profile_photo_repository.dart';
 
@@ -21,12 +22,49 @@ const _useFirebaseEmulators = bool.fromEnvironment(
   'USE_FIREBASE_EMULATORS',
   defaultValue: false,
 );
+const _previewAuthSetting = String.fromEnvironment(
+  'DEV_PREVIEW_AUTH',
+  defaultValue: 'auto',
+);
 const _firebaseEmulatorHost = String.fromEnvironment(
   'FIREBASE_EMULATOR_HOST',
   defaultValue: '10.0.2.2',
 );
 
 abstract final class FirebaseConfigurationGuard {
+  static bool resolvePreviewMode({
+    required AppEnvironment environment,
+    required bool isReleaseMode,
+    required String setting,
+  }) {
+    if (setting == 'auto') {
+      return environment == AppEnvironment.development && !isReleaseMode;
+    }
+    if (setting == 'false') return false;
+    if (setting != 'true') {
+      throw StateError('DEV_PREVIEW_AUTH must be true or false.');
+    }
+    validatePreviewMode(
+      environment: environment,
+      isReleaseMode: isReleaseMode,
+      enabled: true,
+    );
+    return true;
+  }
+
+  static void validatePreviewMode({
+    required AppEnvironment environment,
+    required bool isReleaseMode,
+    required bool enabled,
+  }) {
+    if (enabled &&
+        (environment != AppEnvironment.development || isReleaseMode)) {
+      throw StateError(
+        'Local auth preview is only available in DEV debug builds.',
+      );
+    }
+  }
+
   static const _expectedProjectIds = <AppEnvironment, String>{
     AppEnvironment.development: 'healthpocket-dev-a82f3',
     AppEnvironment.production: 'healthpocket-ng',
@@ -88,6 +126,11 @@ Future<void> bootstrapFirebase({
     environment: environment,
     useEmulators: _useFirebaseEmulators,
   );
+  final previewMode = FirebaseConfigurationGuard.resolvePreviewMode(
+    environment: environment,
+    isReleaseMode: kReleaseMode,
+    setting: _previewAuthSetting,
+  );
   runApp(
     MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -95,6 +138,15 @@ Future<void> bootstrapFirebase({
       home: const Scaffold(body: SplashArtwork()),
     ),
   );
+  if (previewMode) {
+    runApp(
+      HealthPocketApp(
+        authRepository: PreviewAuthRepository(),
+        previewMode: true,
+      ),
+    );
+    return;
+  }
   await Firebase.initializeApp(options: options);
   final functions = FirebaseFunctions.instanceFor(region: 'africa-south1');
   if (_useFirebaseEmulators) {

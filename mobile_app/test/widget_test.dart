@@ -196,6 +196,53 @@ void main() {
     }
   });
 
+  testWidgets('DEV preview dashboard keeps the V2 sample layout responsive', (
+    tester,
+  ) async {
+    final store = SavingsStore();
+    final profileStore = ProfileStore()
+      ..beginRegistration(
+        fullName: 'David',
+        email: 'david@example.com',
+        phoneNumber: '',
+      );
+    addTearDown(store.dispose);
+    addTearDown(profileStore.dispose);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+
+    for (final width in [390.0, 320.0]) {
+      tester.view.physicalSize = Size(width, 844);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(width, 844),
+              textScaler: TextScaler.linear(width == 320 ? 1.3 : 1),
+            ),
+            child: DashboardScreen(
+              savingsStore: store,
+              profileStore: profileStore,
+              designPreview: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('₦ 12,500'), findsOneWidget);
+      expect(find.text('Malaria treatment'), findsOneWidget);
+      expect(find.text('Clinic Payment'), findsOneWidget);
+      expect(find.text('No activity yet'), findsNothing);
+      expect(
+        tester.getSize(find.byType(AppBottomNavigation)).height,
+        width == 320 ? 70 : 84,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('records a clearly labelled development contribution', (
     tester,
   ) async {

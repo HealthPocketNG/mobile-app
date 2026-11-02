@@ -25,7 +25,8 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
   bool _terms = false;
   bool _busy = false;
   String? _error;
-  bool get _signUp => widget.mode == AuthMode.signUp;
+  bool get _signUp =>
+      widget.mode == AuthMode.signUp && !widget.appState.previewMode;
 
   @override
   void dispose() {
@@ -99,47 +100,55 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
             const AuthV2Back(),
             const SizedBox(height: 18),
             AuthV2Heading(
-              _signUp ? 'Create your account' : 'Welcome back',
               _signUp
+                  ? 'Create your account'
+                  : widget.appState.previewMode
+                  ? 'Preview HealthPocket'
+                  : 'Welcome back',
+              widget.appState.previewMode
+                  ? 'Use any email and a password of at least 8 characters. This is a local preview.'
+                  : _signUp
                   ? 'Join thousands of people building\na healthier tomorrow.'
                   : 'Sign in to keep saving for a\nhealthier tomorrow.',
             ),
             const SizedBox(height: 30),
-            SizedBox(
-              height: 48,
-              child: OutlinedButton(
-                onPressed: _busy
-                    ? null
-                    : () =>
-                          _run(widget.appState.authRepository.signInWithGoogle),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AuthV2.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            if (!widget.appState.previewMode)
+              SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: _busy
+                      ? null
+                      : () => _run(
+                          widget.appState.authRepository.signInWithGoogle,
+                        ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AuthV2.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SvgPicture.asset(
+                        '${AuthV2.assets}google_g.svg',
+                        key: const Key('google-logo'),
+                        width: 18,
+                        height: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Continue with Google',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          color: AuthV2.navy,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SvgPicture.asset(
-                      '${AuthV2.assets}google_g.svg',
-                      key: const Key('google-logo'),
-                      width: 18,
-                      height: 18,
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Continue with Google',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 14,
-                        color: AuthV2.navy,
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ),
             if (_signUp) ...[
               const SizedBox(height: 8),
               SizedBox(
@@ -161,17 +170,18 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                const Expanded(child: Divider(color: AuthV2.border)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('or', style: AuthV2.body),
-                ),
-                const Expanded(child: Divider(color: AuthV2.border)),
-              ],
-            ),
+            if (!widget.appState.previewMode) const SizedBox(height: 20),
+            if (!widget.appState.previewMode)
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: AuthV2.border)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('or', style: AuthV2.body),
+                  ),
+                  const Expanded(child: Divider(color: AuthV2.border)),
+                ],
+              ),
             const SizedBox(height: 18),
             if (_signUp) ...[
               AuthV2Field(
@@ -228,7 +238,7 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                   ),
                 ],
               ),
-            ] else
+            ] else if (!widget.appState.previewMode)
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -271,19 +281,20 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
               onPressed: _busy ? null : _submitEmail,
               busy: _busy,
             ),
-            const SizedBox(height: 20),
-            TextButton(
-              onPressed: () => Navigator.pushReplacementNamed(
-                context,
-                _signUp ? AppRoute.signIn.path : AppRoute.signUp.path,
+            if (!widget.appState.previewMode) const SizedBox(height: 20),
+            if (!widget.appState.previewMode)
+              TextButton(
+                onPressed: () => Navigator.pushReplacementNamed(
+                  context,
+                  _signUp ? AppRoute.signIn.path : AppRoute.signUp.path,
+                ),
+                child: Text(
+                  _signUp
+                      ? 'Already have an account? Sign In'
+                      : 'New to HealthPocket? Create account',
+                  style: AuthV2.body.copyWith(fontSize: 12),
+                ),
               ),
-              child: Text(
-                _signUp
-                    ? 'Already have an account? Sign In'
-                    : 'New to HealthPocket? Create account',
-                style: AuthV2.body.copyWith(fontSize: 12),
-              ),
-            ),
           ],
         ),
       ),
