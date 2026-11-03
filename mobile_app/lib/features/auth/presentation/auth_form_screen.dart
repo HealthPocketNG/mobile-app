@@ -95,7 +95,7 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
       child: Form(
         key: _form,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           children: [
             const AuthV2Back(),
             const SizedBox(height: 18),
@@ -272,7 +272,7 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
     bottomNavigationBar: SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -88,7 +88,7 @@ class _AuthStateScreenState extends State<AuthStateScreen> {
           children: [
             if (kind == AuthStateKind.offline || kind == AuthStateKind.success)
               Positioned(
-                top: 20,
+                top: 16,
                 left: 20,
                 child: kind == AuthStateKind.offline
                     ? const AuthV2Back()
@@ -204,7 +204,7 @@ class _AuthStateScreenState extends State<AuthStateScreen> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

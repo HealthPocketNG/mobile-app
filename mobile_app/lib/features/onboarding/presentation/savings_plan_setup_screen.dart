@@ -102,7 +102,7 @@ class _SavingsPlanSetupScreenState extends State<SavingsPlanSetupScreen> {
               AppSpacing.lg,
               AppSpacing.sm,
               AppSpacing.lg,
-              AppSpacing.lg,
+              AppSpacing.md,
             ),
             children: [
               const OnboardingStepHeader(

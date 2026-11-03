@@ -10,7 +10,7 @@ class OnboardingCompleteScreen extends StatelessWidget {
     body: SafeArea(
       child: Column(
         children: [
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
           Image.asset(
             '${AuthV2.assets}a38b8.png',
             width: 330,
@@ -24,7 +24,7 @@ class OnboardingCompleteScreen extends StatelessWidget {
           ),
           const Spacer(),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: AuthV2Button(
               label: 'Go to Dashboard   →',
               onPressed: () => Navigator.pushNamedAndRemoveUntil(

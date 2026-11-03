@@ -171,7 +171,7 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
           children: [
             const AuthV2Back(),
             SizedBox(height: sent ? 100 : 36),
@@ -246,7 +246,7 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

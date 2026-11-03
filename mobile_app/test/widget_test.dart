@@ -237,7 +237,7 @@ void main() {
       expect(find.text('No activity yet'), findsNothing);
       expect(
         tester.getSize(find.byType(AppBottomNavigation)).height,
-        width == 320 ? 70 : 84,
+        width == 320 ? 64 : 74,
       );
       expect(tester.takeException(), isNull);
     }

@@ -12,6 +12,8 @@ import 'package:healthpocket/features/auth/presentation/verify_email_screen.dart
 import 'package:healthpocket/features/auth/presentation/password_recovery_screen.dart';
 import 'package:healthpocket/features/auth/presentation/auth_state_screen.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:healthpocket/features/dashboard/presentation/notifications_screen.dart';
+import 'package:healthpocket/features/dashboard/data/notification_inbox_repository.dart';
 import 'package:healthpocket/features/activity/presentation/activity_screen.dart';
 import 'package:healthpocket/features/family/presentation/family_pocket_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/savings_plan_setup_screen.dart';
@@ -42,6 +44,7 @@ enum AppRoute {
   savingsPlanSetup('/onboarding/savings-plan'),
   onboardingComplete('/onboarding/complete'),
   dashboard('/dashboard'),
+  notifications('/notifications'),
   activity('/activity'),
   savings('/savings'),
   familyPocket('/family-pocket'),
@@ -148,10 +151,22 @@ class AppRouter {
             savingsStore: appState.savingsStore,
             profileStore: appState.profileStore,
             designPreview: appState.previewMode,
+            emptyPreview:
+                appState.previewMode &&
+                const bool.fromEnvironment('DEV_DASHBOARD_EMPTY'),
             developmentContributionsEnabled:
                 appState.developmentContributionsEnabled,
             onRetryContributions: appState.retryContributionLoad,
             onRefresh: appState.refreshDashboard,
+          ),
+          AppRoute.notifications => NotificationsScreen(
+            repository: appState.backendClient == null
+                ? null
+                : NotificationInboxRepository(appState.backendClient!),
+            designPreview: appState.previewMode,
+            previewEmpty:
+                appState.previewMode &&
+                const bool.fromEnvironment('DEV_NOTIFICATIONS_EMPTY'),
           ),
           AppRoute.activity => ActivityScreen(
             savingsStore: appState.savingsStore,
@@ -226,6 +241,7 @@ class AppRouter {
       AppRoute.unlockPin,
       AppRoute.pinRecovery,
       AppRoute.dashboard,
+      AppRoute.notifications,
       AppRoute.activity,
       AppRoute.savings,
       AppRoute.familyPocket,

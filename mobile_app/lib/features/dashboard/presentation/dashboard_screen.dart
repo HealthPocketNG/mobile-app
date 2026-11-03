@@ -25,6 +25,7 @@ class DashboardScreen extends StatelessWidget {
     super.key,
     this.developmentContributionsEnabled = false,
     this.designPreview = false,
+    this.emptyPreview = false,
     this.onRetryContributions,
     this.onRefresh,
   });
@@ -33,6 +34,7 @@ class DashboardScreen extends StatelessWidget {
   final ProfileStore profileStore;
   final bool developmentContributionsEnabled;
   final bool designPreview;
+  final bool emptyPreview;
   final VoidCallback? onRetryContributions;
   final Future<void> Function()? onRefresh;
 
@@ -69,23 +71,30 @@ class DashboardScreen extends StatelessWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                     sliver: SliverList.list(
                       children: [
-                        _DashboardHeader(profileStore: profileStore),
+                        _DashboardHeader(
+                          profileStore: profileStore,
+                          designPreview: designPreview,
+                        ),
                         const SizedBox(height: 14),
                         _SavingsBalanceCard(
                           balanceKobo: balanceKobo,
                           designPreview: designPreview,
                         ),
                         const SizedBox(height: 14),
-                        _CoveragePanel(balanceKobo: balanceKobo),
+                        _CoveragePanel(
+                          balanceKobo: balanceKobo,
+                          designPreview: designPreview,
+                        ),
                         const SizedBox(height: 14),
                         const _PrimaryActions(),
                         const SizedBox(height: 14),
                         _RecentActivity(
                           store: savingsStore,
                           designPreview: designPreview,
+                          emptyPreview: emptyPreview,
                           developmentContributionsEnabled:
                               developmentContributionsEnabled,
                           onRetry: onRetryContributions,
@@ -105,8 +114,12 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.profileStore});
+  const _DashboardHeader({
+    required this.profileStore,
+    required this.designPreview,
+  });
   final ProfileStore profileStore;
+  final bool designPreview;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -170,11 +183,8 @@ class _DashboardHeader extends StatelessWidget {
               IconButton(
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 48),
                 padding: EdgeInsets.zero,
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('You have no new notifications.'),
-                  ),
-                ),
+                onPressed: () =>
+                    Navigator.pushNamed(context, AppRoute.notifications.path),
                 tooltip: 'Notifications',
                 icon: Stack(
                   clipBehavior: Clip.none,
@@ -184,19 +194,20 @@ class _DashboardHeader extends StatelessWidget {
                       width: 28,
                       height: 28,
                     ),
-                    Positioned(
-                      top: -2,
-                      right: -3,
-                      child: Container(
-                        width: 11,
-                        height: 11,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8405F),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                    if (designPreview)
+                      Positioned(
+                        top: -2,
+                        right: -3,
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8405F),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -399,8 +410,12 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
 }
 
 class _CoveragePanel extends StatelessWidget {
-  const _CoveragePanel({required this.balanceKobo});
+  const _CoveragePanel({
+    required this.balanceKobo,
+    required this.designPreview,
+  });
   final int balanceKobo;
+  final bool designPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -438,8 +453,10 @@ class _CoveragePanel extends StatelessWidget {
                 InkWell(
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) =>
-                          CoverageDetailsScreen(balanceKobo: balanceKobo),
+                      builder: (_) => CoverageDetailsScreen(
+                        balanceKobo: balanceKobo,
+                        designPreview: designPreview,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -689,11 +706,13 @@ class _RecentActivity extends StatelessWidget {
   const _RecentActivity({
     required this.store,
     required this.designPreview,
+    required this.emptyPreview,
     required this.developmentContributionsEnabled,
     this.onRetry,
   });
   final SavingsStore store;
   final bool designPreview;
+  final bool emptyPreview;
   final bool developmentContributionsEnabled;
   final VoidCallback? onRetry;
 
@@ -731,7 +750,7 @@ class _RecentActivity extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 10),
-      if (designPreview) ...[
+      if (designPreview && !emptyPreview) ...[
         const _ActivityRow(
           title: 'Savings Contribution',
           subtitle: 'Today, 9:14 AM',
@@ -771,18 +790,10 @@ class _RecentActivity extends StatelessWidget {
             ],
           ),
         )
-      else if (!developmentContributionsEnabled || store.contributions.isEmpty)
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 16),
-          child: Text(
-            'No recent activity yet.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              color: _DashboardV2.muted,
-            ),
-          ),
-        )
+      else if (emptyPreview ||
+          !developmentContributionsEnabled ||
+          store.contributions.isEmpty)
+        const _EmptyActivityCard()
       else
         for (
           var index = 0;
@@ -797,6 +808,68 @@ class _RecentActivity extends StatelessWidget {
             divider: index > 0,
           ),
     ],
+  );
+}
+
+class _EmptyActivityCard extends StatelessWidget {
+  const _EmptyActivityCard();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    height: 207,
+    padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFEEF9F7),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      children: [
+        SvgPicture.asset('${_DashboardV2.assets}states/no-activity.svg'),
+        const SizedBox(height: 5),
+        const Text(
+          'No activity yet',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: _DashboardV2.navy,
+          ),
+        ),
+        const SizedBox(height: 5),
+        const Text(
+          'Add money to start saving for your healthcare.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            color: _DashboardV2.muted,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 38,
+          child: FilledButton(
+            onPressed: () =>
+                Navigator.pushNamed(context, AppRoute.savings.path),
+            style: FilledButton.styleFrom(
+              backgroundColor: _DashboardV2.teal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: const StadiumBorder(),
+            ),
+            child: const Text(
+              'Add Money',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 }
 

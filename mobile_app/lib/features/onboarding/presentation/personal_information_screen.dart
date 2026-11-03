@@ -103,7 +103,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           children: [
             const AuthV2Back(),
             const SizedBox(height: 18),
@@ -205,7 +205,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: AuthV2Button(
             label: 'Continue   →',
             onPressed: _busy ? null : _continue,

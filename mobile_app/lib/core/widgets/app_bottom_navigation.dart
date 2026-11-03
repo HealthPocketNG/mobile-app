@@ -37,12 +37,12 @@ class AppBottomNavigation extends StatelessWidget {
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.1,
       child: Container(
-        height: compact ? 70 : 84,
+        height: compact ? 64 : 74,
         decoration: const BoxDecoration(
           color: Colors.white,
           border: Border(top: BorderSide(color: Color(0xFFE8EDF0))),
         ),
-        padding: EdgeInsets.only(top: compact ? 8 : 12),
+        padding: EdgeInsets.only(top: compact ? 6 : 8),
         child: Row(
           children: [
             for (var index = 0; index < routes.length; index++)

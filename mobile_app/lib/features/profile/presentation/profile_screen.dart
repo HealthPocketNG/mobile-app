@@ -234,7 +234,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               AppSpacing.lg,
               AppSpacing.sm,
               AppSpacing.lg,
-              AppSpacing.xl,
+              AppSpacing.md,
             ),
             children: [
               Text(

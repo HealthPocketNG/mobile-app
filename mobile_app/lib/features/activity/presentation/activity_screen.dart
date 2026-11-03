@@ -82,9 +82,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.md,
-                AppSpacing.lg,
                 AppSpacing.md,
-                AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.md,
               ),
               children: [
                 Row(

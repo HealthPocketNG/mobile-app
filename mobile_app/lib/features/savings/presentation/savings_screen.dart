@@ -207,7 +207,7 @@ class SavingsScreen extends StatelessWidget {
               AppSpacing.lg,
               AppSpacing.sm,
               AppSpacing.lg,
-              AppSpacing.xl,
+              AppSpacing.md,
             ),
             children: [
               const Text(
@@ -365,18 +365,19 @@ class _PlanCard extends StatelessWidget {
               ),
               if (!cancelled)
                 PopupMenuButton<String>(
-                onSelected: (value) => value == 'edit' ? onEdit() : onToggle(),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Text('Edit savings plan'),
-                  ),
-                  PopupMenuItem(
-                    value: 'toggle',
-                    child: Text(paused ? 'Resume plan' : 'Pause plan'),
-                  ),
-                ],
-              ),
+                  onSelected: (value) =>
+                      value == 'edit' ? onEdit() : onToggle(),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Text('Edit savings plan'),
+                    ),
+                    PopupMenuItem(
+                      value: 'toggle',
+                      child: Text(paused ? 'Resume plan' : 'Pause plan'),
+                    ),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

@@ -131,7 +131,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
           child: Column(
             children: [
               AuthV2Back(
@@ -206,7 +206,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: AuthV2Button(
             label: 'Continue   →',
             onPressed: _busy ? null : _verify,

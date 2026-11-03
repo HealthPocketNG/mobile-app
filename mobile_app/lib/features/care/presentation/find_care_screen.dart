@@ -103,9 +103,9 @@ class _FindCareScreenState extends State<FindCareScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.md,
-              AppSpacing.lg,
               AppSpacing.md,
-              AppSpacing.xl,
+              AppSpacing.md,
+              AppSpacing.md,
             ),
             children: [
               Text(
