@@ -10,7 +10,7 @@ import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 
 void main() {
-  testWidgets('empty dashboard card fits and opens Savings', (tester) async {
+  testWidgets('empty dashboard card fits and opens Add Money', (tester) async {
     final savings = SavingsStore();
     final profile = ProfileStore();
     addTearDown(savings.dispose);
@@ -23,8 +23,8 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           routes: {
-            AppRoute.savings.path: (_) =>
-                const Scaffold(body: Text('Savings destination')),
+            AppRoute.addMoney.path: (_) =>
+                const Scaffold(body: Text('Add Money destination')),
           },
           home: DashboardScreen(
             savingsStore: savings,
@@ -40,7 +40,7 @@ void main() {
     }
     await tester.tap(find.text('Add Money').last);
     await tester.pumpAndSettle();
-    expect(find.text('Savings destination'), findsOneWidget);
+    expect(find.text('Add Money destination'), findsOneWidget);
   });
 
   testWidgets('estimate explanation opens over coverage list and dismisses', (

@@ -6,6 +6,7 @@ import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/core/backend/trusted_backend_client.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/auth/domain/email_verification_service.dart';
+import 'package:healthpocket/core/widgets/app_scroll_behavior.dart';
 
 class HealthPocketApp extends StatefulWidget {
   const HealthPocketApp({
@@ -76,6 +77,7 @@ class _HealthPocketAppState extends State<HealthPocketApp> {
       builder: (context, child) => MaterialApp(
         title: 'HealthPocket',
         debugShowCheckedModeBanner: false,
+        scrollBehavior: const AppScrollBehavior(),
         theme: AppTheme.light,
         onGenerateRoute: AppRouter(_appState).onGenerateRoute,
         onGenerateInitialRoutes: (initialRouteName) => [

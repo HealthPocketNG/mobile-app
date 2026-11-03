@@ -18,6 +18,8 @@ class AppBottomNavigation extends StatelessWidget {
     final compact =
         MediaQuery.sizeOf(context).width < 360 ||
         MediaQuery.textScalerOf(context).scale(1) > 1.1;
+    final savingsDesign = currentIndex == 1;
+    final assetRoot = savingsDesign ? 'assets/savings/v2/' : _assetRoot;
     final iconSize = compact ? 26.0 : 30.0;
     const routes = [
       AppRoute.dashboard,
@@ -64,11 +66,15 @@ class AppBottomNavigation extends StatelessWidget {
                             ? _FamilyInviteIcon(
                                 selected: index == currentIndex,
                                 size: iconSize,
+                                assetRoot: assetRoot,
+                                useAssetColors: savingsDesign,
                               )
                             : _navIcon(
+                                assetRoot,
                                 icons[index],
                                 index == currentIndex,
                                 iconSize,
+                                savingsDesign,
                               ),
                         SizedBox(height: compact ? 3 : 4),
                         Text(
@@ -97,16 +103,23 @@ class AppBottomNavigation extends StatelessWidget {
     );
   }
 
-  static Widget _navIcon(String file, bool selected, double size) =>
-      SvgPicture.asset(
-        '$_assetRoot$file',
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(
-          selected ? const Color(0xFF0B7F7A) : const Color(0xFF5B6477),
-          BlendMode.srcIn,
-        ),
-      );
+  static Widget _navIcon(
+    String assetRoot,
+    String file,
+    bool selected,
+    double size,
+    bool useAssetColors,
+  ) => SvgPicture.asset(
+    '$assetRoot$file',
+    width: size,
+    height: size,
+    colorFilter: useAssetColors
+        ? null
+        : ColorFilter.mode(
+            selected ? const Color(0xFF0B7F7A) : const Color(0xFF5B6477),
+            BlendMode.srcIn,
+          ),
+  );
 }
 
 class FamilyInvitationScope extends InheritedNotifier<FamilyPocketStore> {
@@ -118,10 +131,17 @@ class FamilyInvitationScope extends InheritedNotifier<FamilyPocketStore> {
 }
 
 class _FamilyInviteIcon extends StatefulWidget {
-  const _FamilyInviteIcon({required this.selected, required this.size});
+  const _FamilyInviteIcon({
+    required this.selected,
+    required this.size,
+    required this.assetRoot,
+    required this.useAssetColors,
+  });
 
   final bool selected;
   final double size;
+  final String assetRoot;
+  final bool useAssetColors;
 
   @override
   State<_FamilyInviteIcon> createState() => _FamilyInviteIconState();
@@ -168,13 +188,17 @@ class _FamilyInviteIconState extends State<_FamilyInviteIcon> {
         backgroundColor: Colors.red,
         isLabelVisible: pending.isNotEmpty,
         child: SvgPicture.asset(
-          '${AppBottomNavigation._assetRoot}nav-more.svg',
+          '${widget.assetRoot}nav-more.svg',
           width: widget.size,
           height: widget.size,
-          colorFilter: ColorFilter.mode(
-            widget.selected ? const Color(0xFF0B7F7A) : const Color(0xFF5B6477),
-            BlendMode.srcIn,
-          ),
+          colorFilter: widget.useAssetColors
+              ? null
+              : ColorFilter.mode(
+                  widget.selected
+                      ? const Color(0xFF0B7F7A)
+                      : const Color(0xFF5B6477),
+                  BlendMode.srcIn,
+                ),
         ),
       ),
     );

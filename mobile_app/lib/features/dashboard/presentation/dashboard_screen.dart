@@ -68,7 +68,9 @@ class DashboardScreen extends StatelessWidget {
             child: RefreshIndicator(
               onRefresh: () => _refresh(context),
               child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
                 slivers: [
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
@@ -387,18 +389,30 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
             Positioned(
               right: 18,
               bottom: 18,
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                alignment: Alignment.center,
-                child: SvgPicture.asset(
-                  '${_DashboardV2.assets}savings-arrow.svg',
-                  width: 20,
-                  height: 20,
+              child: Semantics(
+                button: true,
+                label: 'Savings history',
+                child: GestureDetector(
+                  key: const Key('dashboard-savings-history-arrow'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    AppRoute.savingsHistory.path,
+                  ),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    alignment: Alignment.center,
+                    child: SvgPicture.asset(
+                      '${_DashboardV2.assets}savings-arrow.svg',
+                      width: 20,
+                      height: 20,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -629,7 +643,7 @@ class _PrimaryActions extends StatelessWidget {
           label: 'Add Money',
           asset: 'action-add-money.svg',
           color: _DashboardV2.paleTeal,
-          onTap: () => Navigator.pushNamed(context, AppRoute.savings.path),
+          onTap: () => Navigator.pushNamed(context, AppRoute.addMoney.path),
         ),
       ),
       const SizedBox(width: 10),
@@ -852,7 +866,7 @@ class _EmptyActivityCard extends StatelessWidget {
           height: 38,
           child: FilledButton(
             onPressed: () =>
-                Navigator.pushNamed(context, AppRoute.savings.path),
+                Navigator.pushNamed(context, AppRoute.addMoney.path),
             style: FilledButton.styleFrom(
               backgroundColor: _DashboardV2.teal,
               padding: const EdgeInsets.symmetric(horizontal: 16),

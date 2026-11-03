@@ -267,7 +267,9 @@ class _FamilyPocketScreenState extends State<FamilyPocketScreen> {
               : RefreshIndicator(
                   onRefresh: () => _refresh(context),
                   child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.lg,
                       AppSpacing.sm,
@@ -1096,7 +1098,8 @@ class _MemberTile extends StatelessWidget {
       ),
       title: Text(member.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(_memberCapabilities(member)),
-      trailing: member.role == FamilyRole.owner || member.role == FamilyRole.admin
+      trailing:
+          member.role == FamilyRole.owner || member.role == FamilyRole.admin
           ? const Icon(Icons.shield_outlined, color: AppColors.accent)
           : canRemove
           ? IconButton(

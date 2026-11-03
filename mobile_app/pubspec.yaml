@@ -77,6 +77,7 @@ flutter:
     - assets/dashboard/v2/
     - assets/dashboard/v2/coverage/
     - assets/dashboard/v2/states/
+    - assets/savings/v2/
     - assets/auth/v2/
     - assets/activity/
     - assets/HPLogo/

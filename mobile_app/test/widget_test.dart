@@ -16,7 +16,6 @@ import 'package:healthpocket/features/profile/presentation/profile_screen.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
 import 'package:healthpocket/features/savings/presentation/savings_screen.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
   testWidgets('password reset app link opens the V2 new-password form', (
@@ -68,10 +67,11 @@ void main() {
     await tester.tap(find.textContaining('Get Started'));
     await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ListView).last, const Offset(0, -700));
+    await tester.ensureVisible(find.textContaining('Continue with Google'));
     await tester.pumpAndSettle();
-
     await tester.tap(find.textContaining('Continue with Google'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).last, const Offset(0, -350));
     await tester.pumpAndSettle();
 
     expect(
@@ -288,10 +288,12 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('Add development record'));
+    await tester.tap(find.text('Add Money'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField).last, '5000');
-    await tester.tap(find.text('Record development contribution'));
+    await tester.tap(find.text('₦5,000'));
+    await tester.tap(find.text('Continue to Pay'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Record'));
     await tester.pumpAndSettle();
 
     expect(find.text('₦5,000'), findsWidgets);
@@ -304,15 +306,13 @@ void main() {
     addTearDown(store.dispose);
     await tester.pumpWidget(MaterialApp(home: SavingsScreen(store: store)));
 
-    await tester.tap(find.byType(PopupMenuButton<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Edit savings plan'));
+    await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
 
     expect(find.text('Set Your Savings Plan'), findsOneWidget);
     expect(find.text('Weekly'), findsOneWidget);
-    expect(find.text('₦5,000'), findsWidgets);
-    expect(find.byIcon(LucideIcons.circleDot), findsOneWidget);
+    expect(find.text('₦500'), findsWidgets);
+    expect(find.text('Save Plan'), findsOneWidget);
   });
 
   testWidgets('production UI exposes no simulated contribution action', (
@@ -322,8 +322,12 @@ void main() {
     addTearDown(store.dispose);
     await tester.pumpWidget(MaterialApp(home: SavingsScreen(store: store)));
 
-    expect(find.text('Add development record'), findsNothing);
-    expect(find.text('Record development contribution'), findsNothing);
+    await tester.tap(find.text('Add Money'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue to Pay'));
+    await tester.pump();
+    expect(find.text('Bank payments are not available yet.'), findsOneWidget);
+    expect(find.text('Money Added!'), findsNothing);
   });
 
   testWidgets('dashboard activity uses the ordered contribution records', (

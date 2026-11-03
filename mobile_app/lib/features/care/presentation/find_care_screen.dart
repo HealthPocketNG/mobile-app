@@ -100,7 +100,9 @@ class _FindCareScreenState extends State<FindCareScreen> {
         child: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.md,
               AppSpacing.md,

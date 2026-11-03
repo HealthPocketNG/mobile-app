@@ -21,6 +21,7 @@ import 'package:healthpocket/features/onboarding/presentation/personal_informati
 import 'package:healthpocket/features/onboarding/presentation/onboarding_complete_screen.dart';
 import 'package:healthpocket/features/profile/presentation/profile_screen.dart';
 import 'package:healthpocket/features/savings/presentation/savings_screen.dart';
+import 'package:healthpocket/features/savings/presentation/savings_history_v2.dart';
 
 enum AppRoute {
   splash('/'),
@@ -47,6 +48,8 @@ enum AppRoute {
   notifications('/notifications'),
   activity('/activity'),
   savings('/savings'),
+  addMoney('/savings/add-money'),
+  savingsHistory('/savings/history'),
   familyPocket('/family-pocket'),
   findCare('/find-care'),
   profile('/profile');
@@ -174,6 +177,7 @@ class AppRouter {
           ),
           AppRoute.savings => SavingsScreen(
             store: appState.savingsStore,
+            designPreview: appState.previewMode,
             onSavePlan: appState.updateSavingsPlan,
             onTogglePlan: appState.toggleSavingsPlan,
             developmentContributionsEnabled:
@@ -182,6 +186,20 @@ class AppRouter {
             onRecordDevelopmentContribution:
                 appState.recordDevelopmentContribution,
             onRetryContributions: appState.retryContributionLoad,
+          ),
+          AppRoute.addMoney => SavingsAddMoneyEntryScreen(
+            store: appState.savingsStore,
+            designPreview: appState.previewMode,
+            developmentContributionsEnabled:
+                appState.developmentContributionsEnabled,
+            onCreateContributionKey: appState.createDevelopmentContributionKey,
+            onRecordDevelopmentContribution:
+                appState.recordDevelopmentContribution,
+          ),
+          AppRoute.savingsHistory => SavingsHistoryV2(
+            store: appState.savingsStore,
+            designPreview: appState.previewMode,
+            onRetry: appState.retryContributionLoad,
           ),
           AppRoute.familyPocket => FamilyPocketScreen(
             store: appState.familyPocketStore,
@@ -244,6 +262,8 @@ class AppRouter {
       AppRoute.notifications,
       AppRoute.activity,
       AppRoute.savings,
+      AppRoute.addMoney,
+      AppRoute.savingsHistory,
       AppRoute.familyPocket,
       AppRoute.findCare,
       AppRoute.profile,
