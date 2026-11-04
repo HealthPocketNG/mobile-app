@@ -7,9 +7,18 @@ import 'package:healthpocket/app/app_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class AppBottomNavigation extends StatelessWidget {
-  const AppBottomNavigation({required this.currentIndex, super.key});
+  const AppBottomNavigation({
+    required this.currentIndex,
+    this.allowSelectedNavigation = false,
+    this.assetRootOverride,
+    this.iconFiles,
+    super.key,
+  });
 
   final int currentIndex;
+  final bool allowSelectedNavigation;
+  final String? assetRootOverride;
+  final List<String>? iconFiles;
 
   static const _assetRoot = 'assets/dashboard/v2/';
 
@@ -19,7 +28,10 @@ class AppBottomNavigation extends StatelessWidget {
         MediaQuery.sizeOf(context).width < 360 ||
         MediaQuery.textScalerOf(context).scale(1) > 1.1;
     final savingsDesign = currentIndex == 1;
-    final assetRoot = savingsDesign ? 'assets/savings/v2/' : _assetRoot;
+    final assetRoot =
+        assetRootOverride ??
+        (savingsDesign ? 'assets/savings/v2/' : _assetRoot);
+    final useAssetColors = savingsDesign || iconFiles != null;
     final iconSize = compact ? 26.0 : 30.0;
     const routes = [
       AppRoute.dashboard,
@@ -29,13 +41,14 @@ class AppBottomNavigation extends StatelessWidget {
       AppRoute.profile,
     ];
     const labels = ['Home', 'Savings', 'Pay', 'Activity', 'More'];
-    const icons = [
+    const defaultIcons = [
       'nav-home.svg',
       'nav-savings.svg',
       'nav-pay.svg',
       'nav-activity.svg',
       'nav-more.svg',
     ];
+    final icons = iconFiles ?? defaultIcons;
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.1,
       child: Container(
@@ -54,7 +67,7 @@ class AppBottomNavigation extends StatelessWidget {
                   selected: index == currentIndex,
                   label: labels[index],
                   child: InkWell(
-                    onTap: index == currentIndex
+                    onTap: index == currentIndex && !allowSelectedNavigation
                         ? null
                         : () => Navigator.pushReplacementNamed(
                             context,
@@ -67,14 +80,15 @@ class AppBottomNavigation extends StatelessWidget {
                                 selected: index == currentIndex,
                                 size: iconSize,
                                 assetRoot: assetRoot,
-                                useAssetColors: savingsDesign,
+                                assetFile: icons[index],
+                                useAssetColors: useAssetColors,
                               )
                             : _navIcon(
                                 assetRoot,
                                 icons[index],
                                 index == currentIndex,
                                 iconSize,
-                                savingsDesign,
+                                useAssetColors,
                               ),
                         SizedBox(height: compact ? 3 : 4),
                         Text(
@@ -135,12 +149,14 @@ class _FamilyInviteIcon extends StatefulWidget {
     required this.selected,
     required this.size,
     required this.assetRoot,
+    required this.assetFile,
     required this.useAssetColors,
   });
 
   final bool selected;
   final double size;
   final String assetRoot;
+  final String assetFile;
   final bool useAssetColors;
 
   @override
@@ -188,7 +204,7 @@ class _FamilyInviteIconState extends State<_FamilyInviteIcon> {
         backgroundColor: Colors.red,
         isLabelVisible: pending.isNotEmpty,
         child: SvgPicture.asset(
-          '${widget.assetRoot}nav-more.svg',
+          '${widget.assetRoot}${widget.assetFile}',
           width: widget.size,
           height: widget.size,
           colorFilter: widget.useAssetColors

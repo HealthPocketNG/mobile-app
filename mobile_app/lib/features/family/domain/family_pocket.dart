@@ -69,19 +69,23 @@ class FamilyPocket {
       }).length;
 
   FamilyPocket copyWith({
+    String? name,
+    FamilyContributionFrequency? frequency,
+    int? defaultContributionAmountKobo,
     List<FamilyMember>? members,
     List<FamilyInvitation>? invitations,
   }) {
     return FamilyPocket(
       id: id,
-      name: name,
+      name: name ?? this.name,
       members: members ?? this.members,
       invitations: invitations ?? this.invitations,
       beneficiaryLimit: beneficiaryLimit,
       description: description,
       imagePath: imagePath,
-      frequency: frequency,
-      defaultContributionAmountKobo: defaultContributionAmountKobo,
+      frequency: frequency ?? this.frequency,
+      defaultContributionAmountKobo:
+          defaultContributionAmountKobo ?? this.defaultContributionAmountKobo,
       ownerId: ownerId,
       currency: currency,
       status: status,

@@ -384,6 +384,8 @@ void main() {
       MaterialApp(home: FamilyPocketScreen(store: store)),
     );
 
+    await tester.tap(find.text('Adebayo Family Care'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Invite'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(0), 'Tola Adebayo');
@@ -394,12 +396,7 @@ void main() {
     await tester.tap(find.text('Record invitation'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('Tola Adebayo'),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Tola Adebayo'), findsOneWidget);
+    expect(store.selectedPocket!.invitations.last.inviteeName, 'Tola Adebayo');
     expect(
       store.selectedPocket!.invitations.last.effectiveStatus,
       FamilyInvitationStatus.pending,
@@ -419,7 +416,10 @@ void main() {
     await tester.tap(find.text('Adebayo Family Care'));
     await tester.pumpAndSettle();
 
-    final removeButton = find.byKey(const ValueKey('remove-member-grace'));
+    await tester.tap(find.text('See all').first);
+    await tester.pumpAndSettle();
+
+    final removeButton = find.byKey(const ValueKey('family-member-grace'));
     await tester.scrollUntilVisible(
       removeButton,
       250,
@@ -431,6 +431,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(removeButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove from Pocket'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Remove member'));
     await tester.pumpAndSettle();

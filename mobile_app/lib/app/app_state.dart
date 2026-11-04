@@ -688,17 +688,34 @@ class AppState extends ChangeNotifier {
     await _loadFamilyPockets(userId);
   }
 
-  Future<void> createFamilyPocket({required String name}) async {
+  Future<void> createFamilyPocket({
+    required String name,
+    String? description,
+    FamilyContributionFrequency frequency = FamilyContributionFrequency.monthly,
+    int defaultContributionAmountKobo = 50000,
+  }) async {
     final userId = _requireCompletedUserId();
     final repository = familyPocketRepository;
     if (repository == null) {
-      familyPocketStore.createPocket(name: name);
+      familyPocketStore.createPocket(
+        name: name,
+        description: description,
+        frequency: frequency,
+        defaultContributionAmountKobo: defaultContributionAmountKobo,
+      );
       return;
     }
     final now = DateTime.now();
     final pocketId = BackendIds.familyPocket(userId);
     await repository.createPocket(
-      pocket: FamilyPocket(id: pocketId, name: name.trim(), members: const []),
+      pocket: FamilyPocket(
+        id: pocketId,
+        name: name.trim(),
+        description: description,
+        frequency: frequency,
+        defaultContributionAmountKobo: defaultContributionAmountKobo,
+        members: const [],
+      ),
       createdBy: userId,
       adminMembership: FamilyMembership(
         id: userId,
@@ -713,6 +730,82 @@ class AppState extends ChangeNotifier {
       ),
     );
     await _loadFamilyPockets(userId);
+  }
+
+  Future<void> updateFamilyPocket({
+    String? name,
+    FamilyContributionFrequency? frequency,
+    int? defaultContributionAmountKobo,
+  }) async {
+    final userId = _requireCompletedUserId();
+    final pocket = familyPocketStore.selectedPocket;
+    if (pocket == null || !familyPocketStore.canManageMembers) {
+      throw StateError('Only a Family Pocket admin can edit this pocket.');
+    }
+    final client = backendClient;
+    if (client == null) {
+      if (familyPocketRepository != null) {
+        throw StateError('Trusted Family Pocket updates are unavailable.');
+      }
+      familyPocketStore.updateSelectedPocket(
+        name: name,
+        frequency: frequency,
+        defaultContributionAmountKobo: defaultContributionAmountKobo,
+      );
+      return;
+    }
+    final payload = <String, Object?>{'pocketId': pocket.id};
+    if (name != null) {
+      payload['name'] = name.trim();
+    }
+    if (frequency != null) {
+      payload['frequency'] = frequency.name;
+    }
+    if (defaultContributionAmountKobo != null) {
+      payload['defaultContributionAmountKobo'] = defaultContributionAmountKobo;
+    }
+    await client.call(TrustedBackendAction.familyUpdate, payload: payload);
+    if (familyPocketRepository == null) {
+      familyPocketStore.updateSelectedPocket(
+        name: name,
+        frequency: frequency,
+        defaultContributionAmountKobo: defaultContributionAmountKobo,
+      );
+    } else {
+      await _loadFamilyPockets(userId);
+    }
+  }
+
+  Future<void> leaveFamilyPocket() async {
+    final userId = _requireCompletedUserId();
+    final pocket = familyPocketStore.selectedPocket;
+    final membership = pocket?.members
+        .where((member) => member.id == userId)
+        .firstOrNull;
+    if (pocket == null ||
+        membership == null ||
+        membership.role == FamilyRole.owner) {
+      throw StateError('The pocket owner must transfer ownership first.');
+    }
+    final client = backendClient;
+    if (client == null) {
+      if (familyPocketRepository != null) {
+        throw StateError(
+          'Trusted Family Pocket membership changes are unavailable.',
+        );
+      }
+      familyPocketStore.leaveSelectedPocket();
+      return;
+    }
+    await client.call(
+      TrustedBackendAction.familyMembershipChange,
+      payload: {'pocketId': pocket.id, 'memberId': userId, 'action': 'leave'},
+    );
+    if (familyPocketRepository == null) {
+      familyPocketStore.leaveSelectedPocket();
+    } else {
+      await _loadFamilyPockets(userId);
+    }
   }
 
   Future<void> inviteFamilyMember({

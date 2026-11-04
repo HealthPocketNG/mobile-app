@@ -32,6 +32,8 @@ class FamilyPocketStore extends ChangeNotifier {
     return _pockets.where((pocket) => pocket.id == pocketId).firstOrNull;
   }
 
+  String get currentUserId => _currentUserId;
+
   List<ContributionRecord> get selectedContributions {
     final pocketId = _selectedPocketId;
     if (pocketId == null) return const [];
@@ -154,13 +156,21 @@ class FamilyPocketStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void createPocket({required String name}) {
+  void createPocket({
+    required String name,
+    String? description,
+    FamilyContributionFrequency frequency = FamilyContributionFrequency.monthly,
+    int defaultContributionAmountKobo = 50000,
+  }) {
     final id = BackendIds.familyPocket(_currentUserId);
     _pockets.insert(
       0,
       FamilyPocket(
         id: id,
         name: name,
+        description: description,
+        frequency: frequency,
+        defaultContributionAmountKobo: defaultContributionAmountKobo,
         members: [
           FamilyMember(
             id: _currentUserId,
@@ -173,6 +183,38 @@ class FamilyPocketStore extends ChangeNotifier {
       ),
     );
     _selectedPocketId = id;
+    notifyListeners();
+  }
+
+  void updateSelectedPocket({
+    String? name,
+    FamilyContributionFrequency? frequency,
+    int? defaultContributionAmountKobo,
+  }) {
+    final pocket = selectedPocket;
+    if (pocket == null || !canManageMembers) {
+      throw StateError('Only a Family Pocket admin can edit this pocket.');
+    }
+    final index = _pockets.indexOf(pocket);
+    _pockets[index] = pocket.copyWith(
+      name: name?.trim(),
+      frequency: frequency,
+      defaultContributionAmountKobo: defaultContributionAmountKobo,
+    );
+    notifyListeners();
+  }
+
+  void leaveSelectedPocket() {
+    final pocket = selectedPocket;
+    if (pocket == null) return;
+    final membership = pocket.members
+        .where((member) => member.id == _currentUserId)
+        .firstOrNull;
+    if (membership == null || membership.role == FamilyRole.owner) {
+      throw StateError('The pocket owner must transfer ownership first.');
+    }
+    _pockets.remove(pocket);
+    _selectedPocketId = _pockets.firstOrNull?.id;
     notifyListeners();
   }
 

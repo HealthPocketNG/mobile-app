@@ -34,9 +34,29 @@ void main() {
         email: 'amara@example.com',
       );
 
-      await appState.createFamilyPocket(name: 'Okafor Family Care');
+      await appState.createFamilyPocket(
+        name: 'Okafor Family Care',
+        description: 'Shared care',
+        frequency: FamilyContributionFrequency.weekly,
+        defaultContributionAmountKobo: 75000,
+      );
       expect(appState.familyPocketStore.pockets, hasLength(1));
       expect(appState.familyPocketStore.canManageMembers, isTrue);
+      expect(
+        appState.familyPocketStore.selectedPocket!.description,
+        'Shared care',
+      );
+      expect(
+        appState.familyPocketStore.selectedPocket!.frequency,
+        FamilyContributionFrequency.weekly,
+      );
+      expect(
+        appState
+            .familyPocketStore
+            .selectedPocket!
+            .defaultContributionAmountKobo,
+        75000,
+      );
 
       await appState.inviteFamilyMember(
         name: 'Tola Okafor',

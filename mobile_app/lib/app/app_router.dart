@@ -208,6 +208,8 @@ class AppRouter {
             onRespondToInvitation: appState.respondToFamilyInvitation,
             onCancelInvitation: appState.cancelFamilyInvitation,
             onRemoveMember: appState.removeFamilyMember,
+            onUpdatePocket: appState.updateFamilyPocket,
+            onLeavePocket: appState.leaveFamilyPocket,
             onRecordDevelopmentContribution: (amountNaira) =>
                 appState.recordDevelopmentFamilyContribution(
                   amountNaira: amountNaira,
@@ -216,6 +218,7 @@ class AppRouter {
             onRefresh: appState.refreshFamilyPockets,
             developmentContributionsEnabled:
                 appState.developmentContributionsEnabled,
+            designPreview: appState.previewMode,
           ),
           AppRoute.profile => ProfileScreen(
             onSaveAccount: appState.updateAccountDetails,
