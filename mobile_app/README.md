@@ -170,18 +170,16 @@ Do not enable production providers or refresh production configuration until
 the production-auth review is approved.
 # Find care beta directory
 
-## DEV care-request simulator
+## DEV payment UI preview
 
-In the DEV app, open Find care, select an active demo centre, then tap its
-demo-authorization action. Confirm an amount and scan a mock QR such as
-`hp://provider/demo_clinic_001`. The QR contains only a stable fictional provider
-ID. Unknown, inactive, malformed, and mismatched providers are rejected.
-
-This is temporary in-memory design state, not a partner portal. It does not sync,
-persist, debit/reserve balances, write contributions, or expose settlement
-controls. It is gated by the existing development-simulation flag. Device camera
-tests remain required before the external beta build.
-Rebuild the app after adding the scanner plugin; hot reload is insufficient.
+In the DEV app, open Find Care, select an active fictional partner, and follow
+Amount → Bank Transfer → Review. Review checks the current development balance:
+an insufficient balance opens the Add Money or Change Amount state. A funded
+preview continues to the four-digit demo PIN keypad, animated processing state,
+and preview result. The demo digits are kept only in memory and are not the
+app's separate six-digit account PIN. No payment is submitted, balance is
+debited, contribution is written, or receipt is created. Live payment and PIN
+authorization need a trusted backend before they can be enabled.
 
 
 The Find care tab currently uses bundled, explicitly fictional demo providers.

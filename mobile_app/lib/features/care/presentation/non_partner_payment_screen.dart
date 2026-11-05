@@ -197,13 +197,6 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
       const SizedBox(height: AppSpacing.md),
       _providerSummary(),
       const SizedBox(height: AppSpacing.lg),
-      const _MethodCard(
-        icon: LucideIcons.scanQrCode,
-        title: 'Scan QR Code',
-        subtitle: 'Unavailable for non-partner payments',
-        enabled: false,
-      ),
-      const SizedBox(height: AppSpacing.sm),
       _MethodCard(
         icon: LucideIcons.landmark,
         title: 'Pay via Bank Transfer',
@@ -356,21 +349,17 @@ class _MethodCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    this.enabled = true,
     this.onTap,
   });
   final IconData icon;
   final String title, subtitle;
-  final bool enabled;
   final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => Opacity(
-    opacity: enabled ? 1 : .55,
-    child: Material(
+  Widget build(BuildContext context) => Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        onTap: enabled ? onTap : null,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -401,7 +390,6 @@ class _MethodCard extends StatelessWidget {
           ),
         ),
       ),
-    ),
   );
 }
 

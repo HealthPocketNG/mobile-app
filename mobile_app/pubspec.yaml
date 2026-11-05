@@ -42,7 +42,6 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   cryptography: ^2.9.0
   url_launcher: ^6.3.1
-  mobile_scanner: ^7.4.2
   lucide_icons_flutter: ^3.1.20
   flutter_svg: ^2.3.0
   firebase_storage: ^13.6.0
@@ -81,6 +80,7 @@ flutter:
     - assets/family/v2/
     - assets/family/v2/details/
     - assets/family/v2/invites/
+    - assets/care/v2/
     - assets/auth/v2/
     - assets/activity/
     - assets/HPLogo/

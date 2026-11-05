@@ -12,6 +12,7 @@ class AppBottomNavigation extends StatelessWidget {
     this.allowSelectedNavigation = false,
     this.assetRootOverride,
     this.iconFiles,
+    this.useAssetColorsOverride,
     super.key,
   });
 
@@ -19,6 +20,7 @@ class AppBottomNavigation extends StatelessWidget {
   final bool allowSelectedNavigation;
   final String? assetRootOverride;
   final List<String>? iconFiles;
+  final bool? useAssetColorsOverride;
 
   static const _assetRoot = 'assets/dashboard/v2/';
 
@@ -31,7 +33,8 @@ class AppBottomNavigation extends StatelessWidget {
     final assetRoot =
         assetRootOverride ??
         (savingsDesign ? 'assets/savings/v2/' : _assetRoot);
-    final useAssetColors = savingsDesign || iconFiles != null;
+    final useAssetColors =
+        useAssetColorsOverride ?? (savingsDesign || iconFiles != null);
     final iconSize = compact ? 26.0 : 30.0;
     const routes = [
       AppRoute.dashboard,

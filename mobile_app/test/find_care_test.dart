@@ -81,6 +81,8 @@ void main() {
       const MaterialApp(home: FindCareScreen(demoRequestsEnabled: true)),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
     expect(find.text('Use mock location'), findsOneWidget);
     await tester.tap(find.text('Use mock location'));
     await tester.pump();
@@ -98,7 +100,7 @@ void main() {
     expect(find.textContaining('Location is unavailable'), findsOneWidget);
     await tester.tap(find.text('Demo Community Clinic'));
     await tester.pumpAndSettle();
-    expect(find.text('Pay Demo Community Clinic  →'), findsOneWidget);
+    expect(find.text('Pay Demo Community Clinic'), findsOneWidget);
   });
   testWidgets('failed load can be retried', (tester) async {
     await tester.pumpWidget(
@@ -113,7 +115,7 @@ void main() {
     );
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
-    expect(find.text('3 providers'), findsOneWidget);
+    expect(find.text('HealthPocket Partners'), findsOneWidget);
   });
   testWidgets('empty directory explains that no partners are available', (
     tester,
@@ -138,7 +140,12 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: FindCareScreen()));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Non-partners'));
+    await tester.scrollUntilVisible(
+      find.text('Other Healthcare Providers'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('See all').last);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Demo Health Hospital'),
