@@ -7,6 +7,9 @@ import 'package:healthpocket/core/widgets/healthpocket_state_view.dart';
 import 'package:healthpocket/features/care/data/demo_care_directory_repository.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/care/presentation/care_v2_common.dart';
+import 'package:healthpocket/features/care/presentation/care_v2_directory_filters.dart';
+import 'package:healthpocket/features/care/presentation/care_v2_directory_pages.dart';
+import 'package:healthpocket/features/care/presentation/care_v2_explanation_sheet.dart';
 import 'package:healthpocket/features/care/presentation/care_v2_payment_flow.dart';
 import 'package:healthpocket/features/care/presentation/care_v2_partner_sheet.dart';
 import 'package:healthpocket/features/care/presentation/non_partner_payment_screen.dart';
@@ -33,9 +36,10 @@ class FindCareScreen extends StatefulWidget {
 }
 
 class _FindCareScreenState extends State<FindCareScreen> {
-  final _search = TextEditingController();
   List<CareProvider> _providers = [];
   _CareFilter _filter = _CareFilter.all;
+  CareDirectoryFilters _directoryFilters = const CareDirectoryFilters();
+  CareArea? _selectedArea;
   DemoLocationStatus _locationStatus = DemoLocationStatus.notRequested;
   bool _loading = true;
   bool _failed = false;
@@ -48,7 +52,6 @@ class _FindCareScreenState extends State<FindCareScreen> {
 
   @override
   void dispose() {
-    _search.dispose();
     super.dispose();
   }
 
@@ -68,9 +71,23 @@ class _FindCareScreenState extends State<FindCareScreen> {
   }
 
   void _clearFilters() => setState(() {
-    _search.clear();
     _filter = _CareFilter.all;
+    _directoryFilters = const CareDirectoryFilters();
+    _selectedArea = null;
   });
+
+  Future<void> _showFilters() async {
+    final filters = await showCareV2Filters(context, _directoryFilters);
+    if (filters != null && mounted) setState(() => _directoryFilters = filters);
+  }
+
+  Future<void> _showSearch() async {
+    final selected = await Navigator.push<CareProvider>(
+      context,
+      MaterialPageRoute(builder: (_) => CareV2Search(providers: _providers)),
+    );
+    if (selected != null && mounted) _open(selected);
+  }
 
   void _open(CareProvider provider) => Navigator.push<void>(
     context,
@@ -82,41 +99,58 @@ class _FindCareScreenState extends State<FindCareScreen> {
     ),
   );
 
-  void _showLocationOptions() => showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.white,
-    showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Location', style: careText(20, FontWeight.w700, CareV2.navy)),
-            for (final choice in <(String, DemoLocationStatus)>[
-              ('Use mock location', DemoLocationStatus.granted),
-              ('Simulate denied', DemoLocationStatus.denied),
-              ('Simulate unavailable', DemoLocationStatus.unavailable),
-              ('Reset location', DemoLocationStatus.notRequested),
-            ])
-              ListTile(
-                title: Text(choice.$1),
-                onTap: () {
-                  setState(() => _locationStatus = choice.$2);
-                  Navigator.pop(sheetContext);
-                },
+  Future<void> _showLocationOptions() async {
+    final area = await Navigator.push<CareArea>(
+      context,
+      MaterialPageRoute(
+        builder: (changeContext) => CareV2ChangeLocation(
+          current: _selectedArea,
+          onUseCurrent: () {
+            ScaffoldMessenger.of(changeContext).removeCurrentSnackBar();
+            Navigator.push<void>(
+              changeContext,
+              MaterialPageRoute(
+                builder: (permissionContext) => CareV2LocationPermission(
+                  onManual: () => Navigator.pop(permissionContext),
+                  onAllow: () {
+                    Navigator.pop(permissionContext);
+                    if (mounted) {
+                      setState(
+                        () => _locationStatus = DemoLocationStatus.unavailable,
+                      );
+                    }
+                    ScaffoldMessenger.of(changeContext).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Device location is not enabled in this build. Choose an area manually.',
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
-          ],
+            );
+          },
         ),
       ),
-    ),
-  );
+    );
+    if (area != null && mounted) {
+      setState(() {
+        _selectedArea = area;
+        _locationStatus = DemoLocationStatus.notRequested;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final queried = filterCareProviders(_providers, query: _search.text);
+    final queried = filterCareProviders(
+      _providers,
+      state: _selectedArea?.state,
+      city: _selectedArea?.name,
+    );
     final filtered = queried
+        .where(_directoryFilters.matches)
         .where(
           (provider) => switch (_filter) {
             _CareFilter.all => true,
@@ -137,9 +171,11 @@ class _FindCareScreenState extends State<FindCareScreen> {
     final partners = filtered.where((provider) => provider.isPartner).toList();
     final other = filtered.where((provider) => !provider.isPartner).toList();
     final firstLocation = _providers.where((item) => item.active).firstOrNull;
-    final locationLabel = firstLocation == null
-        ? 'Explore nearby care'
-        : '${firstLocation.state}, Nigeria';
+    final locationLabel =
+        _selectedArea?.label ??
+        (firstLocation == null
+            ? 'Explore nearby care'
+            : '${firstLocation.state}, Nigeria');
 
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.1,
@@ -262,59 +298,79 @@ class _FindCareScreenState extends State<FindCareScreen> {
                   }, style: careText(11, FontWeight.w400, CareV2.muted)),
                 ],
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: 44,
-                  child: TextField(
-                    controller: _search,
-                    onChanged: (_) => setState(() {}),
-                    style: careText(13, FontWeight.w400, CareV2.navy),
-                    decoration: InputDecoration(
-                      hintText: 'Search for clinics, pharmacies...',
-                      hintStyle: careText(
-                        13,
-                        FontWeight.w400,
-                        const Color(0xFF8A93A3),
-                      ),
-                      filled: true,
-                      fillColor: CareV2.soft,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                      prefixIcon: Padding(
-                        padding: const EdgeInsets.all(13),
-                        child: SvgPicture.asset(
+                InkWell(
+                  onTap: _showSearch,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    height: 44,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: CareV2.soft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        SvgPicture.asset(
                           '${CareV2.assets}find-4e7cf.svg',
-                          width: 15.81,
+                          width: 18,
                           height: 18,
                         ),
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Search for clinics, pharmacies...',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: careText(
+                              13,
+                              FontWeight.w400,
+                              const Color(0xFF8A93A3),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 14),
-                SizedBox(
-                  height: 32,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      for (final option in <(_CareFilter, String)>[
-                        (_CareFilter.all, 'All'),
-                        (_CareFilter.partners, 'Partners'),
-                        (_CareFilter.pharmacies, 'Pharmacies'),
-                        (_CareFilter.clinics, 'Clinics'),
-                        (_CareFilter.hospitals, 'Hospitals'),
-                      ]) ...[
-                        _CareFilterChip(
-                          label: option.$2,
-                          selected: _filter == option.$1,
-                          onTap: () => setState(() => _filter = option.$1),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 32,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            for (final option in <(_CareFilter, String)>[
+                              (_CareFilter.all, 'All'),
+                              (_CareFilter.partners, 'Partners'),
+                              (_CareFilter.pharmacies, 'Pharmacies'),
+                              (_CareFilter.clinics, 'Clinics'),
+                              (_CareFilter.hospitals, 'Hospitals'),
+                            ]) ...[
+                              _CareFilterChip(
+                                label: option.$2,
+                                selected: _filter == option.$1,
+                                onTap: () =>
+                                    setState(() => _filter = option.$1),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                      ],
-                    ],
-                  ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Filters',
+                      onPressed: _showFilters,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.tune_rounded,
+                        size: 20,
+                        color: CareV2.teal,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 18),
                 if (_loading)
@@ -333,27 +389,9 @@ class _FindCareScreenState extends State<FindCareScreen> {
                     compact: true,
                   )
                 else if (filtered.isEmpty)
-                  HealthPocketStateView(
-                    kind: HealthPocketStateKind.noResults,
-                    title: _providers.isEmpty
-                        ? 'No partners nearby'
-                        : 'No providers found',
-                    message: _providers.isEmpty
-                        ? 'No active healthcare providers are available in this area right now.'
-                        : 'No providers match your search. Try another filter.',
-                    primaryActionLabel: _providers.isEmpty
-                        ? 'Try a different location'
-                        : 'Clear filters',
-                    onPrimaryAction: _providers.isEmpty
-                        ? _showLocationOptions
-                        : _clearFilters,
-                    secondaryActionLabel: _providers.isEmpty
-                        ? 'View all partners'
-                        : null,
-                    onSecondaryAction: _providers.isEmpty
-                        ? _clearFilters
-                        : null,
-                    compact: true,
+                  CareV2NoResults(
+                    onChangeLocation: _showLocationOptions,
+                    onViewAll: _clearFilters,
                   )
                 else ...[
                   if (partners.isNotEmpty) ...[
@@ -511,6 +549,13 @@ class _CareProviderTileV2 extends StatelessWidget {
                   style: careText(12, FontWeight.w400, CareV2.muted),
                 ),
                 const SizedBox(height: 3),
+                if (provider.rating != null) ...[
+                  Text(
+                    '★ ${provider.rating!.toStringAsFixed(1)}${provider.ratingCount == null ? '' : ' (${provider.ratingCount})'}',
+                    style: careText(11.5, FontWeight.w400, CareV2.muted),
+                  ),
+                  const SizedBox(height: 3),
+                ],
                 CarePartnerBadgeV2(
                   provider: provider,
                   iconAsset: badgeAsset,
@@ -545,10 +590,8 @@ class _CareProviderDetailsV2 extends StatelessWidget {
       Navigator.push<void>(
         context,
         MaterialPageRoute(
-          builder: (_) => CareV2PaymentFlow(
-            provider: provider,
-            savingsStore: savingsStore,
-          ),
+          builder: (_) =>
+              CareV2PaymentFlow(provider: provider, savingsStore: savingsStore),
         ),
       );
     } else if (!provider.isPartner) {
@@ -733,113 +776,189 @@ class _CareProviderDetailsV2 extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'About',
-                      style: careText(14, FontWeight.w700, CareV2.navy),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      provider.description ??
-                          'Care services from this directory provider.',
-                      style: careText(
-                        12.5,
-                        FontWeight.w400,
-                        CareV2.muted,
-                      ).copyWith(height: 1.5),
-                    ),
-                    if (provider.isDemo) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'No booking, payment, or real care authorization is available in this beta directory.',
-                        style: careText(11, FontWeight.w400, CareV2.muted),
+                    if (!provider.isPartner) ...[
+                      const SizedBox(height: 18),
+                      _NonPartnerInfoRow(
+                        icon: Icons.place_outlined,
+                        label: 'Address',
+                        value:
+                            provider.address ??
+                            '${provider.city}, ${provider.state}',
                       ),
-                    ],
-                    const SizedBox(height: 18),
-                    Text(
-                      'Services',
-                      style: careText(14, FontWeight.w700, CareV2.navy),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final service in provider.services)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 7,
+                      _NonPartnerInfoRow(
+                        icon: Icons.access_time,
+                        label: 'Hours',
+                        value: provider.openingHours ?? 'Hours unavailable',
+                      ),
+                      _NonPartnerInfoRow(
+                        icon: Icons.call_outlined,
+                        label: 'Phone',
+                        value: provider.effectivePhone ?? 'Phone unavailable',
+                        last: true,
+                      ),
+                      const SizedBox(height: 18),
+                      InkWell(
+                        onTap: () => showCareExplanationSheet(
+                          context,
+                          verification: false,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: CareV2.soft,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                size: 14,
+                                color: CareV2.muted,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: careText(
+                                      11.5,
+                                      FontWeight.w400,
+                                      CareV2.muted,
+                                    ).copyWith(height: 1.5),
+                                    children: [
+                                      const TextSpan(
+                                        text: 'This provider is not yet a HealthPocket partner. You can still pay by bank transfer from your HealthPocket balance. ',
+                                      ),
+                                      TextSpan(
+                                        text: 'Learn more ›',
+                                        style: careText(
+                                          11.5,
+                                          FontWeight.w500,
+                                          CareV2.teal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 18),
+                      Text(
+                        'About',
+                        style: careText(14, FontWeight.w700, CareV2.navy),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        provider.description ??
+                            'Care services from this directory provider.',
+                        style: careText(
+                          12.5,
+                          FontWeight.w400,
+                          CareV2.muted,
+                        ).copyWith(height: 1.5),
+                      ),
+                      if (provider.isDemo) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'No booking, payment, or real care authorization is available in this beta directory.',
+                          style: careText(11, FontWeight.w400, CareV2.muted),
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      Text(
+                        'Services',
+                        style: careText(14, FontWeight.w700, CareV2.navy),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final service in provider.services)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: CareV2.soft,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                service,
+                                style: careText(
+                                  11.5,
+                                  FontWeight.w400,
+                                  CareV2.muted,
+                                ),
+                              ),
                             ),
-                            decoration: BoxDecoration(
-                              color: CareV2.soft,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          SvgPicture.asset(
+                            '${CareV2.assets}detail-bc031.svg',
+                            width: 20,
+                            height: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
                             child: Text(
-                              service,
+                              provider.address ??
+                                  '${provider.city}, ${provider.state}',
                               style: careText(
-                                11.5,
+                                12.5,
                                 FontWeight.w400,
-                                CareV2.muted,
+                                CareV2.navy,
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        SvgPicture.asset(
-                          '${CareV2.assets}detail-bc031.svg',
-                          width: 20,
-                          height: 22,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            provider.address ??
-                                '${provider.city}, ${provider.state}',
-                            style: careText(12.5, FontWeight.w400, CareV2.navy),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        InkWell(
-                          onTap: provider.directionsUri == null
-                              ? null
-                              : () => launchUrl(
-                                  provider.directionsUri!,
-                                  mode: LaunchMode.externalApplication,
-                                ),
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            width: 96,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE6ECEF),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SvgPicture.asset(
-                                  '${CareV2.assets}detail-b049d.svg',
-                                  width: 16,
-                                  height: 16,
-                                ),
-                                Text(
-                                  'View on map',
-                                  style: careText(
-                                    9.5,
-                                    FontWeight.w400,
-                                    CareV2.muted,
+                          const SizedBox(width: 10),
+                          InkWell(
+                            onTap: provider.directionsUri == null
+                                ? null
+                                : () => launchUrl(
+                                    provider.directionsUri!,
+                                    mode: LaunchMode.externalApplication,
                                   ),
-                                ),
-                              ],
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              width: 96,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE6ECEF),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SvgPicture.asset(
+                                    '${CareV2.assets}detail-b049d.svg',
+                                    width: 16,
+                                    height: 16,
+                                  ),
+                                  Text(
+                                    'View on map',
+                                    style: careText(
+                                      9.5,
+                                      FontWeight.w400,
+                                      CareV2.muted,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -852,7 +971,9 @@ class _CareProviderDetailsV2 extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
           child: CareV2Button(
-            label: 'Pay ${provider.name}',
+            label: provider.isPartner
+                ? 'Pay ${provider.name}'
+                : 'Pay with HealthPocket',
             arrowAsset: 'detail-ed152.svg',
             onPressed: provider.active ? () => _pay(context) : null,
           ),
@@ -890,6 +1011,45 @@ class _CareQuickAction extends StatelessWidget {
           Text(label, style: careText(11, FontWeight.w400, CareV2.teal)),
         ],
       ),
+    ),
+  );
+}
+
+class _NonPartnerInfoRow extends StatelessWidget {
+  const _NonPartnerInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.last = false,
+  });
+  final IconData icon;
+  final String label, value;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    decoration: BoxDecoration(
+      border: last
+          ? null
+          : const Border(bottom: BorderSide(color: CareV2.outline)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: CareV2.teal),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: careText(11, FontWeight.w400, CareV2.muted)),
+              const SizedBox(height: 3),
+              Text(value, style: careText(13, FontWeight.w400, CareV2.navy)),
+            ],
+          ),
+        ),
+      ],
     ),
   );
 }

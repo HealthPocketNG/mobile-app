@@ -3,6 +3,8 @@
 This file tracks intentionally deferred work so it does not disappear between
 delivery slices. A checked item means the specific milestone described is done;
 local verification, deployment, and mobile acceptance are tracked separately.
+The V2 service handoffs are listed in
+[`docs/deferred-integration-tracker.md`](docs/deferred-integration-tracker.md).
 
 ## Completed invitation foundation (locally verified)
 
@@ -63,8 +65,8 @@ Production changes and real email delivery are not part of this rollout.
 - [x] Build the signed `1.0.0+1` DEV APK and record its size and SHA-256 checksum
   on the landing page.
 - [ ] Complete the physical-device smoke test, including install/update behavior,
-  authentication, restart unlock, profile persistence, Find Care/demo scanner,
-  and support handoff.
+  authentication, restart unlock, profile persistence, Find Care search,
+  filters, location, bank selection and payment preview, and support handoff.
 - [ ] Deploy `beta-site/` plus the ignored signed APK to Netlify and verify the
   link on a second Android device before sharing it in the private tester group.
 - [ ] Increase the build number for every APK shared with testers and use the
@@ -115,19 +117,22 @@ Production changes and real email delivery are not part of this rollout.
   obtain review, publish website pages, and connect final app links.
 - [ ] Include Find care navigation, filters, details, and small-screen usability
   in combined beta mobile testing.
-- [ ] Build partner QR scanning and the manual care-authorization lifecycle:
-  requested, authorized, care approved, service completed, pending settlement,
-  and settled.
-- [x] Implement the bounded DEV design flow: provider-first selection, amount
-  confirmation, camera/mock scanning, strict stable-ID matching, clear rejection,
-  one in-memory demo authorization result, and duplicate-confirmation prevention.
+- [ ] Connect partner and non-partner healthcare payment authorization to the
+  trusted backend after regulated-provider integration. Keep pending,
+  completed, failed, and reversed states server-owned.
+- [x] Implement the bounded DEV Find Care V2 preview: provider-first selection,
+  amount, bank-transfer details, review, demo PIN, processing, success preview,
+  insufficient balance, filters, location selection, search, and empty states.
+  No payment or care authorization is submitted by this preview.
 - [x] Remove settlement-style states and operator controls from the design beta.
-- [x] Verify the bounded Find Care/QR slice with 9 focused tests and the full
-  56-test Flutter suite (2026-09-19).
-- [ ] Design the future provider-neutral backend separately after partnerships;
-  the current beta must not persist authorization/payment/settlement records.
-- [ ] Device-test scanner permissions, denial fallback, camera lifecycle, and
-  Android release packaging; iOS camera permission text is not iOS validation.
+- [x] Remove the former scanner route, dependency, and camera permission.
+  Verify the V2 Find Care routes with focused tests and the full 141-test
+  Flutter suite (2026-11-05).
+- [x] Define the provider-neutral trusted backend and emulator-only mock
+  lifecycle. Deployed money commands remain unavailable until a regulated
+  adapter and the gates in `docs/real-payment-readiness.md` are complete.
+- [ ] Device-test Find Care search, filters, manual location, permission
+  fallback, bank selection, account errors, and Android release packaging.
 - [ ] Build the minimum partner/admin operations surface needed to confirm care
   authorizations, record manual settlement, and reconcile pilot transactions.
 - [ ] Select the regulated savings/funds-holding partner and replace all DEV-only
@@ -164,4 +169,5 @@ Production changes and real email delivery are not part of this rollout.
 - [ ] Add complete empty, loading, offline, retry, and partial-failure states to
   every remaining network-backed screen.
 - [ ] Add end-to-end tests for fresh install, returning user, new device, password
-  reset, PIN recovery, invitation acceptance, and partner QR authorization.
+  reset, PIN recovery, invitation acceptance, and trusted partner payment
+  authorization when a regulated provider is connected.

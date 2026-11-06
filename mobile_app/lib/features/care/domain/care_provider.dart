@@ -60,6 +60,8 @@ class CareProvider {
     this.active = true,
     this.city = 'Demo city',
     this.mockDistanceKm = 0,
+    this.rating,
+    this.ratingCount,
     this.isPartner = true,
     this.isOpen = true,
     this.closingTime,
@@ -86,6 +88,8 @@ class CareProvider {
   final bool active;
   final String city;
   final double mockDistanceKm;
+  final double? rating;
+  final int? ratingCount;
   final bool isPartner;
   final bool isOpen;
   final String? closingTime;
@@ -121,6 +125,8 @@ class CareProvider {
     active: active,
     city: city,
     mockDistanceKm: mockDistanceKm,
+    rating: rating,
+    ratingCount: ratingCount,
     isPartner: isPartner,
     isOpen: isOpen,
     closingTime: closingTime,

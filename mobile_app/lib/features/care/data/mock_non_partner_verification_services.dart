@@ -13,7 +13,22 @@ class MockBankAccountVerificationService
     if (!RegExp(r'^\d{10}$').hasMatch(accountNumber)) {
       throw const FormatException('Enter a valid 10-digit account number.');
     }
-    const banks = {'044': 'Access Bank', '058': 'GTBank', '033': 'UBA'};
+    if (accountNumber == '0123456780') {
+      throw const FormatException(
+        "We couldn't find this account. Check the number and bank.",
+      );
+    }
+    const banks = {
+      '044': 'Access Bank',
+      '058': 'GTBank',
+      'preview_first': 'First Bank',
+      '033': 'UBA',
+      'preview_zenith': 'Zenith Bank',
+      'preview_kuda': 'Kuda',
+      'preview_opay': 'Opay',
+      'preview_moniepoint': 'Moniepoint',
+      'preview_wema': 'Wema Bank',
+    };
     final bankName = banks[bankCode];
     if (bankName == null) {
       throw const FormatException('Choose a supported bank.');

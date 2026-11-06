@@ -4,6 +4,9 @@ HealthPocket helps Nigerians prepare financially for healthcare before an
 emergency occurs. This repository currently implements the mobile UI MVP in
 Flutter.
 
+Deferred V2 service integrations are tracked in
+[docs/deferred-integration-tracker.md](docs/deferred-integration-tracker.md).
+
 ## Environments
 
 HealthPocket uses separate Android flavors and Firebase projects:

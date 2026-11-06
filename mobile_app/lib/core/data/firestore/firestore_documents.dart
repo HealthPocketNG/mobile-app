@@ -695,6 +695,12 @@ class CareProviderDocument {
           ),
         },
         isDemo: false,
+        rating: data['rating'] is num
+            ? (data['rating'] as num).toDouble()
+            : null,
+        ratingCount: data['ratingCount'] is int
+            ? data['ratingCount'] as int
+            : null,
         coordinates: CareCoordinates(
           latitude: latitude.toDouble(),
           longitude: longitude.toDouble(),

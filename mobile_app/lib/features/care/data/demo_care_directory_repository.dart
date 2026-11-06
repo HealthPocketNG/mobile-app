@@ -8,6 +8,8 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       id: 'demo_clinic_001',
       city: 'Ikeja',
       mockDistanceKm: 2.4,
+      rating: 4.8,
+      ratingCount: 124,
       name: 'Demo Community Clinic',
       state: 'Lagos',
       type: CareProviderType.clinic,
@@ -16,12 +18,14 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       closingTime: '8:00 PM',
       description:
           'A fictional neighbourhood clinic for beta experience testing.',
-      services: ['Consultation', 'Health & Wellness'],
+      services: ['Consultation', 'Malaria treatment', 'Health & Wellness'],
     ),
     CareProvider(
       id: 'demo_pharmacy_001',
       city: 'Yaba',
       mockDistanceKm: 12.5,
+      rating: 4.6,
+      ratingCount: 89,
       name: 'Demo Neighbourhood Pharmacy',
       state: 'Lagos',
       type: CareProviderType.pharmacy,
@@ -30,7 +34,12 @@ class DemoCareDirectoryRepository implements CareDirectoryRepository {
       closingTime: '8:00 PM',
       description:
           'A fictional local pharmacy listing for beta experience testing.',
-      services: ['Prescription Drugs', 'OTC Medicines', 'Health & Wellness'],
+      services: [
+        'Prescription Drugs',
+        'Malaria test',
+        'OTC Medicines',
+        'Health & Wellness',
+      ],
     ),
     CareProvider(
       id: 'demo_hospital_001',
