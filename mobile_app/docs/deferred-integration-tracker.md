@@ -48,6 +48,15 @@ commands currently fail closed; the mock gateway is emulator-only.
   confirmation. Use server-owned amount, beneficiary, reference, status,
   balance, receipt, activity, and notification data. Keep pending and failed
   attempts distinct from completed ones.
+- [ ] Feed the Activity V2 overview, filters, transaction details, and receipt
+  from a trusted payment ledger. The screen currently reads real savings and
+  Family Pocket contribution records; the five sample rows appear only in DEV
+  UI preview when that ledger is empty. `DEMO-*` references are never payment
+  records. Replace them with backend-owned payment attempts and completed
+  transactions, including timestamps, merchant identity, status, reversals,
+  and receipt URLs. Enable receipt export only for confirmed records and keep
+  pending/failed transactions distinct. Remove `DEV_ACTIVITY_EMPTY` after
+  testing the empty state.
 - [ ] Replace `MockBankAccountVerificationService`, preview-only bank IDs,
   and `MockHealthcareMerchantVerificationService` with approved bank catalog,
   account-resolution, beneficiary, and healthcare-eligibility adapters. Keep
@@ -59,6 +68,13 @@ commands currently fail closed; the mock gateway is emulator-only.
   failed, and reversed outcomes without claiming money was returned before
   settlement or reversal is confirmed. The two new explanation sheets describe
   this intended behavior; today's Pay action only runs mock verification.
+- [ ] Replace the six non-partner merchant-check and payment-outcome previews
+  with backend-owned attempt states. The current verified mock shows a timed
+  processing and success preview; slow, ineligible, and unavailable checks
+  show separate review, not-completed, and failed previews. Attach real
+  references, timestamps, balance holds/releases, activity, notifications,
+  and receipts only after trusted confirmation. Remove the debug long-press
+  outcome chooser when live payment status is connected.
 - [ ] Connect real funding and savings balance data to the insufficient-funds
   state. Test duplicate taps, interruptions, retries, reversals, and receipt
   reconciliation without client-side balance writes.
@@ -85,6 +101,56 @@ Firebase or connecting a payment provider.
   data and approved push/email delivery when device registration and provider
   credentials are ready. Family Pocket invitation delivery is also tracked
   in [TODO.md](../TODO.md).
+
+## Profile V2 handoff
+
+- [ ] Finish in-session Change Password and verify the new Reset PIN flow on
+  a live DEV device. Reset PIN now requires Firebase email reauthentication
+  (or Google reauthentication for Google-only accounts), checks the same user
+  remains signed in, then saves a confirmed 6-digit PIN through the existing
+  PIN repository. The onboarding PIN screen is not reused. Fingerprint login
+  uses the existing device biometric service; auto-lock timing is still
+  unavailable. Link Linked Accounts and Two-Factor Authentication to reviewed
+  account flows. Active Sessions now shows the current device only; implement
+  trusted server-side session enumeration and revocation before listing other
+  devices or enabling “Log Out of All Other Devices.”
+- [ ] Define storage, delivery, and consent for the Profile notification
+  categories that are not in the current four-field preference model: login
+  activity, security alerts, payments, and marketing offers. Their switches
+  stay disabled until the backend supports them. Keep essential security
+  messages separate from optional marketing consent.
+- [ ] Add device notification permission handling and push registration before
+  the “Stay in the loop” action can request permission or claim alerts are on.
+  The current screen is a UI preview and makes no permission change.
+- [ ] Connect bank account linking and real balance/payment method data to
+  Payment Methods after the trusted payment provider is ready. It currently
+  shows only the existing DEV contribution balance, labelled as a development
+  record, and does not store bank details or enable a payment method.
+- [ ] Connect the new Refer a Friend page to server-issued codes, attribution,
+  rewards, and sharing once the referral programme is approved. The screen
+  currently shows unavailable values and disables Share Invite rather than
+  displaying Figma's sample code, friends, or earnings.
+- [ ] Replace the new Terms and Privacy screen placeholders with reviewed,
+  approved policies and their actual revision dates before release. The Figma
+  text is explicitly placeholder copy; the current screen labels it as draft.
+- [ ] Connect live chat, phone, and WhatsApp Support cards only after verified
+  endpoints, hours, and response commitments exist. Email uses the existing
+  mailto handoff and does not claim the message was sent by the app. Review
+  the new FAQ answers against the launched payment and Family Pocket behavior.
+- [ ] Build a verified self-service account deletion flow that checks
+  reauthentication, balances, Family Pocket ownership, retention obligations,
+  and cross-device sign-out. The Delete account screen currently opens a
+  support email draft for a manual request; opening it does not delete data.
+- [ ] Add an authenticated report-issue endpoint and screenshot upload if
+  reports should be submitted in-app. The current Report an Issue form opens
+  a prepared email draft; a screenshot can be attached there. Do not claim
+  report delivery until it is sent from the email app or accepted by a backend.
+- [ ] Connect the Profile app-guide and rating actions to real product flows.
+  About uses the original
+  HealthPocket logo and the current app version; the open-source license row
+  was omitted by product decision. Profile photo upload still waits for the
+  DEV Storage bucket and rules noted above. The Change Photo sheet supports
+  camera, gallery, and removal once those callbacks are enabled.
 
 ## Release checks
 

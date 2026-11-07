@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:healthpocket/core/theme/app_ui_density.dart';
 
 abstract final class AuthV2 {
   static const navy = Color(0xFF0F1B4C);
@@ -14,7 +15,7 @@ abstract final class AuthV2 {
 
   static TextStyle heading = const TextStyle(
     fontFamily: 'Inter',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: FontWeight.w700,
     color: navy,
     height: 1.25,
@@ -49,7 +50,9 @@ class AuthV2Button extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
-    height: secondary ? 46 : 52,
+    height: secondary
+        ? AppUiDensity.secondaryButtonHeight
+        : AppUiDensity.primaryButtonHeight,
     child: FilledButton(
       onPressed: busy ? null : onPressed,
       style: FilledButton.styleFrom(

@@ -69,7 +69,7 @@ class _CareFiltersSheetState extends State<_CareFiltersSheet> {
   Widget build(BuildContext context) => SafeArea(
     top: false,
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
@@ -85,7 +85,7 @@ class _CareFiltersSheetState extends State<_CareFiltersSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -128,7 +128,7 @@ class _CareFiltersSheetState extends State<_CareFiltersSheet> {
                   ),
               ],
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 18),
             Row(
               children: [
                 Expanded(
@@ -236,7 +236,7 @@ class _FilterPill extends StatelessWidget {
     onTap: onTap,
     borderRadius: BorderRadius.circular(16),
     child: Container(
-      height: 32,
+      height: 30,
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
@@ -267,7 +267,7 @@ class _FilterSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 46,
+    height: 42,
     child: Row(
       children: [
         Expanded(

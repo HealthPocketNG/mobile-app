@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:healthpocket/core/theme/app_colors.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_common.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_final_pages.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_closing_pages.dart';
 
 const supportEmail = 'gethealthpocket@gmail.com';
 
@@ -29,105 +30,177 @@ class SupportScreen extends StatefulWidget {
 }
 
 class _SupportScreenState extends State<SupportScreen> {
-  bool _opening = false;
-  String? _message;
+  String _query = '';
 
-  Future<void> _email() async {
-    setState(() {
-      _opening = true;
-      _message = null;
-    });
-    try {
-      final uri = supportEmailUri();
-      final opened = await (widget.openEmail?.call(uri) ?? launchUrl(uri));
-      if (mounted) {
-        setState(
-          () => _message = opened
-              ? 'Finish and send your message in your email app. Nothing has been sent by HealthPocket.'
-              : 'Could not open an email app. Copy the address below and email us from your preferred service.',
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _message = 'Could not open an email app. Copy the address below and email us from your preferred service.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _opening = false);
-    }
-  }
+  void _contact() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => ProfileContactSupportScreen(openEmail: widget.openEmail),
+    ),
+  );
+
+  void _faq() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(builder: (_) => const ProfileFaqsScreen()),
+  );
+
+  void _report() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => ProfileReportIssueScreen(openEmail: widget.openEmail),
+    ),
+  );
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Help & feedback')),
-    body: ListView(
-      padding: const EdgeInsets.all(24),
+  Widget build(BuildContext context) {
+    final entries = <_SupportEntry>[
+      _SupportEntry('a4948.svg', 'FAQs', 'Find quick answers', _faq),
+      _SupportEntry(
+        'b20cf.svg',
+        'Contact Support',
+        'Get in touch with our team',
+        _contact,
+      ),
+      _SupportEntry(
+        '36984.svg',
+        'Report an Issue',
+        'Let us know what went wrong',
+        _report,
+        const Color(0xFFFFEBC8),
+      ),
+      _SupportEntry(
+        '04e6c.svg',
+        'App Guides',
+        'Learn how to use HealthPocket',
+        () => profileMessage(context, 'App guides are coming soon.'),
+      ),
+      _SupportEntry(
+        'b6aab.svg',
+        'Terms & Privacy',
+        'Read our policies',
+        () => Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(builder: (_) => const ProfileTermsScreen()),
+        ),
+        const Color(0xFFFFEBC8),
+      ),
+    ];
+    final shown = entries
+        .where(
+          (entry) => '${entry.title} ${entry.subtitle}'.toLowerCase().contains(
+            _query.trim().toLowerCase(),
+          ),
+        )
+        .toList();
+    return ProfileV2Scaffold(
+      title: 'Help & Support',
+      subtitle: "We're here to help.",
+      backAsset: 'f299b.svg',
       children: [
-        Text(
-          'Help us improve HealthPocket',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Tell us what you tried, what happened, and what you expected. Include your phone model and app version if helpful. You can also share feedback in the private beta WhatsApp group you joined.',
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Never share your password, app PIN, banking details, or medical records. Remove personal information from screenshots before sharing.',
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'This inbox is for app support and feedback, not urgent medical assistance.',
-        ),
-        const SizedBox(height: 24),
-        const SelectableText(supportEmail),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: _opening ? null : _email,
-          icon: const Icon(Icons.email_outlined),
-          label: Text(_opening ? 'Opening…' : 'Open email app'),
-        ),
-        TextButton(
-          onPressed: () async {
-            try {
-              await Clipboard.setData(const ClipboardData(text: supportEmail));
-              if (mounted) setState(() => _message = 'Email address copied.');
-            } catch (_) {
-              if (mounted) {
-                setState(
-                  () => _message = 'Could not copy. Select the email address above to copy it manually.',
-                );
-              }
-            }
-          },
-          child: const Text('Copy email address'),
-        ),
-        if (_message != null)
-          Semantics(liveRegion: true, child: Text(_message!)),
+        const SizedBox(height: 22),
         Container(
-          margin: const EdgeInsets.only(top: 20),
-          padding: const EdgeInsets.all(16),
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(18),
+            color: ProfileV2.soft,
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             children: [
-              Image.asset('assets/profile/friendlyWave.png', height: 62),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Still need help?',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+              SvgPicture.asset(
+                '${ProfileV2.assets}4632d.svg',
+                width: 18,
+                height: 18,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: const InputDecoration(
+                    hintText: 'Search for help...',
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (shown.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Text(
+              'No matching help topics.',
+              style: profileText(13, FontWeight.w400, ProfileV2.muted),
+            ),
+          ),
+        for (final entry in shown)
+          ProfileV2CardRow(
+            asset: entry.asset,
+            title: entry.title,
+            subtitle: entry.subtitle,
+            background: entry.background,
+            onTap: entry.onTap,
+          ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEEF9F7),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  ProfileV2Icon(
+                    asset: 'e616f.svg',
+                    background: Colors.white,
+                    size: 56,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Still need help?',
+                          style: profileText(
+                            15,
+                            FontWeight.w600,
+                            ProfileV2.teal,
+                          ),
+                        ),
+                        Text(
+                          'Our team is always happy to assist you.',
+                          style: profileText(
+                            12,
+                            FontWeight.w400,
+                            ProfileV2.muted,
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Our team is always happy to assist you.',
-                      style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              FilledButton(
+                onPressed: _contact,
+                style: FilledButton.styleFrom(
+                  backgroundColor: ProfileV2.teal,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Contact Support'),
+                    const SizedBox(width: 10),
+                    SvgPicture.asset(
+                      '${ProfileV2.assets}4695b.svg',
+                      width: 20,
+                      height: 20,
                     ),
                   ],
                 ),
@@ -136,6 +209,19 @@ class _SupportScreenState extends State<SupportScreen> {
           ),
         ),
       ],
-    ),
-  );
+    );
+  }
+}
+
+class _SupportEntry {
+  const _SupportEntry(
+    this.asset,
+    this.title,
+    this.subtitle,
+    this.onTap, [
+    this.background = ProfileV2.mint,
+  ]);
+  final String asset, title, subtitle;
+  final VoidCallback onTap;
+  final Color background;
 }

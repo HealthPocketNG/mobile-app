@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:healthpocket/core/theme/app_ui_density.dart';
 import 'package:healthpocket/features/family/domain/family_pocket.dart';
 
 abstract final class FamilyV2 {
@@ -15,7 +16,7 @@ abstract final class FamilyV2 {
 
 TextStyle familyText(double size, FontWeight weight, Color color) => TextStyle(
   fontFamily: 'Inter',
-  fontSize: size,
+  fontSize: AppUiDensity.font(size),
   fontWeight: weight,
   color: color,
 );
@@ -25,7 +26,7 @@ class FamilyV2Button extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.secondary = false,
-    this.height = 52,
+    this.height = AppUiDensity.primaryButtonHeight,
     this.trailingAsset,
     super.key,
   });

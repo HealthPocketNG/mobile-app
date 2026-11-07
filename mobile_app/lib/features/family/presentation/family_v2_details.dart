@@ -57,8 +57,8 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
             alignment: Alignment.centerRight,
             icon: SvgPicture.asset(
               '${_assets}details-e119a.svg',
-              width: 24,
-              height: 24,
+              width: 21,
+              height: 21,
             ),
           ),
         ],
@@ -67,8 +67,8 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
       Row(
         children: [
           Container(
-            height: 64,
-            width: 64,
+            height: 54,
+            width: 54,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: FamilyV2.mint,
@@ -76,8 +76,8 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
             ),
             child: SvgPicture.asset(
               '${_assets}details-197ef.svg',
-              width: 30,
-              height: 30,
+              width: 25,
+              height: 25,
             ),
           ),
           const SizedBox(width: 14),
@@ -104,8 +104,8 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       Container(
-        height: MediaQuery.sizeOf(context).width < 360 ? 132 : 116,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        height: MediaQuery.sizeOf(context).width <= 390 ? 108 : 116,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF0A7F7B), Color(0xFF0E9A93)],
@@ -159,7 +159,7 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
           ],
         ),
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: 14),
       Row(
         children: [
           _FamilyDetailAction(
@@ -181,12 +181,12 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
           ),
         ],
       ),
-      const SizedBox(height: 20),
+      const SizedBox(height: 14),
       _FamilySectionTitle(
         title: 'Members (${pocket.members.length})',
         onSeeAll: onMembers,
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 10),
       if (pocket.members.isEmpty)
         Text(
           'No members yet',
@@ -194,7 +194,7 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
         )
       else
         SizedBox(
-          height: 100,
+          height: 88,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: pocket.members.length,
@@ -208,7 +208,7 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
                     FamilyMemberAvatar(
                       member: member,
                       index: index,
-                      radius: 24,
+                      radius: 21,
                     ),
                     const SizedBox(height: 5),
                     Text(
@@ -227,12 +227,12 @@ class FamilyPocketDetailsV2 extends StatelessWidget {
             },
           ),
         ),
-      const SizedBox(height: 20),
+      const SizedBox(height: 14),
       _FamilySectionTitle(title: 'Recent Activity', onSeeAll: onSeeActivity),
       const SizedBox(height: 8),
       if (contributions.isEmpty)
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           child: Text(
             'No shared contributions yet.',
             style: familyText(13, FontWeight.w400, FamilyV2.muted),
@@ -263,14 +263,14 @@ class _FamilyDetailAction extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            height: 48,
+            height: 44,
             width: double.infinity,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: FamilyV2.mint,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: SvgPicture.asset('$_assets$asset', width: 24, height: 24),
+            child: SvgPicture.asset('$_assets$asset', width: 21, height: 21),
           ),
           const SizedBox(height: 6),
           Text(label, style: familyText(12, FontWeight.w400, FamilyV2.navy)),

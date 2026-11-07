@@ -1,16 +1,16 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:healthpocket/core/theme/app_colors.dart';
-import 'package:healthpocket/core/theme/app_spacing.dart';
-import 'package:healthpocket/core/widgets/app_primary_button.dart';
-import 'package:healthpocket/core/widgets/healthpocket_state_view.dart';
 import 'package:healthpocket/features/care/data/mock_non_partner_verification_services.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 import 'package:healthpocket/features/care/domain/non_partner_verification.dart';
 import 'package:healthpocket/features/care/presentation/care_v2_bank_selection.dart';
 import 'package:healthpocket/features/care/presentation/care_v2_common.dart';
 import 'package:healthpocket/features/care/presentation/care_v2_explanation_sheet.dart';
+import 'package:healthpocket/features/care/presentation/care_v2_non_partner_outcomes.dart';
+import 'package:healthpocket/features/care/presentation/care_v2_payment_states.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 enum _NonPartnerStep {
@@ -19,7 +19,8 @@ enum _NonPartnerStep {
   review,
   insufficientBalance,
   verifying,
-  result,
+  processing,
+  outcome,
 }
 
 class NonPartnerPaymentScreen extends StatefulWidget {
@@ -45,10 +46,13 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
   var _bankCode = '044';
   var _step = _NonPartnerStep.amount;
   ResolvedBankAccount? _recipient;
-  MerchantVerificationResult? _verification;
+  CareNonPartnerOutcome _outcome = CareNonPartnerOutcome.success;
   String? _error;
   bool _busy = false;
   int? _insufficientAmountKobo;
+  Timer? _verificationTimeout;
+  Timer? _processingTimer;
+  int _verificationGeneration = 0;
 
   int get _amountKobo =>
       (int.tryParse(_amount.text.replaceAll(',', '')) ?? 0) * 100;
@@ -122,6 +126,8 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
       carePreviewBanks.where((bank) => bank.code == _bankCode).first.name;
   @override
   void dispose() {
+    _verificationTimeout?.cancel();
+    _processingTimer?.cancel();
     _account.dispose();
     _amount.dispose();
     super.dispose();
@@ -158,6 +164,13 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
     final recipient = _recipient;
     final amount = int.tryParse(_amount.text.replaceAll(',', ''));
     final balance = widget.savingsStore?.developmentBalanceKobo;
+    if (!widget.provider.isDemo) {
+      setState(
+        () => _error =
+            'Payments to this provider are not available in this build yet.',
+      );
+      return;
+    }
     if (recipient == null || amount == null || amount <= 0) {
       setState(() => _error = 'Enter a valid payment amount.');
       return;
@@ -175,16 +188,115 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
       _error = null;
       _step = _NonPartnerStep.verifying;
     });
-    final result = await widget.merchantService.verifyRecipient(
-      providerId: widget.provider.id,
-      recipient: recipient,
-    );
-    if (!mounted) return;
+    final generation = ++_verificationGeneration;
+    _verificationTimeout?.cancel();
+    _verificationTimeout = Timer(const Duration(seconds: 4), () {
+      if (!mounted ||
+          _verificationGeneration != generation ||
+          _step != _NonPartnerStep.verifying) {
+        return;
+      }
+      setState(() {
+        _busy = false;
+        _outcome = CareNonPartnerOutcome.inReview;
+        _step = _NonPartnerStep.outcome;
+      });
+    });
+    try {
+      final result = await widget.merchantService.verifyRecipient(
+        providerId: widget.provider.id,
+        recipient: recipient,
+      );
+      if (!mounted ||
+          _verificationGeneration != generation ||
+          _step != _NonPartnerStep.verifying) {
+        return;
+      }
+      _verificationTimeout?.cancel();
+      if (result.status == MerchantVerificationStatus.verified) {
+        _startProcessingPreview();
+      } else {
+        setState(() {
+          _busy = false;
+          _outcome = result.status == MerchantVerificationStatus.ineligible
+              ? CareNonPartnerOutcome.notCompleted
+              : CareNonPartnerOutcome.failed;
+          _step = _NonPartnerStep.outcome;
+        });
+      }
+    } catch (_) {
+      if (!mounted ||
+          _verificationGeneration != generation ||
+          _step != _NonPartnerStep.verifying) {
+        return;
+      }
+      _verificationTimeout?.cancel();
+      setState(() {
+        _busy = false;
+        _outcome = CareNonPartnerOutcome.failed;
+        _step = _NonPartnerStep.outcome;
+      });
+    }
+  }
+
+  void _startProcessingPreview() {
+    _processingTimer?.cancel();
     setState(() {
       _busy = false;
-      _verification = result;
-      _step = _NonPartnerStep.result;
+      _step = _NonPartnerStep.processing;
     });
+    _processingTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted || _step != _NonPartnerStep.processing) return;
+      setState(() {
+        _outcome = CareNonPartnerOutcome.success;
+        _step = _NonPartnerStep.outcome;
+      });
+    });
+  }
+
+  void _cancelVerification() {
+    _verificationGeneration++;
+    _verificationTimeout?.cancel();
+    setState(() {
+      _busy = false;
+      _step = _NonPartnerStep.review;
+    });
+  }
+
+  Future<void> _showPreviewOutcomes() async {
+    if (!kDebugMode || !widget.provider.isDemo) return;
+    final selected = await showModalBottomSheet<CareNonPartnerOutcome>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Preview payment outcomes')),
+            for (final outcome in CareNonPartnerOutcome.values)
+              ListTile(
+                title: Text(switch (outcome) {
+                  CareNonPartnerOutcome.success => 'Payment Successful!',
+                  CareNonPartnerOutcome.inReview => 'Payment in review',
+                  CareNonPartnerOutcome.notCompleted =>
+                    'Merchant could not be verified',
+                  CareNonPartnerOutcome.failed => 'Payment failed',
+                }),
+                onTap: () => Navigator.pop(sheetContext, outcome),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      if (selected == CareNonPartnerOutcome.success) {
+        _startProcessingPreview();
+      } else {
+        setState(() {
+          _outcome = selected;
+          _step = _NonPartnerStep.outcome;
+        });
+      }
+    }
   }
 
   @override
@@ -192,37 +304,30 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
     if (_step == _NonPartnerStep.amount) return _amountScreen();
     if (_step == _NonPartnerStep.details) return _details(context);
     if (_step == _NonPartnerStep.review) return _review(context);
-    final title = switch (_step) {
-      _NonPartnerStep.amount => 'Enter Amount',
-      _NonPartnerStep.details => 'Bank Transfer',
-      _NonPartnerStep.review => 'Review Payment',
-      _NonPartnerStep.insufficientBalance => 'Insufficient Balance',
-      _NonPartnerStep.verifying => 'Verifying merchant',
-      _NonPartnerStep.result => 'Payment Result',
-    };
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: switch (_step) {
-            _NonPartnerStep.amount => _amountScreen(),
-            _NonPartnerStep.details => _details(context),
-            _NonPartnerStep.review => _review(context),
-            _NonPartnerStep.insufficientBalance => InsufficientBalanceView(
-              paymentAmountKobo: _insufficientAmountKobo ?? 0,
-              availableBalanceKobo:
-                  widget.savingsStore?.developmentBalanceKobo ?? 0,
-              onChooseDifferentAmount: () => setState(() {
-                _insufficientAmountKobo = null;
-                _step = _NonPartnerStep.amount;
-              }),
-            ),
-            _NonPartnerStep.verifying => const _VerificationProgress(),
-            _NonPartnerStep.result => _result(context),
-          },
-        ),
-      ),
+    if (_step == _NonPartnerStep.insufficientBalance) {
+      return CareV2InsufficientBalance(
+        amountKobo: _insufficientAmountKobo ?? _amountKobo,
+        balanceKobo: _balanceKobo,
+        onBack: () => setState(() => _step = _NonPartnerStep.review),
+        onAddMoney: () => Navigator.pushNamed(context, '/savings/add-money'),
+        onChangeAmount: () => setState(() => _step = _NonPartnerStep.amount),
+      );
+    }
+    if (_step == _NonPartnerStep.verifying) {
+      return CareV2MerchantVerificationScreen(onBack: _cancelVerification);
+    }
+    if (_step == _NonPartnerStep.processing) {
+      return CareV2ProcessingPreview(
+        provider: widget.provider,
+        amountKobo: _amountKobo,
+      );
+    }
+    return CareV2NonPartnerOutcomeScreen(
+      provider: widget.provider,
+      amountKobo: _amountKobo,
+      outcome: _outcome,
+      onDone: () => Navigator.pop(context),
+      onRetry: () => setState(() => _step = _NonPartnerStep.review),
     );
   }
 
@@ -737,61 +842,17 @@ class _NonPartnerPaymentScreenState extends State<NonPartnerPaymentScreen> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            child: CareV2Button(
-              label: 'Pay ${careMoney(_amountKobo)}',
-              arrowAsset: 'review-ed152.svg',
-              onPressed: _busy ? null : _verify,
+            child: GestureDetector(
+              onLongPress: kDebugMode ? _showPreviewOutcomes : null,
+              child: CareV2Button(
+                label: 'Pay ${careMoney(_amountKobo)}',
+                arrowAsset: 'review-ed152.svg',
+                onPressed: _busy ? null : _verify,
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _result(BuildContext context) {
-    final result = _verification!;
-    final success = result.verified;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        CircleAvatar(
-          radius: 38,
-          backgroundColor: success ? AppColors.primary : AppColors.secondary,
-          child: Icon(
-            success ? LucideIcons.check : LucideIcons.x,
-            color: Colors.white,
-            size: 38,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          success ? 'Recipient verified' : 'Verification failed',
-          style: Theme.of(context).textTheme.titleLarge
-              ?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          result.reason,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.inkMuted),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        if (success)
-          const _InfoCard(
-            message: 'Beta verification completed. No bank transfer or balance movement has been performed.',
-          ),
-        const SizedBox(height: AppSpacing.lg),
-        AppPrimaryButton(
-          label: success ? 'Done' : 'Edit account details',
-          onPressed: () {
-            if (success) {
-              Navigator.pop(context);
-            } else {
-              setState(() => _step = _NonPartnerStep.details);
-            }
-          },
-        ),
-      ],
     );
   }
 }
@@ -891,32 +952,6 @@ class _Notice extends StatelessWidget {
   );
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.message});
-  final String message;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.md),
-    decoration: BoxDecoration(
-      color: AppColors.primarySoft,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Icon(LucideIcons.info, color: AppColors.primary),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(
-            message,
-            style: const TextStyle(color: AppColors.primaryDark, fontSize: 12),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 class _ReviewRow extends StatelessWidget {
   const _ReviewRow({
     required this.label,
@@ -961,28 +996,6 @@ class _ReviewRow extends StatelessWidget {
           const SizedBox(width: 5),
           SvgPicture.asset('${CareV2.assets}$asset', width: 16, height: 16),
         ],
-      ],
-    ),
-  );
-}
-
-class _VerificationProgress extends StatelessWidget {
-  const _VerificationProgress();
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(),
-        SizedBox(height: AppSpacing.lg),
-        Text(
-          'Checking if this provider is a healthcare business...',
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: AppSpacing.lg),
-        _InfoCard(
-          message: 'Valid account details\nChecking merchant category\nConfirming healthcare provider\nSecuring your payment',
-        ),
       ],
     ),
   );

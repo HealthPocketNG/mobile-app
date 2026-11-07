@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:healthpocket/core/theme/app_ui_density.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
 
 abstract final class CareV2 {
@@ -14,7 +15,7 @@ abstract final class CareV2 {
 
 TextStyle careText(double size, FontWeight weight, Color color) => TextStyle(
   fontFamily: 'Inter',
-  fontSize: size,
+  fontSize: AppUiDensity.font(size),
   fontWeight: weight,
   color: color,
 );
@@ -67,7 +68,7 @@ class CareV2Button extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
-    height: 52,
+    height: AppUiDensity.primaryButtonHeight,
     child: FilledButton(
       onPressed: onPressed,
       style: FilledButton.styleFrom(
@@ -224,8 +225,8 @@ class CareProviderSummaryV2 extends StatelessWidget {
         : null,
     child: Row(
       children: [
-        CareProviderAvatarV2(provider: provider, size: highlighted ? 48 : 64),
-        const SizedBox(width: 14),
+        CareProviderAvatarV2(provider: provider, size: highlighted ? 44 : 52),
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

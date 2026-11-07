@@ -174,6 +174,10 @@ class AppRouter {
           AppRoute.activity => ActivityScreen(
             savingsStore: appState.savingsStore,
             familyStore: appState.familyPocketStore,
+            designPreview: appState.previewMode,
+            previewEmpty:
+                appState.previewMode &&
+                const bool.fromEnvironment('DEV_ACTIVITY_EMPTY'),
           ),
           AppRoute.savings => SavingsScreen(
             store: appState.savingsStore,
@@ -221,6 +225,9 @@ class AppRouter {
             designPreview: appState.previewMode,
           ),
           AppRoute.profile => ProfileScreen(
+            savingsStore: appState.savingsStore,
+            biometricService: appState.biometricUnlockService,
+            designPreview: appState.previewMode,
             onSaveAccount: appState.updateAccountDetails,
             onSavePersonalDetails: appState.updatePersonalDetails,
             // Live uploads stay disabled until the DEV Storage bucket exists.
@@ -230,6 +237,7 @@ class AppRouter {
             store: appState.profileStore,
             authRepository: appState.authRepository,
             onSignOut: appState.signOut,
+            onSetPin: appState.setPin,
             onSaveNotificationPreferences:
                 appState.updateNotificationPreferences,
           ),

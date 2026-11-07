@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
@@ -627,7 +625,7 @@ class _CareProviderDetailsV2 extends StatelessWidget {
           padding: EdgeInsets.zero,
           children: [
             SizedBox(
-              height: 200,
+              height: 170,
               child: Stack(
                 children: [
                   Container(
@@ -640,41 +638,37 @@ class _CareProviderDetailsV2 extends StatelessWidget {
                     ),
                   ),
                   Center(
-                    child: Transform.rotate(
-                      angle: -4 * math.pi / 180,
-                      child: Container(
-                        width: math.min(
-                          MediaQuery.sizeOf(context).width - 80,
-                          250,
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: CareV2.teal,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              provider.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: careText(
-                                20,
-                                FontWeight.w700,
-                                Colors.white,
-                              ),
-                            ),
-                            Text(
-                              careType(provider.type).toUpperCase(),
-                              style: careText(
-                                14,
-                                FontWeight.w500,
-                                Colors.white,
-                              ).copyWith(letterSpacing: 3),
-                            ),
-                          ],
-                        ),
+                    child: Container(
+                      width: MediaQuery.sizeOf(context).width - 112,
+                      constraints: const BoxConstraints(maxWidth: 280),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: CareV2.teal,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            provider.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: careText(18, FontWeight.w700, Colors.white),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            careType(provider.type).toUpperCase(),
+                            style: careText(
+                              11,
+                              FontWeight.w500,
+                              Colors.white,
+                            ).copyWith(letterSpacing: 2),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -699,9 +693,9 @@ class _CareProviderDetailsV2 extends StatelessWidget {
               ),
             ),
             Transform.translate(
-              offset: const Offset(0, -28),
+              offset: const Offset(0, -20),
               child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -729,7 +723,7 @@ class _CareProviderDetailsV2 extends StatelessWidget {
                             : const Color(0xFFE8405F),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     Row(
                       children: [
                         Expanded(
@@ -998,7 +992,7 @@ class _CareQuickAction extends StatelessWidget {
     onTap: onTap,
     borderRadius: BorderRadius.circular(12),
     child: Container(
-      height: 56,
+      height: 54,
       decoration: BoxDecoration(
         color: CareV2.mint,
         borderRadius: BorderRadius.circular(12),
@@ -1006,7 +1000,7 @@ class _CareQuickAction extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SvgPicture.asset('${CareV2.assets}$asset', width: 20, height: 20),
+          SvgPicture.asset('${CareV2.assets}$asset', width: 18, height: 18),
           const SizedBox(height: 4),
           Text(label, style: careText(11, FontWeight.w400, CareV2.teal)),
         ],

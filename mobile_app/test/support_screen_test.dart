@@ -30,7 +30,9 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.text('Open email app'));
+      await tester.tap(find.text('Contact Support').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Email us'));
       await tester.pumpAndSettle();
       expect(requested?.path, supportEmail);
       expect(

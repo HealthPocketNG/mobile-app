@@ -27,7 +27,7 @@ class AppBottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compact =
-        MediaQuery.sizeOf(context).width < 360 ||
+        MediaQuery.sizeOf(context).width <= 390 ||
         MediaQuery.textScalerOf(context).scale(1) > 1.1;
     final savingsDesign = currentIndex == 1;
     final assetRoot =
@@ -35,7 +35,7 @@ class AppBottomNavigation extends StatelessWidget {
         (savingsDesign ? 'assets/savings/v2/' : _assetRoot);
     final useAssetColors =
         useAssetColorsOverride ?? (savingsDesign || iconFiles != null);
-    final iconSize = compact ? 26.0 : 30.0;
+    final iconSize = compact ? 22.0 : 26.0;
     const routes = [
       AppRoute.dashboard,
       AppRoute.savings,
@@ -55,12 +55,12 @@ class AppBottomNavigation extends StatelessWidget {
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.1,
       child: Container(
-        height: compact ? 64 : 74,
+        height: compact ? 60 : 66,
         decoration: const BoxDecoration(
           color: Colors.white,
           border: Border(top: BorderSide(color: Color(0xFFE8EDF0))),
         ),
-        padding: EdgeInsets.only(top: compact ? 6 : 8),
+        padding: EdgeInsets.only(top: compact ? 7 : 8),
         child: Row(
           children: [
             for (var index = 0; index < routes.length; index++)
@@ -93,14 +93,14 @@ class AppBottomNavigation extends StatelessWidget {
                                 iconSize,
                                 useAssetColors,
                               ),
-                        SizedBox(height: compact ? 3 : 4),
+                        SizedBox(height: compact ? 4 : 5),
                         Text(
                           labels[index],
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontFamily: 'Inter',
-                            fontSize: compact ? 11 : 12,
+                            fontSize: compact ? 10 : 11,
                             fontWeight: index == currentIndex
                                 ? FontWeight.w500
                                 : FontWeight.w400,

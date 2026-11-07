@@ -1,14 +1,21 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:healthpocket/features/profile/presentation/support_screen.dart';
 import 'package:healthpocket/features/profile/presentation/edit_personal_details_screen.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_common.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_pages.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_more_pages.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_final_pages.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_closing_pages.dart';
+import 'package:healthpocket/features/auth/data/biometric_unlock_service.dart';
+import 'package:healthpocket/features/savings/application/savings_store.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
-import 'package:healthpocket/core/widgets/initials_avatar.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
@@ -33,6 +40,10 @@ class ProfileScreen extends StatefulWidget {
     this.providerPhotoUrl,
     this.onUploadProfilePhoto,
     this.onRemoveProfilePhoto,
+    this.savingsStore,
+    this.biometricService,
+    this.designPreview = false,
+    this.onSetPin,
   });
 
   final ProfileStore store;
@@ -47,6 +58,10 @@ class ProfileScreen extends StatefulWidget {
   final String? providerPhotoUrl;
   final ProfilePhotoUploadCallback? onUploadProfilePhoto;
   final Future<void> Function()? onRemoveProfilePhoto;
+  final SavingsStore? savingsStore;
+  final BiometricUnlockService? biometricService;
+  final bool designPreview;
+  final Future<void> Function(String pin)? onSetPin;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -60,42 +75,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
   AuthRepository? get authRepository => widget.authRepository;
 
   Future<void> _editPhoto() async {
-    if (_savingPhoto || widget.onUploadProfilePhoto == null) return;
-    final remove = store.profile.profileImagePath == null
-        ? false
-        : await showModalBottomSheet<bool>(
-            context: context,
-            builder: (context) => SafeArea(
-              child: Wrap(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.photo_library_outlined),
-                    title: const Text('Choose a new photo'),
-                    onTap: () => Navigator.pop(context, false),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.delete_outline),
-                    title: const Text('Remove current photo'),
-                    textColor: AppColors.error,
-                    iconColor: AppColors.error,
-                    onTap: () => Navigator.pop(context, true),
-                  ),
-                ],
-              ),
-            ),
-          );
-    if (!mounted || remove == null && store.profile.profileImagePath != null) {
+    if (_savingPhoto) return;
+    final action = await showModalBottomSheet<ProfilePhotoAction>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const ProfileChangePhotoSheet(),
+    );
+    if (!mounted || action == null) return;
+    if (action == ProfilePhotoAction.remove &&
+        store.profile.profileImagePath == null) {
+      profileMessage(context, 'No uploaded photo to remove.');
+      return;
+    }
+    if (action == ProfilePhotoAction.remove &&
+            widget.onRemoveProfilePhoto == null ||
+        action != ProfilePhotoAction.remove &&
+            widget.onUploadProfilePhoto == null) {
+      profileMessage(
+        context,
+        'Photo changes will be available after account storage is ready.',
+      );
       return;
     }
     setState(() => _savingPhoto = true);
     try {
-      if (remove == true) {
+      if (action == ProfilePhotoAction.remove) {
         await widget.onRemoveProfilePhoto?.call();
         if (mounted) _showMessage(context, 'Profile photo removed');
         return;
       }
       final file = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+        source: action == ProfilePhotoAction.camera
+            ? ImageSource.camera
+            : ImageSource.gallery,
         maxWidth: 1600,
         maxHeight: 1600,
         imageQuality: 88,
@@ -183,7 +198,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (signOut != null) {
       await signOut();
     } else {
-      await authRepository?.signOut();
+      final repository = authRepository;
+      if (repository == null) throw StateError('No active sign-out service.');
+      await repository.signOut();
     }
     if (!context.mounted) return;
     Navigator.pushNamedAndRemoveUntil(
@@ -192,6 +209,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       (route) => false,
     );
   }
+
+  void _showLogout() => showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.white,
+    barrierColor: ProfileV2.navy.withValues(alpha: .5),
+    isScrollControlled: true,
+    useSafeArea: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) => ProfileLogoutSheet(onLogOut: () => _signOut(context)),
+  );
+
+  void _openDeleteAccount() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(builder: (_) => const ProfileDeleteAccountScreen()),
+  );
+
+  void _openActiveSessions() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => const ProfileActiveSessionsScreen(),
+    ),
+  );
 
   Future<void> _saveNotifications(
     BuildContext context,
@@ -221,530 +262,442 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: store,
-      builder: (context, child) {
-        final profile = store.profile;
-        return Scaffold(
-          appBar: AppBar(title: const Text('More')),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              AppSpacing.md,
+  void _openPersonalInformation() {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => AnimatedBuilder(
+          animation: store,
+          builder: (context, _) => ProfilePersonalInfoScreen(
+            profile: store.profile,
+            userId: authRepository?.currentUserId,
+            photoRepository: widget.profilePhotoRepository,
+            providerPhotoUrl: widget.providerPhotoUrl,
+            onPhoto: _editPhoto,
+            onEdit: _showEditChoices,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditChoices() {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Name and phone number'),
+              subtitle: const Text('Edit your account basics'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _editAccount(context);
+              },
             ),
-            children: [
-              Text(
-                'Manage your account and settings.',
-                style: const TextStyle(color: AppColors.inkMuted),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _ProfileHeader(
-                profile: profile,
-                userId: authRepository?.currentUserId,
-                photoRepository: widget.profilePhotoRepository,
-                providerPhotoUrl: widget.providerPhotoUrl,
-                canEditPhoto: widget.onUploadProfilePhoto != null,
-                editing: _savingPhoto,
-                onEdit: _editPhoto,
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionTitle('Quick access'),
-              const SizedBox(height: AppSpacing.sm),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.savings_outlined,
-                    title: 'Savings',
-                    subtitle: 'Manage your health fund',
-                    onTap: () =>
-                        Navigator.pushNamed(context, AppRoute.savings.path),
-                  ),
-                  _SettingsTile(
-                    icon: Icons.groups_2_outlined,
-                    title: 'Family Pocket',
-                    subtitle: 'Save together for care',
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      AppRoute.familyPocket.path,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionTitle('Account information'),
-              const SizedBox(height: AppSpacing.sm),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.person_outline_rounded,
-                    title: 'Account details',
-                    subtitle: '${profile.email} • ${profile.phoneNumber}',
-                    onTap: () => _editAccount(context),
-                  ),
-                  _SettingsTile(
-                    icon: Icons.home_outlined,
-                    title: 'Personal information',
-                    onTap: () => _editDetails(false),
-                    subtitle: _personalInformationLabel(profile),
-                  ),
-                  _SettingsTile(
-                    icon: Icons.contact_emergency_outlined,
-                    title: 'Emergency contact',
-                    onTap: () => _editDetails(true),
-                    subtitle: profile.nextOfKinName.isEmpty
-                        ? 'Not provided'
-                        : '${profile.nextOfKinName} • ${profile.nextOfKinPhone}',
-                  ),
-                  _SettingsTile(
-                    icon: Icons.verified_user_outlined,
-                    title: 'Email verification',
-                    subtitle:
-                        authRepository?.currentUser?.email ?? profile.email,
-                    trailing: _StatusBadge(
-                      label:
-                          authRepository?.currentUser?.emailVerified == true ||
-                              profile.emailVerified
-                          ? 'Verified'
-                          : 'Pending',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionTitle('Notification preferences'),
-              const SizedBox(height: AppSpacing.sm),
-              _SettingsCard(
-                children: [
-                  _PreferenceSwitch(
-                    switchKey: const ValueKey('savings-reminders-switch'),
-                    icon: Icons.savings_outlined,
-                    title: 'Savings reminders',
-                    subtitle: 'Plan schedule and contribution reminders',
-                    value: store.notifications.savingsReminders,
-                    onChanged: _savingNotifications
-                        ? null
-                        : (value) => _saveNotifications(
-                            context,
-                            store.notifications.copyWith(
-                              savingsReminders: value,
+            ListTile(
+              title: const Text('Date of birth and location'),
+              subtitle: const Text('Edit your personal details'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _editDetails(false);
+              },
+            ),
+            ListTile(
+              title: const Text('Emergency contact'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _editDetails(true);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openSecurity() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => ProfileSecurityScreen(
+        onPersonalInformation: _openPersonalInformation,
+        onLoginPin: _openLoginPin,
+        onDeleteAccount: _openDeleteAccount,
+        onActiveSessions: _openActiveSessions,
+      ),
+    ),
+  );
+
+  void _openLoginPin() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => ProfileLoginPinScreen(
+        profileStore: store,
+        biometricService: widget.biometricService,
+        userId: authRepository?.currentUserId,
+        authRepository: authRepository,
+        onSetPin: widget.onSetPin,
+      ),
+    ),
+  );
+
+  void _openPaymentMethods() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => ProfilePaymentMethodsScreen(
+        savingsStore: widget.savingsStore,
+        designPreview: widget.designPreview,
+      ),
+    ),
+  );
+
+  void _openAbout() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(builder: (_) => const ProfileAboutScreen()),
+  );
+
+  void _openNotificationSettings() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => ProfileNotificationSettingsScreen(
+        store: store,
+        onSave: _saveNotifications,
+      ),
+    ),
+  );
+
+  void _openSupport() => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(builder: (_) => const SupportScreen()),
+  );
+
+  Widget _buildV2(BuildContext context) => AnimatedBuilder(
+    animation: store,
+    builder: (context, _) {
+      final profile = store.profile;
+      return MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.1,
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
+            bottom: false,
+            child: ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'More',
+                            style: profileText(
+                              26,
+                              FontWeight.w700,
+                              ProfileV2.teal,
                             ),
                           ),
-                  ),
-                  _PreferenceSwitch(
-                    switchKey: const ValueKey('family-activity-switch'),
-                    icon: Icons.groups_2_outlined,
-                    title: 'Family activity',
-                    subtitle: 'Invites and shared-pocket updates',
-                    value: store.notifications.familyActivity,
-                    onChanged: _savingNotifications
-                        ? null
-                        : (value) => _saveNotifications(
-                            context,
-                            store.notifications.copyWith(familyActivity: value),
-                          ),
-                  ),
-                  _PreferenceSwitch(
-                    switchKey: const ValueKey('health-reminders-switch'),
-                    icon: Icons.health_and_safety_outlined,
-                    title: 'Health reminders',
-                    subtitle: 'Helpful prompts for your healthcare plans',
-                    value: store.notifications.healthReminders,
-                    onChanged: _savingNotifications
-                        ? null
-                        : (value) => _saveNotifications(
-                            context,
-                            store.notifications.copyWith(
-                              healthReminders: value,
+                          const SizedBox(height: 4),
+                          Text(
+                            'Manage your account and\nsettings.',
+                            style: profileText(
+                              12,
+                              FontWeight.w400,
+                              ProfileV2.muted,
                             ),
                           ),
-                  ),
-                  _PreferenceSwitch(
-                    switchKey: const ValueKey('product-updates-switch'),
-                    icon: Icons.campaign_outlined,
-                    title: 'Product updates',
-                    subtitle: 'New HealthPocket feature announcements',
-                    value: store.notifications.productUpdates,
-                    onChanged: _savingNotifications
-                        ? null
-                        : (value) => _saveNotifications(
-                            context,
-                            store.notifications.copyWith(productUpdates: value),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Notifications',
+                      onPressed: () => Navigator.pushNamed(
+                        context,
+                        AppRoute.notifications.path,
+                      ),
+                      icon: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          SvgPicture.asset(
+                            '${ProfileV2.assets}c7bc7.svg',
+                            width: 26,
+                            height: 26,
                           ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              const _SectionTitle('Help & support'),
-              const SizedBox(height: AppSpacing.sm),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.help_outline_rounded,
-                    title: 'Frequently asked questions',
-                    subtitle: 'Understand the no-money beta',
-                    onTap: () => _showHelp(context),
-                  ),
-                  _SettingsTile(
-                    icon: Icons.support_agent_rounded,
-                    title: 'Contact support',
-                    subtitle: 'Email us or share beta feedback',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => const SupportScreen(),
+                          Positioned(
+                            right: -2,
+                            top: -2,
+                            child: Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: ProfileV2.pink,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: _openPersonalInformation,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFB5EDE5),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: SvgPicture.asset(
+                          '${ProfileV2.assets}91e10.svg',
+                          width: 22,
+                          height: 22,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Material(
+                  color: const Color(0xFFEEF9F7),
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    onTap: _openPersonalInformation,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          ProfileV2Photo(
+                            profile: profile,
+                            userId: authRepository?.currentUserId,
+                            repository: widget.profilePhotoRepository,
+                            providerPhotoUrl: widget.providerPhotoUrl,
+                            radius: 32,
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  profile.fullName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: profileText(
+                                    15,
+                                    FontWeight.w700,
+                                    ProfileV2.navy,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  profile.email,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: profileText(
+                                    12,
+                                    FontWeight.w400,
+                                    ProfileV2.muted,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  'View profile ›',
+                                  style: profileText(
+                                    12,
+                                    FontWeight.w500,
+                                    ProfileV2.teal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SvgPicture.asset(
+                            '${ProfileV2.assets}f60f9.svg',
+                            width: 16,
+                            height: 16,
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  _SettingsTile(
-                    icon: Icons.shield_outlined,
-                    title: 'About HealthPocket',
-                    subtitle: 'Beta app information, privacy and terms',
-                    onTap: () => _showMessage(
+                ),
+                const SizedBox(height: 12),
+                _overviewRow('02a29.svg', 'Account & Security', _openSecurity),
+                _overviewRow(
+                  '68563.svg',
+                  'Savings',
+                  () => Navigator.pushNamed(context, AppRoute.savings.path),
+                ),
+                _overviewRow(
+                  '10141.svg',
+                  'Family Pocket',
+                  () =>
+                      Navigator.pushNamed(context, AppRoute.familyPocket.path),
+                ),
+                _overviewRow(
+                  'e38c3.svg',
+                  'Payment Methods',
+                  _openPaymentMethods,
+                ),
+                _overviewRow(
+                  'cc73a.svg',
+                  'Notifications',
+                  _openNotificationSettings,
+                ),
+                _overviewRow('a4948.svg', 'Help & Support', _openSupport),
+                _overviewRow(
+                  '9b106.svg',
+                  'About HealthPocket',
+                  _openAbout,
+                  last: true,
+                ),
+                const SizedBox(height: 12),
+                Material(
+                  color: const Color(0xFFFDE8EE),
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    onTap: () => Navigator.push<void>(
                       context,
-                      'Legal documents will be connected before release',
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ProfileReferScreen(),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              OutlinedButton.icon(
-                onPressed: () => _signOut(context),
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Log out'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.error,
-                  side: const BorderSide(color: AppColors.outline),
-                  minimumSize: const Size.fromHeight(52),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              const Text(
-                'HealthPocket MVP • Version 1.0.0',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.inkMuted, fontSize: 12),
-              ),
-            ],
-          ),
-          bottomNavigationBar: const AppBottomNavigation(currentIndex: 4),
-        );
-      },
-    );
-  }
-}
-
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({
-    required this.profile,
-    required this.userId,
-    required this.photoRepository,
-    required this.providerPhotoUrl,
-    required this.canEditPhoto,
-    required this.editing,
-    required this.onEdit,
-  });
-
-  final UserProfile profile;
-  final String? userId;
-  final ProfilePhotoRepository? photoRepository;
-  final String? providerPhotoUrl;
-  final bool canEditPhoto;
-  final bool editing;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryDark],
-        ),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              _ProfilePhoto(
-                profile: profile,
-                userId: userId,
-                repository: photoRepository,
-                providerPhotoUrl: providerPhotoUrl,
-              ),
-              if (canEditPhoto)
-                Positioned(
-                  right: -8,
-                  bottom: -8,
-                  child: IconButton.filled(
-                    tooltip: 'Change profile photo',
-                    onPressed: editing ? null : onEdit,
-                    icon: editing
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.camera_alt_outlined, size: 17),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: AppColors.primaryDark,
-                      minimumSize: const Size.square(34),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: SvgPicture.asset(
+                              '${ProfileV2.assets}34677.svg',
+                              width: 24,
+                              height: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Refer a Friend',
+                                  style: profileText(
+                                    14,
+                                    FontWeight.w600,
+                                    ProfileV2.pink,
+                                  ),
+                                ),
+                                Text(
+                                  'Help others stay healthy.\nYou both earn rewards!',
+                                  style: profileText(
+                                    11.5,
+                                    FontWeight.w400,
+                                    ProfileV2.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SvgPicture.asset(
+                            '${ProfileV2.assets}f60f9.svg',
+                            width: 16,
+                            height: 16,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  profile.fullName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  profile.email,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${profile.stateOfResidence} • Member since ${profile.memberSince.year}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                const SizedBox(height: 150),
+                OutlinedButton.icon(
+                  onPressed: _showLogout,
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text('Log out'),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfilePhoto extends StatelessWidget {
-  const _ProfilePhoto({
-    required this.profile,
-    required this.userId,
-    required this.repository,
-    required this.providerPhotoUrl,
-  });
-
-  final UserProfile profile;
-  final String? userId;
-  final ProfilePhotoRepository? repository;
-  final String? providerPhotoUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    final path = profile.profileImagePath;
-    final uid = userId;
-    final photos = repository;
-    if (path == null || uid == null || photos == null) {
-      return _providerOrInitials();
-    }
-    return FutureBuilder<String?>(
-      future: photos.getDownloadUrl(userId: uid, storagePath: path),
-      builder: (context, snapshot) {
-        final url = snapshot.data;
-        if (url == null) return _providerOrInitials();
-        return CircleAvatar(
-          radius: 31,
-          backgroundColor: Colors.white.withValues(alpha: 0.18),
-          foregroundImage: NetworkImage(url),
-          child: _initialsText(),
-        );
-      },
-    );
-  }
-
-  Widget _providerOrInitials() {
-    final url = providerPhotoUrl;
-    if (url == null || !url.startsWith('https://')) return _fallback();
-    return CircleAvatar(
-      radius: 31,
-      backgroundColor: Colors.white.withValues(alpha: 0.18),
-      foregroundImage: NetworkImage(url),
-      onForegroundImageError: (_, _) {},
-      child: _initialsText(),
-    );
-  }
-
-  Widget _fallback() => CircleAvatar(
-    radius: 31,
-    backgroundColor: Colors.white.withValues(alpha: 0.18),
-    child: _initialsText(),
+          bottomNavigationBar: const SafeArea(
+            top: false,
+            child: AppBottomNavigation(
+              currentIndex: 4,
+              assetRootOverride: ProfileV2.assets,
+              iconFiles: [
+                '40668.svg',
+                '95340.svg',
+                'f073d.svg',
+                '5e36a.svg',
+                '14584.svg',
+              ],
+              useAssetColorsOverride: true,
+            ),
+          ),
+        ),
+      );
+    },
   );
 
-  Widget _initialsText() => Text(
-    _initials(profile.fullName),
-    style: const TextStyle(
-      color: Colors.white,
-      fontSize: 20,
-      fontWeight: FontWeight.w800,
-    ),
-  );
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleMedium
-          ?.copyWith(fontWeight: FontWeight.w800),
-    );
-  }
-}
-
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: AppColors.outline),
-      ),
-      child: Column(
-        children: [
-          for (var index = 0; index < children.length; index++) ...[
-            children[index],
-            if (index != children.length - 1)
-              const Divider(height: 1, indent: 64),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-    this.trailing,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: _SettingsIcon(icon: icon),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
-      trailing:
-          trailing ??
-          (onTap == null
-              ? null
-              : const Icon(Icons.chevron_right_rounded, size: 20)),
+  Widget _overviewRow(
+    String asset,
+    String label,
+    VoidCallback onTap, {
+    bool last = false,
+  }) => Material(
+    color: Colors.white,
+    child: InkWell(
       onTap: onTap,
-    );
-  }
-}
-
-class _SettingsIcon extends StatelessWidget {
-  const _SettingsIcon({required this.icon});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: const BoxDecoration(
-        color: AppColors.primarySoft,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(icon, color: AppColors.primary, size: 20),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: AppColors.primaryDark,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+      child: Container(
+        height: 46,
+        decoration: BoxDecoration(
+          border: last
+              ? null
+              : const Border(bottom: BorderSide(color: ProfileV2.outline)),
+        ),
+        child: Row(
+          children: [
+            SvgPicture.asset(
+              '${ProfileV2.assets}$asset',
+              width: 22,
+              height: 22,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: profileText(14, FontWeight.w400, ProfileV2.navy),
+              ),
+            ),
+            SvgPicture.asset(
+              '${ProfileV2.assets}809a3.svg',
+              width: 16,
+              height: 16,
+            ),
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _PreferenceSwitch extends StatelessWidget {
-  const _PreferenceSwitch({
-    required this.switchKey,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final Key switchKey;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool>? onChanged;
+    ),
+  );
 
   @override
-  Widget build(BuildContext context) {
-    return SwitchListTile.adaptive(
-      key: switchKey,
-      secondary: _SettingsIcon(icon: icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      value: value,
-      onChanged: onChanged,
-    );
-  }
+  Widget build(BuildContext context) => _buildV2(context);
 }
 
 class _EditAccountSheet extends StatefulWidget {
@@ -905,60 +858,6 @@ class _AccountDraft {
   final String stateOfResidence;
 }
 
-void _showHelp(BuildContext context) {
-  showModalBottomSheet<void>(
-    context: context,
-    useSafeArea: true,
-    builder: (context) => const _SheetFrame(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Frequently asked questions',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-          ),
-          SizedBox(height: AppSpacing.lg),
-          _HelpAnswer(
-            question: 'Is this real money?',
-            answer: 'No. Beta contributions and balances are simulated records. No money is deposited, held, or transferred.',
-          ),
-          _HelpAnswer(
-            question: 'Can family members contribute?',
-            answer: 'The demo records shared contributions without processing a payment.',
-          ),
-          _HelpAnswer(
-            question: 'Are investments available?',
-            answer: 'No. Investments and real payments are not available in this beta.',
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _HelpAnswer extends StatelessWidget {
-  const _HelpAnswer({required this.question, required this.answer});
-
-  final String question;
-  final String answer;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(question, style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: AppSpacing.xs),
-          Text(answer, style: const TextStyle(color: AppColors.inkMuted)),
-        ],
-      ),
-    );
-  }
-}
-
 Widget _sheetTitle(BuildContext context, String title) => Text(
   title,
   style: Theme.of(context).textTheme.titleLarge
@@ -967,19 +866,6 @@ Widget _sheetTitle(BuildContext context, String title) => Text(
 
 String? _required(String? value) =>
     value == null || value.trim().isEmpty ? 'Required' : null;
-
-String _initials(String name) => InitialsAvatar.initialsFor(name);
-
-String _personalInformationLabel(UserProfile profile) {
-  final date = profile.dateOfBirth;
-  final dateLabel = date == null
-      ? 'Date of birth not provided'
-      : '${date.day}/${date.month}/${date.year}';
-  final residence = profile.residentialAddress.isEmpty
-      ? profile.stateOfResidence
-      : '${profile.residentialAddress}, ${profile.stateOfResidence}';
-  return residence.isEmpty ? dateLabel : '$dateLabel • $residence';
-}
 
 void _showMessage(BuildContext context, String message) {
   ScaffoldMessenger.of(context)

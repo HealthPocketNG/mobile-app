@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:healthpocket/app/app_router.dart';
+import 'package:healthpocket/core/theme/app_ui_density.dart';
 import 'package:healthpocket/features/dashboard/domain/coverage_guide.dart';
 import 'package:healthpocket/features/dashboard/presentation/price_estimate_sheet.dart';
 
@@ -18,7 +19,7 @@ abstract final class CoverV2 {
 
 TextStyle coverText(double size, FontWeight weight, Color color) => TextStyle(
   fontFamily: 'Inter',
-  fontSize: size,
+  fontSize: AppUiDensity.font(size),
   fontWeight: weight,
   color: color,
 );

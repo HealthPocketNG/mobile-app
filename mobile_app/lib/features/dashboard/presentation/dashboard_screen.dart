@@ -130,7 +130,7 @@ class _DashboardHeader extends StatelessWidget {
       final headline = TextStyle(
         fontFamily: 'Inter',
         color: _DashboardV2.navy,
-        fontSize: compact ? 18 : 21,
+        fontSize: compact ? 17 : 19,
         fontWeight: FontWeight.w700,
         height: 1.25,
       );
@@ -149,7 +149,7 @@ class _DashboardHeader extends StatelessWidget {
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     color: _DashboardV2.muted,
-                    fontSize: 16,
+                    fontSize: 14,
                     height: 1.2,
                   ),
                 ),
@@ -171,8 +171,8 @@ class _DashboardHeader extends StatelessWidget {
                     const SizedBox(width: 5),
                     SvgPicture.asset(
                       '${_DashboardV2.assets}sprout.svg',
-                      width: 22,
-                      height: 22,
+                      width: 18,
+                      height: 18,
                     ),
                   ],
                 ),
@@ -193,8 +193,8 @@ class _DashboardHeader extends StatelessWidget {
                   children: [
                     SvgPicture.asset(
                       '${_DashboardV2.assets}bell.svg',
-                      width: 28,
-                      height: 28,
+                      width: 23,
+                      height: 23,
                     ),
                     if (designPreview)
                       Positioned(
@@ -222,12 +222,12 @@ class _DashboardHeader extends StatelessWidget {
                   button: true,
                   label: '$name profile',
                   child: CircleAvatar(
-                    radius: compact ? 24 : 28,
+                    radius: compact ? 21 : 24,
                     backgroundColor: const Color(0xFFB5EDE5),
                     child: SvgPicture.asset(
                       '${_DashboardV2.assets}avatar.svg',
-                      width: 28,
-                      height: 28,
+                      width: 23,
+                      height: 23,
                     ),
                   ),
                 ),
@@ -262,7 +262,7 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
       borderRadius: BorderRadius.circular(20),
       onTap: () => Navigator.pushNamed(context, AppRoute.savings.path),
       child: Ink(
-        height: 142,
+        height: 128,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           gradient: const LinearGradient(
@@ -287,7 +287,7 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 62, 12),
+              padding: const EdgeInsets.fromLTRB(18, 16, 58, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -302,7 +302,7 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
                           style: TextStyle(
                             fontFamily: 'Inter',
                             color: Colors.white,
-                            fontSize: 15,
+                            fontSize: 13,
                           ),
                         ),
                       ),
@@ -351,7 +351,7 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         color: Colors.white,
-                        fontSize: 34,
+                        fontSize: 29,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -.5,
                       ),
@@ -371,15 +371,15 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
                           style: const TextStyle(
                             fontFamily: 'Inter',
                             color: Colors.white,
-                            fontSize: 15,
+                            fontSize: 13,
                           ),
                         ),
                       ),
                       const SizedBox(width: 6),
                       SvgPicture.asset(
                         '${_DashboardV2.assets}keep-going.svg',
-                        width: 20,
-                        height: 20,
+                        width: 17,
+                        height: 17,
                       ),
                     ],
                   ),
@@ -387,8 +387,8 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
               ),
             ),
             Positioned(
-              right: 18,
-              bottom: 18,
+              right: 16,
+              bottom: 16,
               child: Semantics(
                 button: true,
                 label: 'Savings history',
@@ -400,8 +400,8 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
                     AppRoute.savingsHistory.path,
                   ),
                   child: Container(
-                    width: 40,
-                    height: 40,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
@@ -409,8 +409,8 @@ class _SavingsBalanceCardState extends State<_SavingsBalanceCard> {
                     alignment: Alignment.center,
                     child: SvgPicture.asset(
                       '${_DashboardV2.assets}savings-arrow.svg',
-                      width: 20,
-                      height: 20,
+                      width: 18,
+                      height: 18,
                     ),
                   ),
                 ),
@@ -688,7 +688,7 @@ class _ActionButton extends StatelessWidget {
       children: [
         Container(
           width: double.infinity,
-          height: 52,
+          height: 48,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(12),
@@ -696,8 +696,8 @@ class _ActionButton extends StatelessWidget {
           alignment: Alignment.center,
           child: SvgPicture.asset(
             '${_DashboardV2.assets}$asset',
-            width: label == 'Family Pocket' ? 28 : 26,
-            height: label == 'Family Pocket' ? 28 : 26,
+            width: label == 'Family Pocket' ? 24 : 22,
+            height: label == 'Family Pocket' ? 24 : 22,
           ),
         ),
         const SizedBox(height: 6),
@@ -707,7 +707,7 @@ class _ActionButton extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontFamily: 'Inter',
-            fontSize: 13,
+            fontSize: 12,
             color: _DashboardV2.navy,
           ),
         ),
@@ -743,7 +743,7 @@ class _RecentActivity extends StatelessWidget {
                 'Recent Activity',
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: _DashboardV2.navy,
                 ),
@@ -831,7 +831,7 @@ class _EmptyActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    height: 207,
+    height: 200,
     padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
     decoration: BoxDecoration(
       color: const Color(0xFFEEF9F7),

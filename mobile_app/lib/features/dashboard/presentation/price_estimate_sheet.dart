@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:healthpocket/core/theme/app_ui_density.dart';
 
 const _assetRoot = 'assets/dashboard/v2/states/';
 const _teal = Color(0xFF0B7F7A);
@@ -162,7 +163,7 @@ class _EstimateReason extends StatelessWidget {
 
 TextStyle _text(double size, FontWeight weight, Color color) => TextStyle(
   fontFamily: 'Inter',
-  fontSize: size,
+  fontSize: AppUiDensity.font(size),
   fontWeight: weight,
   color: color,
 );

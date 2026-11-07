@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:healthpocket/core/theme/app_ui_density.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
@@ -21,7 +22,7 @@ abstract final class SavingsV2 {
 
 TextStyle savingsText(double size, FontWeight weight, Color color) => TextStyle(
   fontFamily: 'Inter',
-  fontSize: size,
+  fontSize: AppUiDensity.font(size),
   fontWeight: weight,
   color: color,
 );
@@ -56,7 +57,11 @@ class SavingsV2Button extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
-    height: height ?? (secondary ? 46 : 52),
+    height:
+        height ??
+        (secondary
+            ? AppUiDensity.secondaryButtonHeight
+            : AppUiDensity.primaryButtonHeight),
     child: TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(

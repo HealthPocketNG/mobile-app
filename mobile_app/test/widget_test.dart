@@ -172,7 +172,7 @@ void main() {
       ),
     ]);
     tester.view.devicePixelRatio = 1;
-    for (final width in [390.0, 320.0]) {
+    for (final width in [390.0, 360.0, 320.0]) {
       tester.view.physicalSize = Size(width, 844);
       await tester.pumpWidget(
         MaterialApp(
@@ -212,7 +212,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     tester.view.devicePixelRatio = 1;
 
-    for (final width in [390.0, 320.0]) {
+    for (final width in [390.0, 360.0, 320.0]) {
       tester.view.physicalSize = Size(width, 844);
       await tester.pumpWidget(
         MaterialApp(
@@ -235,10 +235,7 @@ void main() {
       expect(find.text('Malaria treatment'), findsOneWidget);
       expect(find.text('Clinic Payment'), findsOneWidget);
       expect(find.text('No activity yet'), findsNothing);
-      expect(
-        tester.getSize(find.byType(AppBottomNavigation)).height,
-        width == 320 ? 64 : 74,
-      );
+      expect(tester.getSize(find.byType(AppBottomNavigation)).height, 60);
       expect(tester.takeException(), isNull);
     }
   });
@@ -473,25 +470,21 @@ void main() {
     addTearDown(store.dispose);
     await tester.pumpWidget(MaterialApp(home: ProfileScreen(store: store)));
 
+    await tester.tap(find.text('Notifications'));
+    await tester.pumpAndSettle();
+
     expect(store.notifications.savingsReminders, isTrue);
     final preferenceFinder = find.byKey(
       const ValueKey('savings-reminders-switch'),
     );
-    await tester.scrollUntilVisible(
-      preferenceFinder,
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump();
-
-    var preference = tester.widget<SwitchListTile>(preferenceFinder);
+    var preference = tester.widget<Switch>(preferenceFinder);
     expect(preference.value, isTrue);
 
     preference.onChanged!(false);
     await tester.pump();
 
     expect(store.notifications.savingsReminders, isFalse);
-    preference = tester.widget<SwitchListTile>(preferenceFinder);
+    preference = tester.widget<Switch>(preferenceFinder);
     expect(preference.value, isFalse);
   });
 

@@ -81,10 +81,12 @@ flutter:
     - assets/family/v2/details/
     - assets/family/v2/invites/
     - assets/care/v2/
+    - assets/activity/v2/
     - assets/auth/v2/
     - assets/activity/
     - assets/HPLogo/
     - assets/profile/
+    - assets/profile/v2/
     - assets/onboarding/
 
   fonts:

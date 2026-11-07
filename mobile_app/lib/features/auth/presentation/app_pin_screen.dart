@@ -199,7 +199,7 @@ class _AppPinScreenState extends State<AppPinScreen> {
                       child: Text(
                         initials,
                         style: AuthV2.heading.copyWith(
-                          fontSize: 30,
+                          fontSize: 26,
                           color: AuthV2.teal,
                         ),
                       ),
@@ -310,7 +310,7 @@ class _AppPinScreenState extends State<AppPinScreen> {
                               child: Text(
                                 digit,
                                 style: AuthV2.heading.copyWith(
-                                  fontSize: 26,
+                                  fontSize: 23,
                                   fontWeight: FontWeight.w400,
                                 ),
                               ),
@@ -324,7 +324,7 @@ class _AppPinScreenState extends State<AppPinScreen> {
                             child: Text(
                               '0',
                               style: AuthV2.heading.copyWith(
-                                fontSize: 26,
+                                fontSize: 23,
                                 fontWeight: FontWeight.w400,
                               ),
                             ),

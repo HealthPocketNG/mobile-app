@@ -236,12 +236,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Pay ₦ 5,000'), findsOneWidget);
     await tester.tap(find.text('Pay ₦ 5,000'));
-    await tester.pumpAndSettle();
-    expect(find.text('Recipient verified'), findsOneWidget);
-    expect(
-      find.textContaining('No bank transfer or balance movement'),
-      findsOneWidget,
-    );
+    await tester.pump();
+    expect(find.text('Verifying merchant'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump();
+    expect(find.text('Sending your payment...'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    expect(find.text('Payment Successful!'), findsOneWidget);
+    expect(find.text('UI preview only · No payment was sent'), findsOneWidget);
+    expect(find.text('View Receipt'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
