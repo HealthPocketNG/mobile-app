@@ -17,6 +17,7 @@ import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/core/theme/app_colors.dart';
 import 'package:healthpocket/core/theme/app_spacing.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
+import 'package:healthpocket/core/widgets/app_notification_bell.dart';
 import 'package:healthpocket/core/widgets/app_primary_button.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/profile/domain/profile_photo.dart';
@@ -413,34 +414,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Notifications',
+                    AppNotificationBell(
                       onPressed: () => Navigator.pushNamed(
                         context,
                         AppRoute.notifications.path,
                       ),
-                      icon: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          SvgPicture.asset(
-                            '${ProfileV2.assets}c7bc7.svg',
-                            width: 26,
-                            height: 26,
-                          ),
-                          Positioned(
-                            right: -2,
-                            top: -2,
-                            child: Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: ProfileV2.pink,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      iconSize: 23,
                     ),
                     const SizedBox(width: 4),
                     InkWell(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:healthpocket/core/theme/app_ui_density.dart';
 import 'package:healthpocket/app/app_router.dart';
+import 'package:healthpocket/core/state/notification_unread_count.dart';
 import 'package:healthpocket/features/dashboard/data/notification_inbox_repository.dart';
 
 abstract final class _NoticeStyle {
@@ -46,6 +47,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     super.initState();
     if (widget.designPreview) {
       _items = widget.previewEmpty ? [] : previewNotifications();
+      _syncUnreadCount(_items!);
     } else {
       _load();
     }
@@ -59,6 +61,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             oldWidget.previewEmpty != widget.previewEmpty)) {
       _filter = _NoticeFilter.all;
       _items = widget.previewEmpty ? [] : previewNotifications();
+      _syncUnreadCount(_items!);
       _error = null;
     }
   }
@@ -66,6 +69,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _load() async {
     final repository = widget.repository;
     if (repository == null) {
+      NotificationUnreadCount.update(0);
       setState(() => _items = []);
       return;
     }
@@ -75,11 +79,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
     try {
       final items = await repository.list();
-      if (mounted) setState(() => _items = items);
+      if (mounted) {
+        NotificationUnreadCount.update(
+          items.where((item) => item.unread).length,
+        );
+        setState(() => _items = items);
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error);
     }
   }
+
+  void _syncUnreadCount(List<InboxNotification> items) =>
+      NotificationUnreadCount.update(items.where((item) => item.unread).length);
 
   Future<void> _markAll() async {
     final current = _items;
@@ -87,9 +99,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       if (!widget.designPreview) await widget.repository?.markAllRead();
       if (mounted) {
-        setState(
-          () => _items = current.map((item) => item.markedRead()).toList(),
-        );
+        final markedRead = current.map((item) => item.markedRead()).toList();
+        NotificationUnreadCount.update(0);
+        setState(() => _items = markedRead);
       }
     } catch (_) {
       _showError();
@@ -101,12 +113,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       try {
         if (!widget.designPreview) await widget.repository?.markRead(item.id);
         if (mounted) {
-          setState(
-            () => _items = [
-              for (final value in _items ?? <InboxNotification>[])
-                value.id == item.id ? value.markedRead() : value,
-            ],
+          final markedRead = [
+            for (final value in _items ?? <InboxNotification>[])
+              value.id == item.id ? value.markedRead() : value,
+          ];
+          NotificationUnreadCount.update(
+            markedRead.where((value) => value.unread).length,
           );
+          setState(() => _items = markedRead);
         }
       } catch (_) {
         _showError();
@@ -167,8 +181,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: SizedBox(
                     height: 46,
                     child: TextButton(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, AppRoute.profile.path),
+                      onPressed: () => Navigator.pushNamed(
+                        context,
+                        AppRoute.notificationSettings.path,
+                      ),
                       style: TextButton.styleFrom(
                         backgroundColor: const Color(0xFFE4F6F3),
                         shape: const StadiumBorder(),
@@ -206,7 +222,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 icon: SvgPicture.asset('assets/dashboard/v2/coverage/back.svg'),
               ),
             ),
-            if (empty)
+            if (empty || unread == 0)
               const Spacer()
             else ...[
               Expanded(
@@ -227,7 +243,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               const SizedBox(width: 14),
             ],
             InkWell(
-              onTap: () => Navigator.pushNamed(context, AppRoute.profile.path),
+              onTap: () => Navigator.pushNamed(
+                context,
+                AppRoute.notificationSettings.path,
+              ),
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 key: const Key('notification-settings-action'),

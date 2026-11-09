@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/backend/trusted_backend_client.dart';
+import 'package:healthpocket/core/state/notification_unread_count.dart';
+import 'package:healthpocket/core/widgets/app_notification_bell.dart';
 import 'package:healthpocket/features/dashboard/data/notification_inbox_repository.dart';
 import 'package:healthpocket/features/dashboard/presentation/coverage_details_screen.dart';
 import 'package:healthpocket/features/dashboard/presentation/dashboard_screen.dart';
@@ -10,6 +12,28 @@ import 'package:healthpocket/features/profile/application/profile_store.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 
 void main() {
+  testWidgets(
+    'shared notification bell only shows an unread count when needed',
+    (tester) async {
+      addTearDown(() => NotificationUnreadCount.update(0));
+      NotificationUnreadCount.update(0);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: AppNotificationBell(onPressed: () {})),
+        ),
+      );
+      expect(find.byKey(const Key('notification-unread-badge')), findsNothing);
+
+      NotificationUnreadCount.update(12);
+      await tester.pump();
+      expect(
+        find.byKey(const Key('notification-unread-badge')),
+        findsOneWidget,
+      );
+      expect(find.text('12'), findsOneWidget);
+    },
+  );
+
   testWidgets('empty dashboard card fits and opens Add Money', (tester) async {
     final savings = SavingsStore();
     final profile = ProfileStore();
@@ -70,6 +94,7 @@ void main() {
     await tester.tap(find.text('Mark all as read'));
     await tester.pumpAndSettle();
     expect(find.text('Nothing new right now.'), findsOneWidget);
+    expect(find.text('Mark all as read'), findsNothing);
     await tester.tap(find.text('Unread'));
     await tester.pumpAndSettle();
     expect(find.text('No notifications in this filter'), findsOneWidget);
@@ -90,6 +115,23 @@ void main() {
     expect(find.text('Notifications'), findsOneWidget);
     expect(find.text('Savings added'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('notification settings action opens notification preferences', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: {
+          AppRoute.notificationSettings.path: (_) =>
+              const Scaffold(body: Text('Notification preferences')),
+        },
+        home: const NotificationsScreen(designPreview: true),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('notification-settings-action')));
+    await tester.pumpAndSettle();
+    expect(find.text('Notification preferences'), findsOneWidget);
   });
 
   testWidgets('notification actions stay on the right at both widths', (

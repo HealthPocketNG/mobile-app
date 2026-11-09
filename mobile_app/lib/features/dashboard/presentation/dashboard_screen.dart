@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
+import 'package:healthpocket/core/widgets/app_notification_bell.dart';
 import 'package:healthpocket/features/dashboard/domain/coverage_guide.dart';
 import 'package:healthpocket/features/dashboard/presentation/coverage_details_screen.dart';
 import 'package:healthpocket/features/profile/application/profile_store.dart';
@@ -182,36 +183,10 @@ class _DashboardHeader extends StatelessWidget {
           SizedBox(width: compact ? 10 : 22),
           Row(
             children: [
-              IconButton(
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 48),
-                padding: EdgeInsets.zero,
+              AppNotificationBell(
                 onPressed: () =>
                     Navigator.pushNamed(context, AppRoute.notifications.path),
-                tooltip: 'Notifications',
-                icon: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    SvgPicture.asset(
-                      '${_DashboardV2.assets}bell.svg',
-                      width: 23,
-                      height: 23,
-                    ),
-                    if (designPreview)
-                      Positioned(
-                        top: -2,
-                        right: -3,
-                        child: Container(
-                          width: 11,
-                          height: 11,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE8405F),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                iconSize: 23,
               ),
               SizedBox(width: compact ? 10 : 14),
               InkWell(

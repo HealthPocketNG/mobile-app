@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
+import 'package:healthpocket/core/widgets/app_notification_bell.dart';
 import 'package:healthpocket/core/widgets/healthpocket_state_view.dart';
 import 'package:healthpocket/features/care/data/demo_care_directory_repository.dart';
 import 'package:healthpocket/features/care/domain/care_provider.dart';
@@ -218,15 +220,12 @@ class _FindCareScreenState extends State<FindCareScreen> {
                         ],
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Notifications',
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/notifications'),
-                      icon: SvgPicture.asset(
-                        '${CareV2.assets}find-cc5dd.svg',
-                        width: 26,
-                        height: 26,
+                    AppNotificationBell(
+                      onPressed: () => Navigator.pushNamed(
+                        context,
+                        AppRoute.notifications.path,
                       ),
+                      iconSize: 23,
                     ),
                     const SizedBox(width: 8),
                     InkWell(

@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:healthpocket/core/theme/app_ui_density.dart';
 import 'package:healthpocket/app/app_router.dart';
 import 'package:healthpocket/core/widgets/app_bottom_navigation.dart';
+import 'package:healthpocket/core/widgets/app_notification_bell.dart';
 import 'package:healthpocket/features/contributions/domain/contribution_record.dart';
 import 'package:healthpocket/features/funding/domain/funding_transaction.dart';
 import 'package:healthpocket/features/savings/domain/savings_plan.dart';
@@ -206,31 +207,12 @@ class _SavingsOverviewV2State extends State<SavingsOverviewV2> {
                       ],
                     ),
                   ),
-                  InkWell(
-                    onTap: () => Navigator.pushNamed(
+                  AppNotificationBell(
+                    onPressed: () => Navigator.pushNamed(
                       context,
                       AppRoute.notifications.path,
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                    child: SizedBox(
-                      width: 32,
-                      height: 40,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          SvgPicture.asset('${SavingsV2.assets}bell.svg'),
-                          if (widget.designPreview)
-                            const Positioned(
-                              top: 4,
-                              right: 2,
-                              child: CircleAvatar(
-                                radius: 3,
-                                backgroundColor: Color(0xFFE8405F),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                    iconSize: 23,
                   ),
                   const SizedBox(width: 12),
                   InkWell(

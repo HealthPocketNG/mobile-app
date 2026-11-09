@@ -116,6 +116,7 @@ Future<void> bootstrapFirebase({
   required FirebaseOptions options,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   FirebaseConfigurationGuard.validate(
     environment: environment,
     options: options,

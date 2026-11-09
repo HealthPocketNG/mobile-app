@@ -20,6 +20,7 @@ import 'package:healthpocket/features/onboarding/presentation/savings_plan_setup
 import 'package:healthpocket/features/onboarding/presentation/personal_information_screen.dart';
 import 'package:healthpocket/features/onboarding/presentation/onboarding_complete_screen.dart';
 import 'package:healthpocket/features/profile/presentation/profile_screen.dart';
+import 'package:healthpocket/features/profile/presentation/profile_v2_pages.dart';
 import 'package:healthpocket/features/savings/presentation/savings_screen.dart';
 import 'package:healthpocket/features/savings/presentation/savings_history_v2.dart';
 
@@ -46,6 +47,7 @@ enum AppRoute {
   onboardingComplete('/onboarding/complete'),
   dashboard('/dashboard'),
   notifications('/notifications'),
+  notificationSettings('/profile/notifications'),
   activity('/activity'),
   savings('/savings'),
   addMoney('/savings/add-money'),
@@ -171,6 +173,11 @@ class AppRouter {
                 appState.previewMode &&
                 const bool.fromEnvironment('DEV_NOTIFICATIONS_EMPTY'),
           ),
+          AppRoute.notificationSettings => ProfileNotificationSettingsScreen(
+            store: appState.profileStore,
+            onSave: (_, preferences) =>
+                appState.updateNotificationPreferences(preferences),
+          ),
           AppRoute.activity => ActivityScreen(
             savingsStore: appState.savingsStore,
             familyStore: appState.familyPocketStore,
@@ -271,6 +278,7 @@ class AppRouter {
       AppRoute.pinRecovery,
       AppRoute.dashboard,
       AppRoute.notifications,
+      AppRoute.notificationSettings,
       AppRoute.activity,
       AppRoute.savings,
       AppRoute.addMoney,

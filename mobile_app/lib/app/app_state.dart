@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:healthpocket/core/data/backend_ids.dart';
 import 'package:healthpocket/core/backend/trusted_backend_client.dart';
+import 'package:healthpocket/core/state/notification_unread_count.dart';
+import 'package:healthpocket/features/dashboard/data/notification_inbox_repository.dart';
 import 'package:healthpocket/core/data/repository_contracts.dart';
 import 'package:healthpocket/features/auth/data/app_pin_repository.dart';
 import 'package:healthpocket/features/auth/data/biometric_unlock_service.dart';
@@ -42,7 +44,9 @@ class AppState extends ChangeNotifier {
            biometricUnlockService ?? BiometricUnlockService(),
        pinRepository =
            pinRepository ??
-           SecureAppPinRepository(storage: MemorySecureValueStore());
+           SecureAppPinRepository(storage: MemorySecureValueStore()) {
+    NotificationUnreadCount.update(previewMode ? 3 : 0);
+  }
 
   final AuthRepository authRepository;
   final EmailVerificationService? emailVerificationService;
@@ -176,6 +180,7 @@ class AppState extends ChangeNotifier {
     profileStore.clear();
     savingsStore.resetForOnboarding();
     familyPocketStore.resetForNewUser(name: '', email: '');
+    NotificationUnreadCount.update(0);
     await authRepository.signOut();
     notifyListeners();
   }
@@ -252,9 +257,23 @@ class AppState extends ChangeNotifier {
       return AuthFlowDestination.personalInformation;
     }
 
+    unawaited(refreshUnreadNotifications());
     return await pinRepository.hasPin(user.uid)
         ? AuthFlowDestination.unlockPin
         : AuthFlowDestination.createPin;
+  }
+
+  Future<void> refreshUnreadNotifications() async {
+    final client = backendClient;
+    if (client == null) return;
+    try {
+      final notifications = await NotificationInboxRepository(client).list();
+      NotificationUnreadCount.update(
+        notifications.where((notification) => notification.unread).length,
+      );
+    } catch (_) {
+      // The bell remains neutral until the inbox can be reached.
+    }
   }
 
   void _beginRegistrationFor(AuthUser user) {
