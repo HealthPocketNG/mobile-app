@@ -110,11 +110,16 @@ class _CareV2PaymentFlowState extends State<CareV2PaymentFlow> {
     } else if (_step == _CarePaymentStep.transfer) {
       setState(() => _step = _CarePaymentStep.review);
     } else if (_step == _CarePaymentStep.review) {
-      setState(
-        () => _step = _balanceKobo < _amountKobo
-            ? _CarePaymentStep.insufficient
-            : _CarePaymentStep.pin,
-      );
+      setState(() => _step = _CarePaymentStep.processing);
+      _processingTimer = Timer(const Duration(milliseconds: 1200), () {
+        if (mounted && _step == _CarePaymentStep.processing) {
+          setState(
+            () => _step = _balanceKobo < _amountKobo
+                ? _CarePaymentStep.insufficient
+                : _CarePaymentStep.pin,
+          );
+        }
+      });
     }
   }
 
@@ -665,22 +670,33 @@ class _ReviewRow extends StatelessWidget {
           ),
         ),
         Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.end,
-            style: careText(
-              13,
-              FontWeight.w500,
-              teal ? CareV2.teal : CareV2.navy,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: careText(
+                    13,
+                    FontWeight.w500,
+                    teal ? CareV2.teal : CareV2.navy,
+                  ),
+                ),
+              ),
+              if (asset != null) ...[
+                const SizedBox(width: 5),
+                SvgPicture.asset(
+                  '${CareV2.assets}$asset',
+                  width: 16,
+                  height: 16,
+                ),
+              ],
+            ],
           ),
         ),
-        if (asset != null) ...[
-          const SizedBox(width: 5),
-          SvgPicture.asset('${CareV2.assets}$asset', width: 16, height: 16),
-        ],
       ],
     ),
   );

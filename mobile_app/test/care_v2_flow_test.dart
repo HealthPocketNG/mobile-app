@@ -5,7 +5,7 @@ import 'package:healthpocket/features/care/presentation/find_care_screen.dart';
 import 'package:healthpocket/features/savings/application/savings_store.dart';
 
 void main() {
-  testWidgets('partner explanation opens from Find Care and closes', (
+  testWidgets('partner explanation opens from partner details and closes', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(320, 640);
@@ -15,6 +15,8 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     await tester.pumpWidget(const MaterialApp(home: FindCareScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Demo Community Clinic'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('What is a HealthPocket Partner?'));
     await tester.pumpAndSettle();
@@ -74,7 +76,10 @@ void main() {
       expect(tester.takeException(), isNull);
 
       await tester.tap(find.text('Pay ₦ 5,000'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      expect(find.text('Sending your payment...'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump();
       expect(find.text('Insufficient Balance'), findsOneWidget);
       expect(find.text('Add Money'), findsOneWidget);
       expect(find.text('Choose a Different Amount'), findsOneWidget);
@@ -149,6 +154,7 @@ void main() {
       150,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.text('Demo Health Hospital'));
     await tester.tap(find.text('Demo Health Hospital'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Pay with HealthPocket'));
@@ -173,6 +179,7 @@ void main() {
       150,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.text('Demo Health Hospital'));
     await tester.tap(find.text('Demo Health Hospital'));
     await tester.pumpAndSettle();
     final nonPartnerNote = find.textContaining(

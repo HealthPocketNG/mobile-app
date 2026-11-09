@@ -393,18 +393,29 @@ class _OutcomeRow extends StatelessWidget {
           )
         else
           Flexible(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-              style: careText(13, FontWeight.w500, CareV2.navy),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: careText(13, FontWeight.w500, CareV2.navy),
+                  ),
+                ),
+                if (asset != null) ...[
+                  const SizedBox(width: 5),
+                  SvgPicture.asset(
+                    '${CareV2.assets}$asset',
+                    width: 16,
+                    height: 16,
+                  ),
+                ],
+              ],
             ),
           ),
-        if (asset != null) ...[
-          const SizedBox(width: 5),
-          SvgPicture.asset('${CareV2.assets}$asset', width: 16, height: 16),
-        ],
       ],
     ),
   );
@@ -426,8 +437,8 @@ class _PreviewNotice extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         asset == null
-            ? const Icon(Icons.info_outline, size: 20, color: CareV2.teal)
-            : SvgPicture.asset('${CareV2.assets}$asset', width: 20, height: 20),
+            ? const Icon(Icons.info_outline, size: 16, color: CareV2.teal)
+            : SvgPicture.asset('${CareV2.assets}$asset', width: 16, height: 16),
         const SizedBox(width: 10),
         Expanded(
           child: Text(

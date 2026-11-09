@@ -69,7 +69,7 @@ class _CareFiltersSheetState extends State<_CareFiltersSheet> {
   Widget build(BuildContext context) => SafeArea(
     top: false,
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
@@ -85,7 +85,7 @@ class _CareFiltersSheetState extends State<_CareFiltersSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -128,7 +128,7 @@ class _CareFiltersSheetState extends State<_CareFiltersSheet> {
                   ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -151,7 +151,8 @@ class _CareFiltersSheetState extends State<_CareFiltersSheet> {
                 inactiveTrackColor: CareV2.soft,
                 thumbColor: CareV2.teal,
                 overlayColor: CareV2.mint,
-                trackHeight: 5,
+                trackHeight: 6,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
               ),
               child: Slider(
                 value: _distance,
@@ -267,7 +268,7 @@ class _FilterSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 42,
+    height: 46,
     child: Row(
       children: [
         Expanded(
@@ -276,6 +277,7 @@ class _FilterSwitch extends StatelessWidget {
         Switch(
           value: value,
           activeTrackColor: CareV2.teal,
+          inactiveTrackColor: const Color(0xFFD5DBE0),
           onChanged: onChanged,
         ),
       ],

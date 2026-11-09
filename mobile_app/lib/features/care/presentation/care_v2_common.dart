@@ -152,11 +152,13 @@ class CarePartnerBadgeV2 extends StatelessWidget {
     required this.provider,
     required this.iconAsset,
     this.short = false,
+    this.onInfo,
     super.key,
   });
   final CareProvider provider;
   final String iconAsset;
   final bool short;
+  final VoidCallback? onInfo;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -198,6 +200,24 @@ class CarePartnerBadgeV2 extends StatelessWidget {
             ),
           ),
         ),
+        if (onInfo != null) ...[
+          const SizedBox(width: 3),
+          Tooltip(
+            message: 'What is a HealthPocket Partner?',
+            child: InkWell(
+              onTap: onInfo,
+              borderRadius: BorderRadius.circular(10),
+              child: const Padding(
+                padding: EdgeInsets.all(2),
+                child: Icon(
+                  Icons.info_outline_rounded,
+                  size: 14,
+                  color: CareV2.teal,
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     ),
   );
@@ -208,11 +228,13 @@ class CareProviderSummaryV2 extends StatelessWidget {
     required this.provider,
     required this.badgeAsset,
     this.highlighted = false,
+    this.onPartnerInfo,
     super.key,
   });
   final CareProvider provider;
   final String badgeAsset;
   final bool highlighted;
+  final VoidCallback? onPartnerInfo;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -251,7 +273,11 @@ class CareProviderSummaryV2 extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 4),
-              CarePartnerBadgeV2(provider: provider, iconAsset: badgeAsset),
+              CarePartnerBadgeV2(
+                provider: provider,
+                iconAsset: badgeAsset,
+                onInfo: onPartnerInfo,
+              ),
               if (highlighted) ...[
                 const SizedBox(height: 4),
                 Text(

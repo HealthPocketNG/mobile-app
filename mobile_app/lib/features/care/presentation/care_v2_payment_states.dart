@@ -736,25 +736,32 @@ class _ReceiptRow extends StatelessWidget {
           ),
         ),
         Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.end,
-            style: careText(13, FontWeight.w500, CareV2.navy),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: careText(13, FontWeight.w500, CareV2.navy),
+                ),
+              ),
+              if (icon != null) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => Clipboard.setData(ClipboardData(text: value)),
+                  child: SvgPicture.asset(
+                    '${CareV2.assets}$icon',
+                    width: 16,
+                    height: 16,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        if (icon != null) ...[
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: () => Clipboard.setData(ClipboardData(text: value)),
-            child: SvgPicture.asset(
-              '${CareV2.assets}$icon',
-              width: 16,
-              height: 16,
-            ),
-          ),
-        ],
       ],
     ),
   );

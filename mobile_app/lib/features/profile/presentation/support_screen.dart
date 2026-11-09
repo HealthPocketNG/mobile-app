@@ -99,18 +99,19 @@ class _SupportScreenState extends State<SupportScreen> {
       children: [
         const SizedBox(height: 22),
         Container(
-          height: 44,
+          height: 42,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: ProfileV2.soft,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: ProfileV2.outline),
           ),
           child: Row(
             children: [
               SvgPicture.asset(
                 '${ProfileV2.assets}4632d.svg',
-                width: 18,
-                height: 18,
+                width: 16,
+                height: 16,
               ),
               const SizedBox(width: 10),
               Expanded(

@@ -1083,7 +1083,6 @@ class _SavingsCustomAmountV2State extends State<SavingsCustomAmountV2> {
         32;
     final topGap = (availableHeight - 540).clamp(16.0, 38.0);
     final buttonGap = (availableHeight - 560).clamp(20.0, 46.0);
-    final keypadHeight = (availableHeight - 310).clamp(190.0, 258.0);
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.1,
       child: Scaffold(
@@ -1102,19 +1101,30 @@ class _SavingsCustomAmountV2State extends State<SavingsCustomAmountV2> {
                   ),
                 ),
                 SizedBox(height: topGap),
-                Text(
-                  savingsMoney(
-                    (int.tryParse(_digits) ?? 0) * 100,
-                    spaced: true,
-                  ),
-                  style: savingsText(46, FontWeight.w700, SavingsV2.navy),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      savingsMoney(
+                        (int.tryParse(_digits) ?? 0) * 100,
+                        spaced: true,
+                      ),
+                      style: savingsText(46, FontWeight.w700, SavingsV2.navy),
+                    ),
+                    Container(
+                      width: 2,
+                      height: 34,
+                      margin: const EdgeInsets.only(left: 5),
+                      color: SavingsV2.teal,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Minimum ₦500',
                   style: savingsText(13.5, FontWeight.w400, SavingsV2.muted),
                 ),
-                const Spacer(),
                 SavingsV2Button(
                   label: 'Continue',
                   arrow: true,
@@ -1122,14 +1132,13 @@ class _SavingsCustomAmountV2State extends State<SavingsCustomAmountV2> {
                   onPressed: _continue,
                 ),
                 SizedBox(height: buttonGap),
-                SizedBox(
-                  height: keypadHeight,
+                Expanded(
                   child: GridView.builder(
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: 12,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
-                      mainAxisExtent: (keypadHeight - 18) / 4,
+                      mainAxisExtent: 54,
                       mainAxisSpacing: 6,
                     ),
                     itemBuilder: (context, index) {

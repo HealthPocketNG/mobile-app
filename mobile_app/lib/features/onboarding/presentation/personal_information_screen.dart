@@ -159,6 +159,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
             const SizedBox(height: 7),
             DropdownButtonFormField<String>(
               initialValue: _gender,
+              iconSize: 18,
               decoration: _decoration(),
               items: const [
                 DropdownMenuItem(value: 'male', child: Text('Male')),
@@ -175,6 +176,7 @@ class _PersonalInformationScreenState extends State<PersonalInformationScreen> {
             const SizedBox(height: 7),
             DropdownButtonFormField<String>(
               initialValue: _state,
+              iconSize: 18,
               decoration: _decoration(),
               hint: const Text('Select location'),
               items: const [

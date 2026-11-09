@@ -394,7 +394,6 @@ class _FindCareScreenState extends State<FindCareScreen> {
                   if (partners.isNotEmpty) ...[
                     _CareSectionHeading(
                       title: 'HealthPocket Partners',
-                      onInfo: () => showCareV2PartnerSheet(context),
                       onSeeAll: () =>
                           setState(() => _filter = _CareFilter.partners),
                     ),
@@ -468,14 +467,9 @@ class _CareFilterChip extends StatelessWidget {
 }
 
 class _CareSectionHeading extends StatelessWidget {
-  const _CareSectionHeading({
-    required this.title,
-    required this.onSeeAll,
-    this.onInfo,
-  });
+  const _CareSectionHeading({required this.title, required this.onSeeAll});
   final String title;
   final VoidCallback onSeeAll;
-  final VoidCallback? onInfo;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -483,17 +477,6 @@ class _CareSectionHeading extends StatelessWidget {
       Expanded(
         child: Text(title, style: careText(15, FontWeight.w700, CareV2.navy)),
       ),
-      if (onInfo != null)
-        IconButton(
-          tooltip: 'What is a HealthPocket Partner?',
-          onPressed: onInfo,
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(
-            Icons.info_outline_rounded,
-            size: 18,
-            color: CareV2.teal,
-          ),
-        ),
       TextButton(
         onPressed: onSeeAll,
         child: Text(
@@ -705,6 +688,9 @@ class _CareProviderDetailsV2 extends StatelessWidget {
                     CareProviderSummaryV2(
                       provider: provider,
                       badgeAsset: 'detail-c11d5.svg',
+                      onPartnerInfo: provider.isPartner
+                          ? () => showCareV2PartnerSheet(context)
+                          : null,
                     ),
                     const SizedBox(height: 10),
                     Text(
